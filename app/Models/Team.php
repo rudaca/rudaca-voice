@@ -25,6 +25,10 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, TeamInvitation> $invitations
  * @property-read Collection<int, Membership> $memberships
  * @property-read Collection<int, User> $members
+ * @property-read Collection<int, IdeaBoardGroup> $boardGroups
+ * @property-read Collection<int, IdeaBoard> $boards
+ * @property-read Collection<int, IdeaCategory> $categories
+ * @property-read Collection<int, Idea> $ideas
  */
 #[Fillable(['name', 'slug', 'is_personal'])]
 class Team extends Model
@@ -93,6 +97,46 @@ class Team extends Model
     public function invitations(): HasMany
     {
         return $this->hasMany(TeamInvitation::class);
+    }
+
+    /**
+     * Get all idea board groups for this team.
+     *
+     * @return HasMany<IdeaBoardGroup, $this>
+     */
+    public function boardGroups(): HasMany
+    {
+        return $this->hasMany(IdeaBoardGroup::class);
+    }
+
+    /**
+     * Get all idea boards for this team.
+     *
+     * @return HasMany<IdeaBoard, $this>
+     */
+    public function boards(): HasMany
+    {
+        return $this->hasMany(IdeaBoard::class);
+    }
+
+    /**
+     * Get all idea categories for this team.
+     *
+     * @return HasMany<IdeaCategory, $this>
+     */
+    public function categories(): HasMany
+    {
+        return $this->hasMany(IdeaCategory::class);
+    }
+
+    /**
+     * Get all ideas for this team.
+     *
+     * @return HasMany<Idea, $this>
+     */
+    public function ideas(): HasMany
+    {
+        return $this->hasMany(Idea::class);
     }
 
     /**
