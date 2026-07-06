@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: 'Public Sans', system-ui, -apple-system, sans-serif; color: #18181b; background: #f4f4f5; -webkit-font-smoothing: antialiased; }
+  a { color: #4f46e5; text-decoration: none; }
+  a:hover { color: #4338ca; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 8px; border: 2px solid #f4f4f5; }
+  input, textarea, select, button { font-family: inherit; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: #4f46e5 !important; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+</style>
+</helmet>
+
+<div style="display:flex;height:100vh;width:100%;overflow:hidden;background:#f4f4f5;">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside style="width:250px;flex-shrink:0;background:#ffffff;border-right:1px solid #e4e4e7;display:flex;flex-direction:column;height:100vh;">
+    <div style="padding:20px 20px 16px 20px;display:flex;align-items:center;gap:11px;">
+      <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(150deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 6px rgba(79,70,229,.32);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v10.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><path d="M8 6.5v7M16 6.5v7M4.5 9v2M19.5 9v2" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".85"/></svg>
+      </div>
+      <div>
+        <div style="font-size:15px;font-weight:800;letter-spacing:-.2px;line-height:1;">Rudaca Voice</div>
+        <div style="font-size:11.5px;color:#8b8f99;margin-top:3px;">{{ orgName }}</div>
+      </div>
+    </div>
+
+    <nav style="padding:8px 12px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto;min-height:0;">
+      <button onClick="{{ goDashboard }}" style="{{ nav.dashboard }}">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.6" stroke="currentColor" stroke-width="1.8"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button onClick="{{ goAllIdeas }}" style="{{ allIdeasStyle }}">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.4" fill="currentColor"/><circle cx="4.5" cy="12" r="1.4" fill="currentColor"/><circle cx="4.5" cy="18" r="1.4" fill="currentColor"/></svg>
+        <span>All Ideas</span>
+      </button>
+      <button onClick="{{ goSubmit }}" style="{{ nav.submit }}">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Submit Idea</span>
+      </button>
+
+      <div style="height:1px;background:#eeeef0;margin:10px 8px;"></div>
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.6px;color:#a1a1aa;padding:4px 12px 6px;text-transform:uppercase;">Boards</div>
+      <sc-for list="{{ boardNav }}" as="g" hint-placeholder-count="4">
+        <button onClick="{{ g.onToggle }}" style="{{ g.headerStyle }}">
+          <span style="{{ g.chevronStyle }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span>{{ g.name }}</span>
+          <span style="margin-left:auto;font-size:11px;color:#a1a1aa;font-weight:600;">{{ g.count }}</span>
+        </button>
+        <sc-if value="{{ g.expanded }}" hint-placeholder-val="{{ true }}">
+          <sc-for list="{{ g.boards }}" as="bd" hint-placeholder-count="3">
+            <button onClick="{{ bd.onOpen }}" style="{{ bd.style }}">
+              <span style="font-size:14px;line-height:1;">{{ bd.emoji }}</span>
+              <span>{{ bd.name }}</span>
+              <span style="{{ bd.countStyle }}">{{ bd.count }}</span>
+            </button>
+          </sc-for>
+        </sc-if>
+      </sc-for>
+
+      <sc-if value="{{ canManage }}" hint-placeholder-val="{{ true }}">
+        <div style="height:1px;background:#eeeef0;margin:10px 8px;"></div>
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:.6px;color:#a1a1aa;padding:4px 12px 6px;text-transform:uppercase;">{{ manageLabel }}</div>
+        <button onClick="{{ goReview }}" style="{{ nav.review }}">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16.5 16.5l1.6 1.6 3-3.2" stroke="#16a34a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Review Queue</span>
+          <sc-if value="{{ hasQueue }}" hint-placeholder-val="{{ true }}"><span style="{{ queuePillStyle }}">{{ queueCount }}</span></sc-if>
+        </button>
+      </sc-if>
+
+      <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ goSettings }}" style="{{ nav.settings }}">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M19 12a7 7 0 0 0-.12-1.3l1.9-1.5-2-3.4-2.3.95a7 7 0 0 0-2.24-1.3L11.8 2h-3.6l-.34 2.15a7 7 0 0 0-2.24 1.3l-2.3-.95-2 3.4 1.9 1.5A7 7 0 0 0 3.1 12c0 .44.04.87.12 1.3l-1.9 1.5 2 3.4 2.3-.95a7 7 0 0 0 2.24 1.3L8.2 22h3.6l.34-2.15a7 7 0 0 0 2.24-1.3l2.3.95 2-3.4-1.9-1.5c.08-.43.12-.86.12-1.3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Organization</span>
+        </button>
+      </sc-if>
+    </nav>
+
+    <div style="margin-top:auto;padding:14px 16px;border-top:1px solid #eeeef0;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="{{ currentUser.avatarStyle }}">{{ currentUser.initials }}</div>
+        <div style="min-width:0;">
+          <div style="font-size:13px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ currentUser.name }}</div>
+          <div style="font-size:11.5px;color:#8b8f99;line-height:1.3;">{{ currentUser.roleLabel }}</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;">
+
+    <header style="height:60px;flex-shrink:0;background:#ffffff;border-bottom:1px solid #e4e4e7;display:flex;align-items:center;padding:0 24px;gap:16px;">
+      <div style="position:relative;flex:1;max-width:400px;">
+        <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);" width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#a1a1aa" stroke-width="1.8"/><path d="m20 20-3.2-3.2" stroke="#a1a1aa" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input placeholder="Search ideas, boards, people…" style="width:100%;height:38px;padding:0 12px 0 36px;border:1px solid #e4e4e7;border-radius:9px;background:#fafafa;font-size:13.5px;color:#18181b;" />
+      </div>
+      <div style="flex:1;"></div>
+      <div style="display:flex;align-items:center;gap:5px;background:#f1f1f3;padding:4px;border-radius:10px;">
+        <span style="font-size:10.5px;font-weight:700;color:#a1a1aa;padding:0 6px;letter-spacing:.3px;">VIEW AS</span>
+        <button onClick="{{ setEmployee }}" style="{{ roleTab.employee }}">Employee</button>
+        <button onClick="{{ setManager }}" style="{{ roleTab.manager }}">Manager</button>
+        <button onClick="{{ setAdmin }}" style="{{ roleTab.admin }}">Admin</button>
+      </div>
+      <button onClick="{{ goSubmit }}" style="display:flex;align-items:center;gap:7px;height:38px;padding:0 16px;background:#4f46e5;color:#fff;border:none;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(79,70,229,.3);" style-hover="background:#4338ca;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+        New Idea
+      </button>
+    </header>
+
+    <main style="flex:1;overflow-y:auto;">
+
+      <!-- ===================== DASHBOARD ===================== -->
+      <sc-if value="{{ showDashboard }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width:1080px;margin:0 auto;padding:28px 32px 56px;animation:fadeIn .25s ease;">
+        <div style="margin-bottom:22px;">
+          <div style="font-size:13px;color:#8b8f99;font-weight:500;">{{ greeting }}</div>
+          <h1 style="font-size:24px;font-weight:800;letter-spacing:-.5px;margin:4px 0 0;">{{ dashTitle }}</h1>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px;">
+          <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+            <div style="background:#fff;border:1px solid #e4e4e7;border-radius:13px;padding:16px 18px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="{{ s.dot }}"></span>
+                <div style="font-size:12.5px;color:#71717a;font-weight:600;">{{ s.label }}</div>
+              </div>
+              <div style="font-size:29px;font-weight:800;letter-spacing:-1px;margin-top:10px;line-height:1;">{{ s.value }}</div>
+              <div style="font-size:12px;color:#a1a1aa;margin-top:6px;">{{ s.sub }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:20px;">
+          <section>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <h2 style="font-size:15px;font-weight:700;margin:0;">{{ leftColTitle }}</h2>
+              <a onClick="{{ goIdeas }}" style="font-size:13px;font-weight:600;cursor:pointer;">View all →</a>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <sc-for list="{{ dashLeftList }}" as="idea" hint-placeholder-count="4">
+                <div onClick="{{ idea.onOpen }}" style="background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:14px 16px;display:flex;gap:14px;cursor:pointer;transition:border-color .15s,box-shadow .15s;" style-hover="border-color:#c7d2fe;box-shadow:0 2px 10px rgba(30,32,60,.06);">
+                  <button onClick="{{ idea.onVote }}" style="{{ idea.voteStyle }}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5l7 8H5l7-8Z" fill="{{ idea.voteFill }}" stroke="{{ idea.voteFill }}" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                    <span style="font-weight:700;font-size:13px;">{{ idea.votes }}</span>
+                  </button>
+                  <div style="min-width:0;flex:1;">
+                    <div style="font-size:14.5px;font-weight:650;line-height:1.3;">{{ idea.title }}</div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                      <span style="{{ idea.badgeStyle }}"><span style="{{ idea.dotStyle }}"></span>{{ idea.statusLabel }}</span>
+                      <span style="font-size:12px;color:#8b8f99;">{{ idea.board }}</span>
+                      <span style="font-size:12px;color:#d4d4d8;">·</span>
+                      <span style="font-size:12px;color:#8b8f99;">{{ idea.commentCount }} comments</span>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+          <section>
+            <h2 style="font-size:15px;font-weight:700;margin:0 0 12px;">Boards</h2>
+            <div style="background:#fff;border:1px solid #e4e4e7;border-radius:13px;padding:6px 4px;">
+              <sc-for list="{{ boardSummary }}" as="b" hint-placeholder-count="5">
+                <div onClick="{{ b.onOpen }}" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:9px;cursor:pointer;" style-hover="background:#f7f7f8;">
+                  <div style="{{ b.iconStyle }}">{{ b.emoji }}</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:13.5px;font-weight:600;">{{ b.name }}</div>
+                    <div style="font-size:11.5px;color:#a1a1aa;">{{ b.count }} ideas</div>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="#d4d4d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== IDEAS LIST ===================== -->
+      <sc-if value="{{ showIdeas }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:1080px;margin:0 auto;padding:28px 32px 56px;animation:fadeIn .25s ease;">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <sc-if value="{{ boardHeader.showIcon }}" hint-placeholder-val="{{ false }}"><div style="{{ boardHeader.iconStyle }}">{{ boardHeader.emoji }}</div></sc-if>
+            <div>
+              <sc-if value="{{ boardHeader.hasCrumb }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;font-weight:600;color:#8b8f99;letter-spacing:.2px;">{{ boardHeader.crumb }}</div></sc-if>
+              <h1 style="font-size:24px;font-weight:800;letter-spacing:-.5px;margin:2px 0 0;">{{ boardHeader.name }}</h1>
+              <div style="font-size:13.5px;color:#8b8f99;margin-top:4px;">{{ boardHeader.sub }}</div>
+            </div>
+          </div>
+          <button onClick="{{ goSubmit }}" style="display:flex;align-items:center;gap:7px;height:38px;padding:0 15px;background:#fff;color:#4f46e5;border:1px solid #d6d8f5;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;" style-hover="background:#f5f5fd;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#4f46e5" stroke-width="2.2" stroke-linecap="round"/></svg>
+            Submit Idea
+          </button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+          <div style="display:flex;background:#eeeef1;border-radius:9px;padding:3px;">
+            <button onClick="{{ setSortTop }}" style="{{ sortTab.top }}">Top voted</button>
+            <button onClick="{{ setSortNew }}" style="{{ sortTab.new }}">Newest</button>
+            <button onClick="{{ setSortTrend }}" style="{{ sortTab.trending }}">Trending</button>
+          </div>
+          <div style="flex:1;"></div>
+          <select value="{{ filterStatus }}" onChange="{{ onFilterStatus }}" style="height:36px;padding:0 12px;border:1px solid #e4e4e7;border-radius:9px;background:#fff;font-size:13px;color:#3f3f46;cursor:pointer;">
+            <option value="all">All statuses</option>
+            <option value="new">New</option>
+            <option value="review">Under Review</option>
+            <option value="planned">Planned</option>
+            <option value="progress">In Progress</option>
+            <option value="done">Implemented</option>
+            <option value="declined">Declined</option>
+          </select>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <sc-for list="{{ ideasList }}" as="idea" hint-placeholder-count="6">
+            <div onClick="{{ idea.onOpen }}" style="background:#fff;border:1px solid #e4e4e7;border-radius:13px;padding:16px 18px;display:flex;gap:16px;cursor:pointer;transition:border-color .15s,box-shadow .15s;" style-hover="border-color:#c7d2fe;box-shadow:0 2px 12px rgba(30,32,60,.07);">
+              <button onClick="{{ idea.onVote }}" style="{{ idea.voteStyleLg }}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5l7 8H5l7-8Z" fill="{{ idea.voteFill }}" stroke="{{ idea.voteFill }}" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                <span style="font-weight:700;font-size:15px;">{{ idea.votes }}</span>
+              </button>
+              <div style="min-width:0;flex:1;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="{{ idea.badgeStyle }}"><span style="{{ idea.dotStyle }}"></span>{{ idea.statusLabel }}</span>
+                  <span style="{{ idea.catChip }}">{{ idea.category }}</span>
+                </div>
+                <div style="font-size:16px;font-weight:700;line-height:1.3;margin-top:9px;letter-spacing:-.2px;">{{ idea.title }}</div>
+                <div style="font-size:13.5px;color:#71717a;line-height:1.5;margin-top:5px;">{{ idea.excerpt }}</div>
+                <div style="display:flex;align-items:center;gap:9px;margin-top:12px;">
+                  <div style="{{ idea.author.avatarStyleSm }}">{{ idea.author.initials }}</div>
+                  <span style="font-size:12.5px;color:#8b8f99;">{{ idea.author.name }}</span>
+                  <span style="font-size:12px;color:#d4d4d8;">·</span>
+                  <span style="font-size:12.5px;color:#8b8f99;">{{ idea.board }}</span>
+                  <span style="font-size:12px;color:#d4d4d8;">·</span>
+                  <span style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#8b8f99;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l.9-5A8 8 0 1 1 21 12Z" stroke="#a1a1aa" stroke-width="1.7" stroke-linejoin="round"/></svg>
+                    {{ idea.commentCount }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ ideasEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding:56px 20px;color:#a1a1aa;background:#fff;border:1px dashed #dcdce0;border-radius:13px;">No ideas match these filters.</div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== SUBMIT ===================== -->
+      <sc-if value="{{ showSubmit }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:680px;margin:0 auto;padding:28px 32px 56px;animation:fadeIn .25s ease;">
+        <a onClick="{{ goIdeas }}" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#71717a;cursor:pointer;margin-bottom:14px;">← Back to ideas</a>
+        <h1 style="font-size:24px;font-weight:800;letter-spacing:-.5px;margin:0;">Submit an idea</h1>
+        <p style="font-size:14px;color:#71717a;margin:6px 0 22px;line-height:1.5;">Share a way to improve how we work — operations, HR, finance, IT, customer experience, anything. Great ideas earn votes and can become real projects.</p>
+
+        <div style="background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:24px;">
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:7px;">Title</label>
+          <input value="{{ form.title }}" onChange="{{ onFormTitle }}" placeholder="e.g. Automate monthly expense reconciliation" style="width:100%;height:42px;padding:0 13px;border:1px solid #e4e4e7;border-radius:9px;font-size:14px;margin-bottom:18px;" />
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;margin-bottom:7px;">Board</label>
+              <select value="{{ form.board }}" onChange="{{ onFormBoard }}" style="width:100%;height:42px;padding:0 11px;border:1px solid #e4e4e7;border-radius:9px;font-size:14px;background:#fff;cursor:pointer;">
+                <option value="">Select a board…</option>
+                <sc-for list="{{ boardGroups }}" as="g" hint-placeholder-count="4"><optgroup label="{{ g.name }}"><sc-for list="{{ g.boardOpts }}" as="b" hint-placeholder-count="3"><option value="{{ b.id }}">{{ b.name }}</option></sc-for></optgroup></sc-for>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:13px;font-weight:600;margin-bottom:7px;">Category</label>
+              <select value="{{ form.category }}" onChange="{{ onFormCategory }}" style="width:100%;height:42px;padding:0 11px;border:1px solid #e4e4e7;border-radius:9px;font-size:14px;background:#fff;cursor:pointer;">
+                <option value="">Select a category…</option>
+                <sc-for list="{{ categories }}" as="c" hint-placeholder-count="6"><option value="{{ c.name }}">{{ c.name }}</option></sc-for>
+              </select>
+            </div>
+          </div>
+
+          <label style="display:block;font-size:13px;font-weight:600;margin-bottom:7px;">Description</label>
+          <textarea value="{{ form.description }}" onChange="{{ onFormDesc }}" placeholder="What's the problem, who does it affect, and what would you change? The clearer the better." style="width:100%;min-height:130px;padding:12px 13px;border:1px solid #e4e4e7;border-radius:9px;font-size:14px;line-height:1.55;resize:vertical;margin-bottom:6px;"></textarea>
+          <div style="font-size:12px;color:#a1a1aa;margin-bottom:20px;">Tip: describe the impact — time saved, cost reduced, or experience improved.</div>
+
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button onClick="{{ submitIdea }}" style="{{ submitBtnStyle }}">Post idea</button>
+            <button onClick="{{ goIdeas }}" style="height:42px;padding:0 18px;background:#fff;color:#52525b;border:1px solid #e4e4e7;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+            <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;color:#dc2626;font-weight:500;">Add a title and pick a board first.</span></sc-if>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== IDEA DETAIL ===================== -->
+      <sc-if value="{{ showDetail }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:1000px;margin:0 auto;padding:24px 32px 64px;animation:fadeIn .25s ease;">
+        <a onClick="{{ goIdeas }}" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#71717a;cursor:pointer;margin-bottom:16px;">← Back to ideas</a>
+
+        <div style="display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start;">
+          <div>
+            <div style="display:flex;gap:18px;align-items:flex-start;">
+              <button onClick="{{ selected.onVote }}" style="{{ selected.voteStyleXl }}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5l7 8H5l7-8Z" fill="{{ selected.voteFill }}" stroke="{{ selected.voteFill }}" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                <span style="font-weight:800;font-size:18px;">{{ selected.votes }}</span>
+                <span style="font-size:10.5px;font-weight:600;opacity:.7;">votes</span>
+              </button>
+              <div style="min-width:0;">
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px;">
+                  <span style="{{ selected.badgeStyle }}"><span style="{{ selected.dotStyle }}"></span>{{ selected.statusLabel }}</span>
+                  <span style="{{ selected.catChip }}">{{ selected.category }}</span>
+                  <span style="font-size:12.5px;color:#a1a1aa;">{{ selected.board }}</span>
+                </div>
+                <h1 style="font-size:24px;font-weight:800;letter-spacing:-.5px;line-height:1.25;margin:0;">{{ selected.title }}</h1>
+                <div style="display:flex;align-items:center;gap:9px;margin-top:12px;">
+                  <div style="{{ selected.author.avatarStyleSm }}">{{ selected.author.initials }}</div>
+                  <span style="font-size:13px;color:#71717a;">Submitted by <strong style="color:#3f3f46;">{{ selected.author.name }}</strong> · {{ selected.createdAt }}</span>
+                </div>
+              </div>
+            </div>
+
+            <p style="font-size:15px;line-height:1.65;color:#3f3f46;margin:22px 0 26px;">{{ selected.description }}</p>
+
+            <div style="height:1px;background:#eeeef0;margin-bottom:22px;"></div>
+
+            <h2 style="font-size:15px;font-weight:700;margin:0 0 16px;">{{ commentsHeading }}</h2>
+
+            <div style="display:flex;gap:11px;margin-bottom:24px;">
+              <div style="{{ currentUser.avatarStyle }}">{{ currentUser.initials }}</div>
+              <div style="flex:1;">
+                <textarea value="{{ commentDraft }}" onChange="{{ onCommentInput }}" placeholder="Add a comment or build on this idea…" style="width:100%;min-height:64px;padding:11px 13px;border:1px solid #e4e4e7;border-radius:10px;font-size:13.5px;line-height:1.5;resize:vertical;"></textarea>
+                <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+                  <button onClick="{{ addComment }}" style="{{ commentBtnStyle }}">Comment</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:20px;">
+              <sc-for list="{{ selected.comments }}" as="c" hint-placeholder-count="3">
+                <div style="display:flex;gap:11px;">
+                  <div style="{{ c.author.avatarStyle }}">{{ c.author.initials }}</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="font-size:13.5px;font-weight:650;">{{ c.author.name }}</span>
+                      <sc-if value="{{ c.isStaff }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:700;color:#4f46e5;background:#eef2ff;padding:1px 7px;border-radius:5px;">{{ c.author.roleLabel }}</span></sc-if>
+                      <span style="font-size:12px;color:#a1a1aa;">{{ c.at }}</span>
+                    </div>
+                    <div style="font-size:13.5px;color:#3f3f46;line-height:1.55;margin-top:4px;">{{ c.text }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- RIGHT RAIL -->
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <sc-if value="{{ canManage }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4e4e7;border-radius:13px;padding:16px;">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.2 6.6H21l-5.4 4 2 6.6L12 15.3 6.4 19.2l2-6.6L3 8.6h6.8L12 2Z" fill="#f59e0b" stroke="#f59e0b" stroke-width="1"/></svg>
+                <div style="font-size:12.5px;font-weight:700;color:#3f3f46;">Manage status</div>
+              </div>
+              <div style="font-size:11.5px;color:#a1a1aa;margin-bottom:12px;">Set where this idea sits in the pipeline.</div>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+                <sc-for list="{{ selected.statusButtons }}" as="s" hint-placeholder-count="6">
+                  <button onClick="{{ s.onClick }}" style="{{ s.style }}"><span style="{{ s.dot }}"></span>{{ s.label }}<sc-if value="{{ s.active }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;color:#16a34a;font-weight:700;">✓</span></sc-if></button>
+                </sc-for>
+              </div>
+              <label style="display:block;font-size:11.5px;font-weight:600;color:#71717a;margin-bottom:6px;">Add a note (optional)</label>
+              <input value="{{ statusNote }}" onChange="{{ onStatusNote }}" placeholder="Reason or context…" style="width:100%;height:36px;padding:0 11px;border:1px solid #e4e4e7;border-radius:8px;font-size:12.5px;" />
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ showGithubPanel }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e4e4e7;border-radius:13px;padding:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="#18181b"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+                <div style="font-size:13px;font-weight:700;">Development</div>
+              </div>
+              <sc-if value="{{ selected.hasGithub }}" hint-placeholder-val="{{ false }}">
+                <a href="{{ selected.github.url }}" target="_blank" style="display:block;border:1px solid #e4e4e7;border-radius:10px;padding:11px 12px;text-decoration:none;" style-hover="border-color:#c7d2fe;">
+                  <div style="display:flex;align-items:center;gap:7px;">
+                    <span style="{{ selected.github.stateStyle }}">{{ selected.github.stateLabel }}</span>
+                    <span style="font-size:12px;color:#8b8f99;font-family:monospace;">#{{ selected.github.number }}</span>
+                  </div>
+                  <div style="font-size:13px;font-weight:600;color:#18181b;margin-top:6px;line-height:1.3;">{{ selected.github.title }}</div>
+                  <div style="font-size:11.5px;color:#8b8f99;margin-top:4px;font-family:monospace;">{{ selected.github.repo }}</div>
+                </a>
+              </sc-if>
+              <sc-if value="{{ selected.noGithub }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:12px;color:#a1a1aa;line-height:1.5;margin-bottom:12px;">No linked issue yet. Create one to track the build work in GitHub.</div>
+                <button onClick="{{ openGithubModal }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;height:38px;background:#18181b;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;" style-hover="background:#000;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+                  Create GitHub issue
+                </button>
+              </sc-if>
+            </div>
+            </sc-if>
+
+            <div style="background:#fff;border:1px solid #e4e4e7;border-radius:13px;padding:16px;">
+              <div style="font-size:12.5px;font-weight:700;color:#3f3f46;margin-bottom:14px;">Activity</div>
+              <div>
+                <sc-for list="{{ selected.history }}" as="h" hint-placeholder-count="3">
+                  <div style="display:flex;gap:11px;">
+                    <div style="display:flex;flex-direction:column;align-items:center;">
+                      <span style="{{ h.dot }}"></span>
+                      <sc-if value="{{ h.showLine }}" hint-placeholder-val="{{ true }}"><span style="width:2px;flex:1;background:#eeeef0;margin:3px 0;min-height:16px;"></span></sc-if>
+                    </div>
+                    <div style="padding-bottom:14px;">
+                      <div style="font-size:12.5px;color:#3f3f46;line-height:1.4;"><strong>{{ h.label }}</strong></div>
+                      <sc-if value="{{ h.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:#71717a;margin-top:2px;line-height:1.4;">{{ h.note }}</div></sc-if>
+                      <div style="font-size:11px;color:#a1a1aa;margin-top:3px;">{{ h.by }} · {{ h.at }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== REVIEW QUEUE ===================== -->
+      <sc-if value="{{ showReview }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:1080px;margin:0 auto;padding:28px 32px 56px;animation:fadeIn .25s ease;">
+        <h1 style="font-size:24px;font-weight:800;letter-spacing:-.5px;margin:0;">Review queue</h1>
+        <p style="font-size:13.5px;color:#8b8f99;margin:5px 0 22px;">New and under-review ideas waiting on a decision. Triage the highest-voted first.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px;">
+          <sc-for list="{{ reviewStats }}" as="s" hint-placeholder-count="3">
+            <div style="background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:15px 18px;">
+              <div style="font-size:12.5px;color:#71717a;font-weight:600;">{{ s.label }}</div>
+              <div style="font-size:26px;font-weight:800;letter-spacing:-.8px;margin-top:6px;">{{ s.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background:#fff;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:64px 1fr 150px 130px 190px;gap:12px;padding:11px 18px;background:#fafafa;border-bottom:1px solid #eeeef0;font-size:11px;font-weight:700;color:#a1a1aa;letter-spacing:.4px;text-transform:uppercase;">
+            <div>Votes</div><div>Idea</div><div>Board</div><div>Status</div><div style="text-align:right;">Decision</div>
+          </div>
+          <sc-for list="{{ reviewList }}" as="idea" hint-placeholder-count="5">
+            <div style="display:grid;grid-template-columns:64px 1fr 150px 130px 190px;gap:12px;padding:14px 18px;border-bottom:1px solid #f4f4f5;align-items:center;">
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:44px;height:44px;border-radius:9px;background:#f4f4f5;">
+                <span style="font-size:15px;font-weight:800;line-height:1;">{{ idea.votes }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="margin-top:2px;"><path d="M12 5l7 8H5l7-8Z" fill="#a1a1aa"/></svg>
+              </div>
+              <div style="min-width:0;cursor:pointer;" onClick="{{ idea.onOpen }}">
+                <div style="font-size:14px;font-weight:650;line-height:1.3;">{{ idea.title }}</div>
+                <div style="font-size:12px;color:#a1a1aa;margin-top:3px;">{{ idea.author.name }} · {{ idea.commentCount }} comments</div>
+              </div>
+              <div style="font-size:12.5px;color:#71717a;">{{ idea.board }}</div>
+              <div><span style="{{ idea.badgeStyle }}"><span style="{{ idea.dotStyle }}"></span>{{ idea.statusLabel }}</span></div>
+              <div style="display:flex;gap:7px;justify-content:flex-end;">
+                <button onClick="{{ idea.onApprove }}" style="height:32px;padding:0 13px;background:#e9f7ef;color:#15803d;border:1px solid #c3e9d2;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;" style-hover="background:#d8f0e2;">Approve</button>
+                <button onClick="{{ idea.onDecline }}" style="height:32px;padding:0 13px;background:#fff;color:#b91c1c;border:1px solid #f2d4d1;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;" style-hover="background:#fef2f2;">Decline</button>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ reviewEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding:48px 20px;color:#a1a1aa;">Queue is clear — nothing awaiting review. 🎉</div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== ORGANIZATION SETTINGS ===================== -->
+      <sc-if value="{{ showSettings }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:1000px;margin:0 auto;padding:28px 32px 56px;animation:fadeIn .25s ease;">
+        <h1 style="font-size:24px;font-weight:800;letter-spacing:-.5px;margin:0;">Organization settings</h1>
+        <p style="font-size:13.5px;color:#8b8f99;margin:5px 0 20px;">Manage boards, categories, and members for {{ orgName }}.</p>
+
+        <div style="display:flex;gap:4px;border-bottom:1px solid #e4e4e7;margin-bottom:22px;">
+          <button onClick="{{ setTabBoards }}" style="{{ setTab.boards }}">Boards</button>
+          <button onClick="{{ setTabCategories }}" style="{{ setTab.categories }}">Categories</button>
+          <button onClick="{{ setTabUsers }}" style="{{ setTab.users }}">Members</button>
+          <button onClick="{{ setTabGithub }}" style="{{ setTab.github }}">Integrations</button>
+        </div>
+
+        <sc-if value="{{ tabBoards }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:11px;">
+          <sc-for list="{{ boardsForSettings }}" as="b" hint-placeholder-count="5">
+            <div style="background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;">
+              <div style="{{ b.iconStyle }}">{{ b.emoji }}</div>
+              <div style="flex:1;">
+                <div style="font-size:14.5px;font-weight:650;">{{ b.name }}</div>
+                <div style="font-size:12.5px;color:#a1a1aa;">{{ b.desc }}</div>
+              </div>
+              <span style="font-size:12.5px;color:#71717a;background:#f4f4f5;padding:4px 10px;border-radius:7px;">{{ b.count }} ideas</span>
+            </div>
+          </sc-for>
+          <div style="display:flex;gap:10px;margin-top:4px;">
+            <input value="{{ newBoard }}" onChange="{{ onNewBoard }}" placeholder="New board name…" style="flex:1;height:42px;padding:0 13px;border:1px solid #e4e4e7;border-radius:9px;font-size:14px;" />
+            <button onClick="{{ addBoard }}" style="height:42px;padding:0 20px;background:#4f46e5;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;">Add board</button>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ tabCategories }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+            <sc-for list="{{ categoriesForSettings }}" as="c" hint-placeholder-count="6">
+              <div style="display:flex;align-items:center;gap:9px;background:#fff;border:1px solid #e4e4e7;border-radius:10px;padding:9px 14px;">
+                <span style="{{ c.dot }}"></span>
+                <span style="font-size:13.5px;font-weight:600;">{{ c.name }}</span>
+                <span style="font-size:12px;color:#a1a1aa;">{{ c.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;gap:10px;max-width:440px;">
+            <input value="{{ newCategory }}" onChange="{{ onNewCategory }}" placeholder="New category…" style="flex:1;height:42px;padding:0 13px;border:1px solid #e4e4e7;border-radius:9px;font-size:14px;" />
+            <button onClick="{{ addCategory }}" style="height:42px;padding:0 20px;background:#4f46e5;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ tabUsers }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#fff;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:1fr 220px 150px;gap:12px;padding:11px 18px;background:#fafafa;border-bottom:1px solid #eeeef0;font-size:11px;font-weight:700;color:#a1a1aa;letter-spacing:.4px;text-transform:uppercase;">
+            <div>Member</div><div>Email</div><div>Role</div>
+          </div>
+          <sc-for list="{{ members }}" as="u" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:1fr 220px 150px;gap:12px;padding:13px 18px;border-bottom:1px solid #f4f4f5;align-items:center;">
+              <div style="display:flex;align-items:center;gap:11px;">
+                <div style="{{ u.avatarStyle }}">{{ u.initials }}</div>
+                <span style="font-size:14px;font-weight:600;">{{ u.name }}</span>
+              </div>
+              <div style="font-size:13px;color:#71717a;">{{ u.email }}</div>
+              <div><span style="{{ u.roleChip }}">{{ u.roleLabel }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ tabGithub }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:22px;max-width:560px;">
+          <div style="display:flex;align-items:center;gap:13px;">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="#18181b"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+            <div style="flex:1;">
+              <div style="font-size:15px;font-weight:700;">GitHub</div>
+              <div style="font-size:12.5px;color:#8b8f99;">Turn approved ideas into tracked issues.</div>
+            </div>
+            <span style="{{ githubConnBadge }}">{{ githubConnLabel }}</span>
+          </div>
+          <div style="height:1px;background:#eeeef0;margin:18px 0;"></div>
+          <label style="display:block;font-size:12.5px;font-weight:600;color:#71717a;margin-bottom:7px;">Default repository</label>
+          <input value="{{ defaultRepo }}" onChange="{{ onDefaultRepo }}" style="width:100%;height:40px;padding:0 12px;border:1px solid #e4e4e7;border-radius:9px;font-size:13.5px;font-family:monospace;margin-bottom:16px;" />
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid #f4f4f5;">
+            <div>
+              <div style="font-size:13.5px;font-weight:600;">Auto-create issues on approval</div>
+              <div style="font-size:12px;color:#a1a1aa;">Draft an issue whenever an idea is approved for development.</div>
+            </div>
+            <button onClick="{{ toggleAuto }}" style="{{ autoToggleStyle }}"><span style="{{ autoKnobStyle }}"></span></button>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <!-- ===== GITHUB CREATE-ISSUE MODAL ===== -->
+  <sc-if value="{{ ghModalOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeGithubModal }}" style="position:fixed;inset:0;background:rgba(24,24,27,.5);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:50;animation:overlayIn .15s ease;padding:24px;">
+    <div onClick="{{ stop }}" style="width:560px;max-width:100%;max-height:90vh;overflow-y:auto;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.28);animation:modalIn .2s cubic-bezier(.2,.8,.3,1);">
+      <div style="display:flex;align-items:center;gap:11px;padding:20px 22px;border-bottom:1px solid #eeeef0;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#18181b"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+        <div style="flex:1;">
+          <div style="font-size:16px;font-weight:700;">Create GitHub issue</div>
+          <div style="font-size:12.5px;color:#8b8f99;">Link this idea to a tracked issue.</div>
+        </div>
+        <button onClick="{{ closeGithubModal }}" style="width:30px;height:30px;border:none;background:#f4f4f5;border-radius:8px;cursor:pointer;color:#71717a;font-size:16px;">✕</button>
+      </div>
+      <div style="padding:22px;">
+        <label style="display:block;font-size:12.5px;font-weight:600;margin-bottom:7px;">Repository</label>
+        <select value="{{ gh.repo }}" onChange="{{ onGhRepo }}" style="width:100%;height:40px;padding:0 11px;border:1px solid #e4e4e7;border-radius:9px;font-size:13.5px;background:#fff;font-family:monospace;cursor:pointer;margin-bottom:16px;">
+          <sc-for list="{{ repos }}" as="r" hint-placeholder-count="3"><option value="{{ r }}">{{ r }}</option></sc-for>
+        </select>
+
+        <label style="display:block;font-size:12.5px;font-weight:600;margin-bottom:7px;">Issue title</label>
+        <input value="{{ gh.title }}" onChange="{{ onGhTitle }}" style="width:100%;height:40px;padding:0 12px;border:1px solid #e4e4e7;border-radius:9px;font-size:13.5px;margin-bottom:16px;" />
+
+        <label style="display:block;font-size:12.5px;font-weight:600;margin-bottom:7px;">Description</label>
+        <textarea value="{{ gh.body }}" onChange="{{ onGhBody }}" style="width:100%;min-height:110px;padding:11px 12px;border:1px solid #e4e4e7;border-radius:9px;font-size:13px;line-height:1.55;font-family:monospace;resize:vertical;margin-bottom:16px;"></textarea>
+
+        <label style="display:block;font-size:12.5px;font-weight:600;margin-bottom:8px;">Labels</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+          <sc-for list="{{ ghLabels }}" as="l" hint-placeholder-count="4">
+            <button onClick="{{ l.onToggle }}" style="{{ l.style }}"><span style="{{ l.dot }}"></span>{{ l.name }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid #eeeef0;background:#fafafa;border-radius:0 0 16px 16px;">
+        <button onClick="{{ closeGithubModal }}" style="height:40px;padding:0 18px;background:#fff;color:#52525b;border:1px solid #e4e4e7;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;">Cancel</button>
+        <button onClick="{{ createGithubIssue }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 18px;background:#1f883d;color:#fff;border:none;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;" style-hover="background:#1a7433;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#fff" stroke-width="1.8"/><circle cx="12" cy="12" r="2.4" fill="#fff"/></svg>
+          Create issue
+        </button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ===== TOAST ===== -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#18181b;color:#fff;padding:12px 20px;border-radius:11px;font-size:13.5px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:60;display:flex;align-items:center;gap:9px;animation:toastIn .25s ease;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="#22c55e"/><path d="m8.5 12 2.5 2.5 4.5-5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      {{ toast }}
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:820},&quot;orgName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Northwind Group&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;defaultRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;employee&quot;,&quot;options&quot;:[&quot;employee&quot;,&quot;manager&quot;,&quot;admin&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;enableGithub&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      role: null,
+      screen: 'dashboard',
+      selectedId: null,
+      filterBoard: 'all',
+      filterStatus: 'all',
+      sort: 'top',
+      form: { title: '', description: '', board: '', category: '' },
+      formError: false,
+      commentDraft: '',
+      statusNote: '',
+      settingsTab: 'boards',
+      newBoard: '',
+      newCategory: '',
+      defaultRepo: 'rudaca/rudaca-voice',
+      autoCreate: false,
+      ghModalOpen: false,
+      gh: { repo: '', title: '', body: '', labels: ['enhancement'] },
+      toast: null,
+      users: [
+        { id: 'u1', name: 'Maya Chen', email: 'maya.chen@northwind.co', role: 'employee', color: '#4f46e5' },
+        { id: 'u2', name: 'Devon Ridley', email: 'devon.ridley@northwind.co', role: 'manager', color: '#0d9488' },
+        { id: 'u3', name: 'Priya Anand', email: 'priya.anand@northwind.co', role: 'admin', color: '#db2777' },
+        { id: 'u4', name: 'Tom Okafor', email: 'tom.okafor@northwind.co', role: 'employee', color: '#ea580c' },
+        { id: 'u5', name: 'Sara Lindqvist', email: 'sara.lindqvist@northwind.co', role: 'employee', color: '#7c3aed' },
+        { id: 'u6', name: 'Marcus Bell', email: 'marcus.bell@northwind.co', role: 'employee', color: '#0284c7' }
+      ],
+      boardGroupsData: [
+        { id: 'g1', name: 'Technology', boards: ['atlas', 'app', 'platform'] },
+        { id: 'g2', name: 'Operations', boards: ['ops', 'field'] },
+        { id: 'g3', name: 'Corporate', boards: ['hr', 'finance'] },
+        { id: 'g4', name: 'Customer', boards: ['cx'] }
+      ],
+      expandedGroups: { g1: true, g2: true, g3: true, g4: true },
+      boards: [
+        { id: 'atlas', name: 'Atlas', emoji: '🛰️', color: '#4f46e5', desc: 'Internal platform & tooling' },
+        { id: 'app', name: 'App', emoji: '📱', color: '#0ea5e9', desc: 'Customer-facing web & mobile app' },
+        { id: 'platform', name: 'Platform', emoji: '🧱', color: '#6366f1', desc: 'Infrastructure, data & security' },
+        { id: 'ops', name: 'Operations', emoji: '⚙️', color: '#0d9488', desc: 'Warehouse, logistics & process' },
+        { id: 'field', name: 'Field Service', emoji: '🚚', color: '#f59e0b', desc: 'On-site & field crews' },
+        { id: 'hr', name: 'People & HR', emoji: '👥', color: '#7c3aed', desc: 'Culture, hiring & workplace' },
+        { id: 'finance', name: 'Finance', emoji: '💰', color: '#16a34a', desc: 'Cost, budgeting & spend' },
+        { id: 'cx', name: 'Customer Experience', emoji: '💬', color: '#db2777', desc: 'Support, onboarding & CX' }
+      ],
+      categories: [
+        { name: 'Automation', color: '#4f46e5' },
+        { name: 'Cost Saving', color: '#16a34a' },
+        { name: 'Process Improvement', color: '#0d9488' },
+        { name: 'Employee Experience', color: '#7c3aed' },
+        { name: 'Customer Impact', color: '#db2777' },
+        { name: 'Compliance', color: '#d97706' }
+      ],
+      ideas: [
+        { id: 'i1', title: 'Automate monthly expense report reconciliation', board: 'finance', category: 'Automation', status: 'review', votes: 42, voted: false, authorId: 'u4', createdAt: '3 days ago',
+          description: 'Finance spends roughly two full days each month manually matching card statements to submitted expenses. A rules-based sync between our card provider and the expense tool could auto-match 80%+ of lines and flag only the exceptions for review.',
+          comments: [
+            { authorId: 'u1', text: 'This would save our team so much time at close. Strong yes.', at: '2 days ago' },
+            { authorId: 'u2', text: 'Good candidate — let me pull in Finance ops to scope the integration.', at: '1 day ago' }
+          ],
+          history: [ { status: 'new', by: 'Tom Okafor', at: '3 days ago', note: '' }, { status: 'review', by: 'Devon Ridley', at: '1 day ago', note: 'Promising — evaluating vendor APIs.' } ] },
+        { id: 'i2', title: 'Company-wide quiet focus hours on the calendar', board: 'hr', category: 'Employee Experience', status: 'planned', votes: 28, voted: true, authorId: 'u5', createdAt: '5 days ago',
+          description: 'Block 9–11am on Tuesdays and Thursdays as no-meeting focus time across the company. Reduces context-switching and gives everyone reliable deep-work windows.',
+          comments: [ { authorId: 'u6', text: 'Please. My mornings are back-to-back right now.', at: '4 days ago' } ],
+          history: [ { status: 'new', by: 'Sara Lindqvist', at: '5 days ago', note: '' }, { status: 'review', by: 'Devon Ridley', at: '3 days ago', note: '' }, { status: 'planned', by: 'Priya Anand', at: '2 days ago', note: 'Approved — rolling out next month.' } ] },
+        { id: 'i3', title: 'Self-service password reset portal', board: 'atlas', category: 'Process Improvement', status: 'progress', votes: 67, voted: false, authorId: 'u6', createdAt: '1 week ago',
+          description: 'Password resets are the #1 IT ticket. A self-service portal with identity verification would cut ticket volume dramatically and unblock staff instantly instead of waiting on the helpdesk.',
+          comments: [
+            { authorId: 'u1', text: 'Locked out twice this quarter — would love this.', at: '5 days ago' },
+            { authorId: 'u3', text: 'Approved for development, tracked in GitHub now.', at: '2 days ago' }
+          ],
+          history: [ { status: 'new', by: 'Marcus Bell', at: '1 week ago', note: '' }, { status: 'planned', by: 'Devon Ridley', at: '4 days ago', note: '' }, { status: 'progress', by: 'Priya Anand', at: '2 days ago', note: 'In active development.' } ],
+          github: { repo: 'rudaca/it-portal', number: 148, url: 'https://github.com/rudaca/it-portal/issues/148', title: 'Self-service password reset portal', state: 'open' } },
+        { id: 'i4', title: 'Standardize the customer onboarding checklist', board: 'cx', category: 'Customer Impact', status: 'new', votes: 15, voted: false, authorId: 'u1', createdAt: '2 days ago',
+          description: 'Every CSM onboards customers slightly differently. A shared, stage-gated checklist would make onboarding consistent, easier to hand off, and measurable.',
+          comments: [], history: [ { status: 'new', by: 'Maya Chen', at: '2 days ago', note: '' } ] },
+        { id: 'i5', title: 'Switch to reusable containers in the warehouse', board: 'ops', category: 'Cost Saving', status: 'done', votes: 51, voted: true, authorId: 'u4', createdAt: '3 weeks ago',
+          description: 'Replace single-use packaging on internal transfers with reusable totes. Cuts recurring packaging spend and waste with a short payback period.',
+          comments: [ { authorId: 'u2', text: 'Implemented across both sites — early numbers look great.', at: '4 days ago' } ],
+          history: [ { status: 'new', by: 'Tom Okafor', at: '3 weeks ago', note: '' }, { status: 'planned', by: 'Devon Ridley', at: '2 weeks ago', note: '' }, { status: 'progress', by: 'Devon Ridley', at: '10 days ago', note: '' }, { status: 'done', by: 'Priya Anand', at: '4 days ago', note: 'Rolled out — ~$18k/yr saved.' } ] },
+        { id: 'i6', title: 'Slack alert when a high-value ticket is unanswered 2h', board: 'app', category: 'Automation', status: 'planned', votes: 33, voted: false, authorId: 'u5', createdAt: '6 days ago',
+          description: 'Auto-notify the on-call lead in Slack when a priority customer ticket has no response after two hours, so nothing high-stakes slips through.',
+          comments: [ { authorId: 'u6', text: 'Would pair well with the auto-tagging idea.', at: '5 days ago' } ],
+          history: [ { status: 'new', by: 'Sara Lindqvist', at: '6 days ago', note: '' }, { status: 'planned', by: 'Devon Ridley', at: '2 days ago', note: 'Scoped, small build.' } ] },
+        { id: 'i7', title: 'Quarterly cross-team lunch & learn program', board: 'hr', category: 'Employee Experience', status: 'new', votes: 9, voted: false, authorId: 'u6', createdAt: '1 day ago',
+          description: 'Rotating 45-minute sessions where teams share what they do. Builds context across departments and surfaces collaboration opportunities.',
+          comments: [], history: [ { status: 'new', by: 'Marcus Bell', at: '1 day ago', note: '' } ] },
+        { id: 'i8', title: 'Consolidate overlapping SaaS subscriptions', board: 'finance', category: 'Cost Saving', status: 'review', votes: 24, voted: false, authorId: 'u1', createdAt: '4 days ago',
+          description: 'We pay for three tools that do nearly the same thing across teams. An audit and consolidation could cut licensing spend meaningfully without losing capability.',
+          comments: [ { authorId: 'u3', text: 'Finance is interested — please add the current tool list.', at: '3 days ago' } ],
+          history: [ { status: 'new', by: 'Maya Chen', at: '4 days ago', note: '' }, { status: 'review', by: 'Devon Ridley', at: '2 days ago', note: '' } ] },
+        { id: 'i9', title: 'Digitize paper timesheets for field staff', board: 'field', category: 'Process Improvement', status: 'new', votes: 19, voted: false, authorId: 'u4', createdAt: '2 days ago',
+          description: 'Field crews still submit paper timesheets that get re-keyed by admin. A simple mobile form would remove double entry and speed up payroll.',
+          comments: [], history: [ { status: 'new', by: 'Tom Okafor', at: '2 days ago', note: '' } ] },
+        { id: 'i10', title: 'Auto-tag incoming support emails by topic', board: 'app', category: 'Automation', status: 'progress', votes: 38, voted: true, authorId: 'u5', createdAt: '1 week ago',
+          description: 'Classify inbound support email by topic on arrival so it routes to the right queue automatically instead of being triaged by hand.',
+          comments: [ { authorId: 'u2', text: 'Prototype is live in a test inbox — accuracy is solid.', at: '3 days ago' } ],
+          history: [ { status: 'new', by: 'Sara Lindqvist', at: '1 week ago', note: '' }, { status: 'planned', by: 'Devon Ridley', at: '5 days ago', note: '' }, { status: 'progress', by: 'Priya Anand', at: '3 days ago', note: '' } ],
+          github: { repo: 'rudaca/support-automation', number: 92, url: 'https://github.com/rudaca/support-automation/issues/92', title: 'Auto-tag inbound support email by topic', state: 'open' } },
+        { id: 'i11', title: 'Single sign-on across all internal tools', board: 'platform', category: 'Compliance', status: 'review', votes: 31, voted: false, authorId: 'u6', createdAt: '5 days ago',
+          description: 'Staff juggle separate logins for a dozen internal systems. Rolling out SSO would cut password fatigue, tighten security, and speed up onboarding and offboarding.',
+          comments: [ { authorId: 'u3', text: 'Security is keen on this — evaluating providers now.', at: '3 days ago' } ],
+          history: [ { status: 'new', by: 'Marcus Bell', at: '5 days ago', note: '' }, { status: 'review', by: 'Priya Anand', at: '3 days ago', note: 'Assessing identity providers.' } ] }
+      ],
+      nextId: 12
+    };
+    this.STATUS = {
+      new:      { label: 'New',          bg: '#f1f1f4', color: '#52525b', dot: '#a1a1aa' },
+      review:   { label: 'Under Review', bg: '#fef4e6', color: '#b45309', dot: '#f59e0b' },
+      planned:  { label: 'Planned',      bg: '#e8f0fe', color: '#1d4ed8', dot: '#3b82f6' },
+      progress: { label: 'In Progress',  bg: '#eef0fe', color: '#4338ca', dot: '#6366f1' },
+      done:     { label: 'Implemented',  bg: '#e9f7ef', color: '#15803d', dot: '#22c55e' },
+      declined: { label: 'Declined',     bg: '#fdecec', color: '#b91c1c', dot: '#ef4444' }
+    };
+    this.STATUS_ORDER = ['new', 'review', 'planned', 'progress', 'done', 'declined'];
+  }
+
+  role() { return this.state.role || this.props.defaultRole || 'employee'; }
+  canManage() { const r = this.role(); return r === 'manager' || r === 'admin'; }
+  userById(id) { return this.state.users.find(u => u.id === id) || this.state.users[0]; }
+  boardById(id) { return this.state.boards.find(b => b.id === id); }
+  currentUser() {
+    const r = this.role();
+    if (r === 'manager') return this.userById('u2');
+    if (r === 'admin') return this.userById('u3');
+    return this.userById('u1');
+  }
+  roleLabel(r) { return r === 'admin' ? 'Admin / Owner' : r === 'manager' ? 'Manager' : 'Employee'; }
+  initials(name) { return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase(); }
+  avatarStyle(user, size) {
+    const s = size || 34;
+    return { width: s + 'px', height: s + 'px', flexShrink: 0, borderRadius: '50%', background: user.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: (s * 0.38) + 'px', fontWeight: 700, letterSpacing: '.2px' };
+  }
+  decorateUser(user) {
+    return { name: user.name, initials: this.initials(user.name), roleLabel: this.roleLabel(user.role),
+      avatarStyle: this.avatarStyle(user, 34), avatarStyleSm: this.avatarStyle(user, 24) };
+  }
+  timeToast(msg) { this.setState({ toast: msg }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2600); }
+
+  badgeStyle(meta) { return { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', borderRadius: '999px', fontSize: '11.5px', fontWeight: 600, background: meta.bg, color: meta.color, whiteSpace: 'nowrap' }; }
+  dotStyle(color, sz) { const s = sz || 6; return { width: s + 'px', height: s + 'px', borderRadius: '999px', background: color, flexShrink: 0, display: 'inline-block' }; }
+
+  voteStyle(voted, size) {
+    const base = { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', flexShrink: 0, cursor: 'pointer', borderRadius: '10px', transition: 'all .12s', fontFamily: 'inherit' };
+    const dims = size === 'xl' ? { width: '72px', padding: '13px 0' } : size === 'lg' ? { width: '52px', padding: '9px 0' } : { width: '44px', padding: '7px 0' };
+    const skin = voted ? { background: '#eef2ff', border: '1px solid #c7d2fe', color: '#4f46e5' } : { background: '#fff', border: '1px solid #e4e4e7', color: '#52525b' };
+    return Object.assign({}, base, dims, skin);
+  }
+
+  decorate(idea) {
+    const meta = this.STATUS[idea.status];
+    const board = this.boardById(idea.board);
+    const cat = this.state.categories.find(c => c.name === idea.category);
+    const author = this.decorateUser(this.userById(idea.authorId));
+    const id = idea.id;
+    return {
+      id, title: idea.title, votes: idea.votes, voted: idea.voted,
+      board: board ? board.name : '', category: idea.category,
+      statusLabel: meta.label, badgeStyle: this.badgeStyle(meta), dotStyle: this.dotStyle(meta.dot),
+      excerpt: idea.description.length > 130 ? idea.description.slice(0, 130).trim() + '…' : idea.description,
+      description: idea.description, createdAt: idea.createdAt,
+      commentCount: idea.comments.length, author,
+      voteFill: idea.voted ? '#4f46e5' : '#a1a1aa',
+      voteStyle: this.voteStyle(idea.voted, 'sm'),
+      voteStyleLg: this.voteStyle(idea.voted, 'lg'),
+      voteStyleXl: this.voteStyle(idea.voted, 'xl'),
+      catChip: { display: 'inline-flex', alignItems: 'center', fontSize: '11.5px', fontWeight: 600, color: cat ? cat.color : '#71717a', background: '#fafafa', border: '1px solid #eeeef0', padding: '2px 9px', borderRadius: '7px' },
+      onOpen: () => this.setState({ screen: 'detail', selectedId: id, commentDraft: '', statusNote: '' }),
+      onVote: (e) => { if (e) e.stopPropagation(); this.toggleVote(id); },
+      onApprove: (e) => { if (e) e.stopPropagation(); this.changeStatus(id, 'planned', 'Approved from review queue.'); this.timeToast('Idea approved and moved to Planned'); },
+      onDecline: (e) => { if (e) e.stopPropagation(); this.changeStatus(id, 'declined', 'Declined from review queue.'); this.timeToast('Idea declined'); }
+    };
+  }
+
+  toggleVote(id) {
+    this.setState(s => ({ ideas: s.ideas.map(i => i.id === id ? Object.assign({}, i, { voted: !i.voted, votes: i.votes + (i.voted ? -1 : 1) }) : i) }));
+  }
+  changeStatus(id, status, note) {
+    const by = this.currentUser().name;
+    this.setState(s => ({ ideas: s.ideas.map(i => {
+      if (i.id !== id) return i;
+      const entry = { status, by, at: 'Just now', note: note || '' };
+      return Object.assign({}, i, { status, history: i.history.concat([entry]) });
+    }) }));
+  }
+
+  submitIdea() {
+    const f = this.state.form;
+    if (!f.title.trim() || !f.board) { this.setState({ formError: true }); return; }
+    const id = 'i' + this.state.nextId;
+    const idea = { id, title: f.title.trim(), board: f.board, category: f.category || 'Process Improvement', status: 'new', votes: 1, voted: true, authorId: this.currentUser().id, createdAt: 'Just now', description: f.description.trim() || 'No description provided.', comments: [], history: [{ status: 'new', by: this.currentUser().name, at: 'Just now', note: '' }] };
+    this.setState(s => ({ ideas: [idea].concat(s.ideas), nextId: s.nextId + 1, form: { title: '', description: '', board: '', category: '' }, formError: false, screen: 'detail', selectedId: id }));
+    this.timeToast('Idea posted 🎉');
+  }
+  addComment() {
+    const txt = this.state.commentDraft.trim();
+    if (!txt) return;
+    const id = this.state.selectedId;
+    const authorId = this.currentUser().id;
+    this.setState(s => ({ commentDraft: '', ideas: s.ideas.map(i => i.id === id ? Object.assign({}, i, { comments: i.comments.concat([{ authorId, text: txt, at: 'Just now' }]) }) : i) }));
+  }
+
+  openGithubModal() {
+    const idea = this.state.ideas.find(i => i.id === this.state.selectedId);
+    const cat = idea ? idea.category : '';
+    const labelMap = { 'Automation': 'automation', 'Cost Saving': 'cost-saving', 'Customer Impact': 'customer', 'Employee Experience': 'people', 'Compliance': 'compliance' };
+    const extra = labelMap[cat];
+    this.setState({ ghModalOpen: true, gh: { repo: this.state.defaultRepo, title: idea ? idea.title : '', body: idea ? (idea.description + '\n\n---\nGenerated from Rudaca Voice · ' + idea.votes + ' votes') : '', labels: extra ? ['enhancement', extra] : ['enhancement'] } });
+  }
+  closeGithubModal() { this.setState({ ghModalOpen: false }); }
+  createGithubIssue() {
+    const id = this.state.selectedId;
+    const gh = this.state.gh;
+    const number = Math.floor(120 + Math.random() * 400);
+    const link = { repo: gh.repo, number, url: 'https://github.com/' + gh.repo + '/issues/' + number, title: gh.title, state: 'open' };
+    this.setState(s => ({ ghModalOpen: false, ideas: s.ideas.map(i => {
+      if (i.id !== id) return i;
+      const entry = { status: i.status, by: s.users.find(u => u.id === (s.role || 'employee')) ? '' : '', at: 'Just now', note: 'Linked GitHub issue #' + number };
+      return Object.assign({}, i, { github: link });
+    }) }));
+    this.timeToast('GitHub issue #' + number + ' created');
+  }
+
+  navStyle(key, activeKey) {
+    const active = key === activeKey;
+    const base = { display: 'flex', alignItems: 'center', gap: '11px', width: '100%', padding: '9px 12px', borderRadius: '8px', border: 'none', fontSize: '14px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background .12s' };
+    return active
+      ? Object.assign({}, base, { background: '#eef2ff', color: '#4338ca', fontWeight: 650 })
+      : Object.assign({}, base, { background: 'transparent', color: '#52525b', fontWeight: 500 });
+  }
+  roleTabStyle(key) {
+    const active = this.role() === key;
+    const base = { height: '30px', padding: '0 12px', borderRadius: '7px', border: 'none', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s' };
+    return active
+      ? Object.assign({}, base, { background: '#fff', color: '#18181b', boxShadow: '0 1px 2px rgba(0,0,0,.1)' })
+      : Object.assign({}, base, { background: 'transparent', color: '#71717a' });
+  }
+  pillStyle(key, current) {
+    const active = key === current;
+    const base = { height: '28px', padding: '0 13px', borderRadius: '7px', border: 'none', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+    return active ? Object.assign({}, base, { background: '#fff', color: '#18181b', boxShadow: '0 1px 2px rgba(0,0,0,.08)' }) : Object.assign({}, base, { background: 'transparent', color: '#71717a' });
+  }
+  tabStyle(key, current) {
+    const active = key === current;
+    const base = { height: '38px', padding: '0 16px', border: 'none', background: 'transparent', fontSize: '13.5px', cursor: 'pointer', fontFamily: 'inherit', borderBottom: '2px solid transparent', marginBottom: '-1px' };
+    return active ? Object.assign({}, base, { color: '#4f46e5', fontWeight: 700, borderBottom: '2px solid #4f46e5' }) : Object.assign({}, base, { color: '#71717a', fontWeight: 600 });
+  }
+  roleChip(role) {
+    const map = { admin: { bg: '#fce7f3', c: '#be185d' }, manager: { bg: '#ccfbf1', c: '#0f766e' }, employee: { bg: '#f1f1f4', c: '#52525b' } };
+    const m = map[role];
+    return { fontSize: '11.5px', fontWeight: 600, padding: '3px 10px', borderRadius: '7px', background: m.bg, color: m.c };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const role = this.role();
+    const canManage = this.canManage();
+    const isAdmin = role === 'admin';
+    const activeKey = s.screen === 'detail' ? 'ideas' : s.screen;
+    const cu = this.currentUser();
+    const currentUser = { name: cu.name, initials: this.initials(cu.name), roleLabel: this.roleLabel(cu.role), avatarStyle: this.avatarStyle(cu, 34) };
+
+    // ideas filtered + sorted
+    let list = s.ideas.slice();
+    if (s.filterBoard !== 'all') list = list.filter(i => i.board === s.filterBoard);
+    if (s.filterStatus !== 'all') list = list.filter(i => i.status === s.filterStatus);
+    if (s.sort === 'top') list.sort((a, b) => b.votes - a.votes);
+    else if (s.sort === 'new') list.sort((a, b) => this.state.ideas.indexOf(a) - this.state.ideas.indexOf(b));
+    else list.sort((a, b) => (b.votes + b.comments.length * 3) - (a.votes + a.comments.length * 3));
+    const ideasList = list.map(i => this.decorate(i));
+
+    // dashboard
+    const mine = s.ideas.filter(i => i.authorId === cu.id);
+    const votesCast = s.ideas.filter(i => i.voted).length;
+    const inReview = s.ideas.filter(i => i.status === 'new' || i.status === 'review').length;
+    const inProgress = s.ideas.filter(i => i.status === 'planned' || i.status === 'progress').length;
+    const implemented = s.ideas.filter(i => i.status === 'done').length;
+
+    let stats, greeting, dashTitle, leftColTitle, dashLeftList;
+    const statDot = (c) => this.dotStyle(c, 9);
+    if (role === 'employee') {
+      greeting = 'Welcome back'; dashTitle = 'Your ideas hub';
+      stats = [
+        { label: 'Your ideas', value: mine.length, sub: 'submitted by you', dot: statDot('#4f46e5') },
+        { label: 'Votes cast', value: votesCast, sub: 'ideas you backed', dot: statDot('#0d9488') },
+        { label: 'In progress', value: inProgress, sub: 'moving forward', dot: statDot('#6366f1') },
+        { label: 'Implemented', value: implemented, sub: 'shipped org-wide', dot: statDot('#22c55e') }
+      ];
+      leftColTitle = 'Trending ideas';
+      dashLeftList = s.ideas.slice().sort((a, b) => b.votes - a.votes).slice(0, 4).map(i => this.decorate(i));
+    } else if (role === 'manager') {
+      greeting = 'Manager view'; dashTitle = 'Team ideas overview';
+      stats = [
+        { label: 'Awaiting review', value: inReview, sub: 'need a decision', dot: statDot('#f59e0b') },
+        { label: 'In progress', value: inProgress, sub: 'being delivered', dot: statDot('#6366f1') },
+        { label: 'Implemented', value: implemented, sub: 'this quarter', dot: statDot('#22c55e') },
+        { label: 'Total ideas', value: s.ideas.length, sub: 'across all boards', dot: statDot('#4f46e5') }
+      ];
+      leftColTitle = 'Top of the queue';
+      dashLeftList = s.ideas.filter(i => i.status === 'new' || i.status === 'review').sort((a, b) => b.votes - a.votes).slice(0, 4).map(i => this.decorate(i));
+    } else {
+      greeting = 'Admin / Owner view'; dashTitle = 'Organization overview';
+      stats = [
+        { label: 'Total ideas', value: s.ideas.length, sub: 'all time', dot: statDot('#4f46e5') },
+        { label: 'Members', value: s.users.length, sub: 'in workspace', dot: statDot('#db2777') },
+        { label: 'Awaiting review', value: inReview, sub: 'need a decision', dot: statDot('#f59e0b') },
+        { label: 'Implemented', value: implemented, sub: 'shipped', dot: statDot('#22c55e') }
+      ];
+      leftColTitle = 'Highest voted';
+      dashLeftList = s.ideas.slice().sort((a, b) => b.votes - a.votes).slice(0, 4).map(i => this.decorate(i));
+    }
+
+    const boardSummary = s.boards.map(b => ({
+      name: b.name, emoji: b.emoji, count: s.ideas.filter(i => i.board === b.id).length,
+      iconStyle: { width: '34px', height: '34px', borderRadius: '9px', background: b.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0 },
+      onOpen: () => this.setState({ screen: 'ideas', filterBoard: b.id, filterStatus: 'all' })
+    }));
+
+    const boardActive = (id) => s.screen === 'ideas' && s.filterBoard === id;
+    const allIdeasActive = (s.screen === 'ideas' || s.screen === 'detail') && s.filterBoard === 'all';
+    const boardNav = s.boardGroupsData.map(g => {
+      const expanded = !!s.expandedGroups[g.id];
+      const gcount = s.ideas.filter(i => g.boards.indexOf(i.board) >= 0).length;
+      return {
+        name: g.name, count: gcount, expanded,
+        headerStyle: { display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '7px 12px', borderRadius: '8px', border: 'none', background: 'transparent', color: '#71717a', fontSize: '11.5px', fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'inherit' },
+        chevronStyle: { display: 'inline-flex', transition: 'transform .15s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' },
+        onToggle: () => this.setState(st => ({ expandedGroups: Object.assign({}, st.expandedGroups, { [g.id]: !st.expandedGroups[g.id] }) })),
+        boards: g.boards.map(bid => this.boardById(bid)).filter(Boolean).map(b => {
+          const active = boardActive(b.id);
+          return { id: b.id, name: b.name, emoji: b.emoji, count: s.ideas.filter(i => i.board === b.id).length, active,
+            style: Object.assign({ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '7px 12px 7px 22px', borderRadius: '8px', border: 'none', fontSize: '13.5px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }, active ? { background: '#eef2ff', color: '#4338ca', fontWeight: 650 } : { background: 'transparent', color: '#52525b', fontWeight: 500 }),
+            countStyle: { marginLeft: 'auto', fontSize: '11.5px', color: active ? '#6366f1' : '#a1a1aa', fontWeight: 600 },
+            onOpen: () => this.setState({ screen: 'ideas', filterBoard: b.id }) };
+        })
+      };
+    });
+    const boardGroups = s.boardGroupsData.map(g => ({ name: g.name, boardOpts: g.boards.map(bid => this.boardById(bid)).filter(Boolean).map(b => ({ id: b.id, name: b.name })) }));
+    let boardHeader;
+    if (s.filterBoard === 'all') {
+      boardHeader = { showIcon: false, hasCrumb: false, crumb: '', name: 'All Ideas', emoji: '', sub: s.ideas.length + ' ideas across ' + s.boards.length + ' boards', iconStyle: {} };
+    } else {
+      const hb = this.boardById(s.filterBoard);
+      const hg = s.boardGroupsData.find(g => g.boards.indexOf(s.filterBoard) >= 0);
+      const hcount = s.ideas.filter(i => i.board === s.filterBoard).length;
+      boardHeader = { showIcon: true, hasCrumb: !!hg, crumb: hg ? hg.name : '', name: hb ? hb.name : '', emoji: hb ? hb.emoji : '', sub: hcount + ' ideas · ' + (hb ? hb.desc : ''),
+        iconStyle: { width: '44px', height: '44px', borderRadius: '11px', background: (hb ? hb.color : '#4f46e5') + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 } };
+    }
+
+    // selected detail
+    let selected = null, commentsHeading = '', showGithubPanel = false;
+    const rawSel = s.ideas.find(i => i.id === s.selectedId);
+    if (rawSel) {
+      selected = this.decorate(rawSel);
+      selected.comments = rawSel.comments.map(c => {
+        const u = this.userById(c.authorId);
+        return { author: this.decorateUser(u), text: c.text, at: c.at, isStaff: u.role !== 'employee' };
+      });
+      const histRev = rawSel.history.slice().reverse();
+      selected.history = histRev.map((h, idx) => {
+        const meta = this.STATUS[h.status];
+        return { label: meta ? meta.label : h.status, note: h.note, hasNote: !!h.note, by: h.by, at: h.at,
+          dot: Object.assign({ marginTop: '3px' }, this.dotStyle(meta ? meta.dot : '#a1a1aa', 9)),
+          showLine: idx < histRev.length - 1 };
+      });
+      selected.statusButtons = this.STATUS_ORDER.map(k => {
+        const meta = this.STATUS[k];
+        const active = rawSel.status === k;
+        return { label: meta.label, active, dot: Object.assign({ marginRight: '2px' }, this.dotStyle(meta.dot, 7)),
+          style: Object.assign({ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', padding: '8px 11px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }, active ? { background: meta.bg, color: meta.color, border: '1px solid ' + meta.dot + '66' } : { background: '#fff', color: '#3f3f46', border: '1px solid #e4e4e7' }),
+          onClick: () => { this.changeStatus(rawSel.id, k, s.statusNote); this.setState({ statusNote: '' }); this.timeToast('Status set to ' + meta.label); } };
+      });
+      commentsHeading = rawSel.comments.length + (rawSel.comments.length === 1 ? ' comment' : ' comments');
+      showGithubPanel = canManage && (this.props.enableGithub !== false);
+      if (rawSel.github) {
+        const stOpen = rawSel.github.state === 'open';
+        selected.hasGithub = true; selected.noGithub = false;
+        selected.github = Object.assign({}, rawSel.github, {
+          stateLabel: stOpen ? 'Open' : 'Closed',
+          stateStyle: { fontSize: '10.5px', fontWeight: 700, padding: '2px 9px', borderRadius: '999px', color: '#fff', background: stOpen ? '#1f883d' : '#8957e5' }
+        });
+      } else { selected.hasGithub = false; selected.noGithub = true; }
+    }
+
+    // review queue
+    const reviewRaw = s.ideas.filter(i => i.status === 'new' || i.status === 'review').sort((a, b) => b.votes - a.votes);
+    const reviewList = reviewRaw.map(i => this.decorate(i));
+    const reviewStats = [
+      { label: 'Awaiting review', value: reviewRaw.length },
+      { label: 'New this week', value: s.ideas.filter(i => i.status === 'new').length },
+      { label: 'Total votes in queue', value: reviewRaw.reduce((a, b) => a + b.votes, 0) }
+    ];
+
+    // settings decorations
+    const boardsDec = s.boards.map(b => ({ id: b.id, name: b.name, emoji: b.emoji, desc: b.desc, count: s.ideas.filter(i => i.board === b.id).length,
+      iconStyle: { width: '38px', height: '38px', borderRadius: '10px', background: b.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 } }));
+    const catsDec = s.categories.map(c => ({ name: c.name, count: s.ideas.filter(i => i.category === c.name).length, dot: this.dotStyle(c.color, 9) }));
+    const membersDec = s.users.map(u => ({ name: u.name, email: u.email, initials: this.initials(u.name), roleLabel: this.roleLabel(u.role), avatarStyle: this.avatarStyle(u, 32), roleChip: this.roleChip(u.role) }));
+
+    const ghLabelDefs = [ { name: 'enhancement', color: '#a2eeef' }, { name: 'automation', color: '#c5def5' }, { name: 'cost-saving', color: '#c2e0c6' }, { name: 'customer', color: '#f9d0c4' }, { name: 'people', color: '#d4c5f9' } ];
+    const ghLabels = ghLabelDefs.map(l => {
+      const on = s.gh.labels.indexOf(l.name) >= 0;
+      return { name: l.name, dot: this.dotStyle(l.color, 8),
+        style: Object.assign({ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '5px 11px', borderRadius: '999px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }, on ? { background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' } : { background: '#fff', color: '#71717a', border: '1px solid #e4e4e7' }),
+        onToggle: () => this.setState(st => ({ gh: Object.assign({}, st.gh, { labels: on ? st.gh.labels.filter(x => x !== l.name) : st.gh.labels.concat([l.name]) }) })) };
+    });
+
+    return {
+      orgName: this.props.orgName || 'Northwind Group',
+      role, canManage, isAdmin,
+      manageLabel: isAdmin ? 'Administration' : 'Management',
+      currentUser,
+      nav: {
+        dashboard: this.navStyle('dashboard', activeKey), ideas: this.navStyle('ideas', activeKey),
+        submit: this.navStyle('submit', activeKey), review: this.navStyle('review', activeKey), settings: this.navStyle('settings', activeKey)
+      },
+      roleTab: { employee: this.roleTabStyle('employee'), manager: this.roleTabStyle('manager'), admin: this.roleTabStyle('admin') },
+      hasQueue: reviewRaw.length > 0, queueCount: reviewRaw.length,
+      queuePillStyle: { marginLeft: 'auto', background: '#f59e0b', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '999px', minWidth: '20px', textAlign: 'center' },
+
+      setEmployee: () => this.setState({ role: 'employee', screen: 'dashboard' }),
+      setManager: () => this.setState({ role: 'manager', screen: 'dashboard' }),
+      setAdmin: () => this.setState({ role: 'admin', screen: 'dashboard' }),
+      goDashboard: () => this.setState({ screen: 'dashboard' }),
+      goIdeas: () => this.setState({ screen: 'ideas' }),
+      goSubmit: () => this.setState({ screen: 'submit', formError: false }),
+      goReview: () => this.setState({ screen: 'review' }),
+      goSettings: () => this.setState({ screen: 'settings' }),
+
+      showDashboard: s.screen === 'dashboard',
+      showIdeas: s.screen === 'ideas',
+      showSubmit: s.screen === 'submit',
+      showDetail: s.screen === 'detail' && !!selected,
+      showReview: s.screen === 'review',
+      showSettings: s.screen === 'settings',
+
+      greeting, dashTitle, stats, leftColTitle, dashLeftList, boardSummary,
+
+      ideasList, ideasEmpty: ideasList.length === 0,
+      ideasCountLabel: s.ideas.length + ' ideas across ' + s.boards.length + ' boards',
+      boards: s.boards, categories: s.categories,
+      boardNav, boardGroups, boardHeader,
+      goAllIdeas: () => this.setState({ screen: 'ideas', filterBoard: 'all' }),
+      allIdeasStyle: this.navStyle('ideas', allIdeasActive ? 'ideas' : 'none'),
+      filterBoard: s.filterBoard, filterStatus: s.filterStatus,
+      onFilterBoard: (e) => this.setState({ filterBoard: e.target.value }),
+      onFilterStatus: (e) => this.setState({ filterStatus: e.target.value }),
+      sortTab: { top: this.pillStyle('top', s.sort), new: this.pillStyle('new', s.sort), trending: this.pillStyle('trending', s.sort) },
+      setSortTop: () => this.setState({ sort: 'top' }), setSortNew: () => this.setState({ sort: 'new' }), setSortTrend: () => this.setState({ sort: 'trending' }),
+
+      form: s.form, formError: s.formError,
+      onFormTitle: (e) => this.setState({ form: Object.assign({}, s.form, { title: e.target.value }) }),
+      onFormDesc: (e) => this.setState({ form: Object.assign({}, this.state.form, { description: e.target.value }) }),
+      onFormBoard: (e) => this.setState({ form: Object.assign({}, this.state.form, { board: e.target.value }) }),
+      onFormCategory: (e) => this.setState({ form: Object.assign({}, this.state.form, { category: e.target.value }) }),
+      submitIdea: () => this.submitIdea(),
+      submitBtnStyle: { height: '42px', padding: '0 22px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '9px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(79,70,229,.3)' },
+
+      selected, commentsHeading,
+      commentDraft: s.commentDraft,
+      onCommentInput: (e) => this.setState({ commentDraft: e.target.value }),
+      addComment: () => this.addComment(),
+      commentBtnStyle: { height: '36px', padding: '0 18px', background: s.commentDraft.trim() ? '#4f46e5' : '#e4e4e7', color: s.commentDraft.trim() ? '#fff' : '#a1a1aa', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: s.commentDraft.trim() ? 'pointer' : 'default' },
+      statusNote: s.statusNote,
+      onStatusNote: (e) => this.setState({ statusNote: e.target.value }),
+      showGithubPanel,
+      openGithubModal: () => this.openGithubModal(),
+
+      reviewList, reviewStats, reviewEmpty: reviewList.length === 0,
+
+      setTab: { boards: this.tabStyle('boards', s.settingsTab), categories: this.tabStyle('categories', s.settingsTab), users: this.tabStyle('users', s.settingsTab), github: this.tabStyle('github', s.settingsTab) },
+      setTabBoards: () => this.setState({ settingsTab: 'boards' }), setTabCategories: () => this.setState({ settingsTab: 'categories' }),
+      setTabUsers: () => this.setState({ settingsTab: 'users' }), setTabGithub: () => this.setState({ settingsTab: 'github' }),
+      tabBoards: s.settingsTab === 'boards', tabCategories: s.settingsTab === 'categories', tabUsers: s.settingsTab === 'users', tabGithub: s.settingsTab === 'github',
+      newBoard: s.newBoard, onNewBoard: (e) => this.setState({ newBoard: e.target.value }),
+      addBoard: () => { const n = s.newBoard.trim(); if (!n) return; const palette = ['#0d9488', '#7c3aed', '#16a34a', '#2563eb', '#db2777', '#ea580c']; this.setState(st => ({ boards: st.boards.concat([{ id: 'b' + (st.boards.length + 1), name: n, emoji: '📋', color: palette[st.boards.length % palette.length], desc: 'Custom board' }]), newBoard: '' })); this.timeToast('Board added'); },
+      newCategory: s.newCategory, onNewCategory: (e) => this.setState({ newCategory: e.target.value }),
+      addCategory: () => { const n = s.newCategory.trim(); if (!n) return; const palette = ['#4f46e5', '#16a34a', '#0d9488', '#7c3aed', '#db2777', '#d97706']; this.setState(st => ({ categories: st.categories.concat([{ name: n, color: palette[st.categories.length % palette.length] }]), newCategory: '' })); this.timeToast('Category added'); },
+      boardsForSettings: boardsDec, categoriesForSettings: catsDec, members: membersDec,
+      githubConnLabel: 'Connected', githubConnBadge: { fontSize: '12px', fontWeight: 600, color: '#15803d', background: '#e9f7ef', padding: '5px 11px', borderRadius: '7px' },
+      defaultRepo: s.defaultRepo, onDefaultRepo: (e) => this.setState({ defaultRepo: e.target.value }),
+      toggleAuto: () => this.setState({ autoCreate: !s.autoCreate }),
+      autoToggleStyle: { width: '42px', height: '24px', borderRadius: '999px', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', background: s.autoCreate ? '#4f46e5' : '#d4d4d8', justifyContent: s.autoCreate ? 'flex-end' : 'flex-start', transition: 'all .15s' },
+      autoKnobStyle: { width: '20px', height: '20px', borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.2)' },
+
+      ghModalOpen: s.ghModalOpen, gh: s.gh, repos: ['rudaca/rudaca-voice', 'rudaca/it-portal', 'rudaca/support-automation', 'rudaca/ops-tools'],
+      onGhRepo: (e) => this.setState({ gh: Object.assign({}, this.state.gh, { repo: e.target.value }) }),
+      onGhTitle: (e) => this.setState({ gh: Object.assign({}, this.state.gh, { title: e.target.value }) }),
+      onGhBody: (e) => this.setState({ gh: Object.assign({}, this.state.gh, { body: e.target.value }) }),
+      ghLabels,
+      closeGithubModal: () => this.closeGithubModal(),
+      createGithubIssue: () => this.createGithubIssue(),
+      stop: (e) => { if (e) e.stopPropagation(); },
+      toast: s.toast
+    };
+  }
+}
+</script>
+</body>
+</html>
