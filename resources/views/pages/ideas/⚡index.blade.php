@@ -131,14 +131,20 @@ new #[Title('Ideas')] class extends Component {
 <section class="mx-auto w-full max-w-[1080px] px-6 py-7 lg:px-8">
     <div>
         {{-- Header --}}
-        <div class="flex flex-col gap-1">
-            <flux:heading size="xl">{{ __('All Ideas') }}</flux:heading>
-            <flux:text class="text-zinc-500 dark:text-zinc-400">
-                {{ __(':ideas ideas across :boards boards', [
-                    'ideas' => $this->ideas->total(),
-                    'boards' => $this->boards->count(),
-                ]) }}
-            </flux:text>
+        <div class="flex items-start justify-between gap-4">
+            <div class="flex flex-col gap-1">
+                <flux:heading size="xl">{{ __('All Ideas') }}</flux:heading>
+                <flux:text class="text-zinc-500 dark:text-zinc-400">
+                    {{ __(':ideas ideas across :boards boards', [
+                        'ideas' => $this->ideas->total(),
+                        'boards' => $this->boards->count(),
+                    ]) }}
+                </flux:text>
+            </div>
+
+            <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" data-test="new-idea-button">
+                {{ __('New idea') }}
+            </flux:button>
         </div>
 
         {{-- Controls: sort (left) + filters (right) --}}

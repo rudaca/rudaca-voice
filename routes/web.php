@@ -10,6 +10,7 @@ Route::prefix('{current_team}')
     ->group(function () {
         Route::view('dashboard', 'dashboard')->name('dashboard');
         Route::livewire('ideas', 'pages::ideas.index')->name('ideas.index');
+        Route::livewire('ideas/create', 'pages::ideas.create')->name('ideas.create');
         Route::livewire('ideas/{idea}', 'pages::ideas.show')->name('ideas.show');
     });
 
