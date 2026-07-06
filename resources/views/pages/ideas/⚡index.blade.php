@@ -196,17 +196,15 @@ new #[Title('Ideas')] class extends Component {
                     data-test="idea-row"
                 >
                     {{-- Vote count (display only — voting not built yet) --}}
-                    <div class="flex w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-zinc-200 py-2 dark:border-zinc-700">
-                        <flux:icon.chevron-up class="size-4 text-zinc-400" />
-                        <span class="text-sm font-bold text-zinc-900 dark:text-zinc-100">{{ $idea->votes_count }}</span>
+                    <div class="flex w-12 shrink-0 flex-col items-center justify-center gap-0.5" aria-hidden="true">
+                        <flux:icon.chevron-up class="size-4 text-zinc-300 dark:text-zinc-600" />
+                        <span class="text-base font-semibold text-zinc-700 dark:text-zinc-200">{{ $idea->votes_count }}</span>
+                        <span class="text-[10px] font-medium uppercase tracking-wide text-zinc-400">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
                     </div>
 
                     <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-2">
                             <flux:badge :color="$meta['color']" size="sm">{{ $meta['label'] }}</flux:badge>
-                            @if ($idea->category)
-                                <flux:badge color="zinc" size="sm" variant="outline">{{ $idea->category->name }}</flux:badge>
-                            @endif
                         </div>
 
                         <flux:heading size="lg" class="mt-2 truncate">{{ $idea->title }}</flux:heading>
@@ -215,19 +213,16 @@ new #[Title('Ideas')] class extends Component {
                             {{ \Illuminate\Support\Str::limit(strip_tags($idea->description), 130) }}
                         </flux:text>
 
-                        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                            <span>{{ $idea->is_anonymous ? __('Anonymous') : $idea->submittedBy?->name }}</span>
-                            @if ($idea->board)
-                                <span class="inline-flex items-center gap-1">
-                                    <flux:icon.rectangle-group class="size-3.5" />
-                                    {{ $idea->board->name }}
-                                </span>
-                            @endif
-                            <span class="inline-flex items-center gap-1">
-                                <flux:icon.chat-bubble-oval-left class="size-3.5" />
-                                {{ $idea->comments_count }}
-                            </span>
-                            <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                        @php($metaPieces = array_values(array_filter([
+                            $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')),
+                            $idea->board?->name,
+                            $idea->category?->name,
+                            trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]),
+                            $idea->created_at->format('M j, Y'),
+                        ], fn ($piece) => filled($piece))))
+
+                        <div class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                            {{ implode(' · ', $metaPieces) }}
                         </div>
                     </div>
                 </a>
