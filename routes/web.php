@@ -9,6 +9,8 @@ Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::view('dashboard', 'dashboard')->name('dashboard');
+        Route::livewire('ideas', 'pages::ideas.index')->name('ideas.index');
+        Route::livewire('ideas/{idea}', 'pages::ideas.show')->name('ideas.show');
     });
 
 Route::middleware(['auth'])->group(function () {

@@ -1,0 +1,229 @@
+<?php
+
+use App\Enums\TeamRole;
+use App\Models\Idea;
+use App\Models\Team;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Title;
+use Livewire\Component;
+
+new #[Title('Idea')] class extends Component {
+    /**
+     * Display metadata for each idea status (label + Flux badge color).
+     *
+     * @var array<string, array{label: string, color: string}>
+     */
+    public const STATUS_META = [
+        'new' => ['label' => 'New', 'color' => 'zinc'],
+        'under_review' => ['label' => 'Under Review', 'color' => 'amber'],
+        'planned' => ['label' => 'Planned', 'color' => 'blue'],
+        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
+        'released' => ['label' => 'Implemented', 'color' => 'green'],
+        'not_doing' => ['label' => 'Declined', 'color' => 'red'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'zinc'],
+    ];
+
+    public Idea $ideaModel;
+
+    /**
+     * Resolve the idea scoped to the current team (slugs are only unique per team).
+     */
+    public function mount(string $idea): void
+    {
+        $this->ideaModel = Idea::query()
+            ->where('team_id', Auth::user()->current_team_id)
+            ->where('slug', $idea)
+            ->with(['board:id,name', 'category:id,name', 'submittedBy:id,name'])
+            ->withCount('votes')
+            ->firstOrFail();
+    }
+
+    #[Computed]
+    public function team(): Team
+    {
+        return Auth::user()->currentTeam;
+    }
+
+    /**
+     * Whether the current user may see internal (manager-only) comments.
+     */
+    #[Computed]
+    public function canViewInternalComments(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Manager) ?? false;
+    }
+
+    /**
+     * Visible comments for the idea, oldest first.
+     *
+     * @return Collection<int, \App\Models\IdeaComment>
+     */
+    #[Computed]
+    public function comments(): Collection
+    {
+        return $this->ideaModel->comments()
+            ->with('user:id,name')
+            ->when(! $this->canViewInternalComments, fn ($query) => $query->where('is_internal', false))
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    /**
+     * Status change history, newest first.
+     *
+     * @return Collection<int, \App\Models\IdeaStatusHistory>
+     */
+    #[Computed]
+    public function statusHistory(): Collection
+    {
+        return $this->ideaModel->statusHistory()
+            ->with('changedBy:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
+     * User ids that hold a staff role (manager and above) on the team.
+     *
+     * @return array<int, int>
+     */
+    #[Computed]
+    public function staffUserIds(): array
+    {
+        return $this->team->memberships()
+            ->get(['user_id', 'role'])
+            ->filter(fn ($membership) => $membership->role->isAtLeast(TeamRole::Manager))
+            ->pluck('user_id')
+            ->all();
+    }
+
+    /**
+     * Get the display metadata for a status value.
+     *
+     * @return array{label: string, color: string}
+     */
+    public function statusMeta(string $status): array
+    {
+        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
+    }
+}; ?>
+
+@php($idea = $this->ideaModel)
+@php($meta = $this->statusMeta($idea->status))
+@php($author = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
+
+<section class="mx-auto w-full max-w-[1000px] px-6 py-7 lg:px-8">
+    <flux:link :href="route('ideas.index')" wire:navigate variant="subtle" class="inline-flex items-center gap-1 text-sm">
+        <flux:icon.arrow-left class="size-4" />
+        {{ __('Back to all ideas') }}
+    </flux:link>
+
+    <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+        {{-- Main column --}}
+        <div>
+            <div class="flex gap-4">
+                {{-- Vote count (display only — voting not built yet) --}}
+                <div class="flex w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 py-3 dark:border-zinc-700">
+                    <flux:icon.chevron-up class="size-5 text-zinc-400" />
+                    <span class="text-lg font-extrabold text-zinc-900 dark:text-zinc-100">{{ $idea->votes_count }}</span>
+                    <span class="text-[11px] font-medium text-zinc-400">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
+                </div>
+
+                <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <flux:badge :color="$meta['color']" size="sm">{{ $meta['label'] }}</flux:badge>
+                        @if ($idea->category)
+                            <flux:badge color="zinc" size="sm" variant="outline">{{ $idea->category->name }}</flux:badge>
+                        @endif
+                        @if ($idea->board)
+                            <span class="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                <flux:icon.rectangle-group class="size-3.5" />
+                                {{ $idea->board->name }}
+                            </span>
+                        @endif
+                    </div>
+
+                    <flux:heading size="xl" class="mt-3">{{ $idea->title }}</flux:heading>
+
+                    <div class="mt-3 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                        <flux:avatar size="xs" :name="$author" />
+                        <span>
+                            {{ __('Submitted by') }}
+                            <span class="font-medium text-zinc-700 dark:text-zinc-300">{{ $author }}</span>
+                            · {{ $idea->created_at->format('M j, Y') }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">{{ $idea->description }}</div>
+
+            <flux:separator class="my-8" />
+
+            {{-- Comments (read-only; composer not built yet) --}}
+            <flux:heading size="lg">
+                {{ trans_choice(':count comment|:count comments', $this->comments->count(), ['count' => $this->comments->count()]) }}
+            </flux:heading>
+
+            <div class="mt-4 space-y-4">
+                @forelse ($this->comments as $comment)
+                    <div
+                        @class([
+                            'flex gap-3 rounded-xl p-4',
+                            'bg-amber-50 dark:bg-amber-950/20' => $comment->is_internal,
+                            'bg-zinc-50 dark:bg-zinc-800/40' => ! $comment->is_internal,
+                        ])
+                        wire:key="comment-{{ $comment->id }}"
+                    >
+                        <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" />
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{{ $comment->user?->name ?? __('Unknown') }}</span>
+                                @if (in_array($comment->user_id, $this->staffUserIds, true))
+                                    <flux:badge color="teal" size="sm">{{ __('Staff') }}</flux:badge>
+                                @endif
+                                @if ($comment->is_internal)
+                                    <flux:badge color="amber" size="sm">{{ __('Internal') }}</flux:badge>
+                                @endif
+                                <span class="text-xs text-zinc-400">{{ $comment->created_at->diffForHumans() }}</span>
+                            </div>
+                            <div class="mt-1 whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-300">{{ $comment->body }}</div>
+                        </div>
+                    </div>
+                @empty
+                    <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No comments yet.') }}</flux:text>
+                @endforelse
+            </div>
+        </div>
+
+        {{-- Right rail: Activity timeline --}}
+        <aside>
+            <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+                <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
+
+                <div class="mt-4 space-y-4">
+                    @forelse ($this->statusHistory as $entry)
+                        @php($entryMeta = $this->statusMeta($entry->new_status))
+                        <div class="flex flex-col gap-1 border-l-2 border-zinc-100 pl-3 dark:border-zinc-700" wire:key="history-{{ $entry->id }}">
+                            <flux:badge :color="$entryMeta['color']" size="sm" class="self-start">{{ $entryMeta['label'] }}</flux:badge>
+                            @if ($entry->note)
+                                <p class="text-sm text-zinc-600 dark:text-zinc-300">{{ $entry->note }}</p>
+                            @endif
+                            <span class="text-xs text-zinc-400">
+                                {{ $entry->changedBy?->name ?? __('Unknown') }}
+                                @if ($entry->created_at)
+                                    · {{ $entry->created_at->diffForHumans() }}
+                                @endif
+                            </span>
+                        </div>
+                    @empty
+                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('No activity yet.') }}</flux:text>
+                    @endforelse
+                </div>
+            </div>
+        </aside>
+    </div>
+</section>
