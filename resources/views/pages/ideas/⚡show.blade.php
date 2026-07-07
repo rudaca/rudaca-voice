@@ -2,6 +2,7 @@
 
 use App\Enums\TeamRole;
 use App\Models\Idea;
+use App\Models\IdeaVote;
 use App\Models\Team;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -36,8 +37,40 @@ new #[Title('Idea')] class extends Component {
             ->where('team_id', Auth::user()->current_team_id)
             ->where('slug', $idea)
             ->with(['board:id,name', 'category:id,name', 'submittedBy:id,name'])
-            ->withCount('votes')
             ->firstOrFail();
+    }
+
+    /**
+     * Toggle the current user's vote on this idea.
+     */
+    public function toggleVote(): void
+    {
+        $existingVote = IdeaVote::where('idea_id', $this->ideaModel->id)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if ($existingVote) {
+            $existingVote->delete();
+        } else {
+            IdeaVote::firstOrCreate([
+                'idea_id' => $this->ideaModel->id,
+                'user_id' => Auth::id(),
+            ]);
+        }
+    }
+
+    #[Computed]
+    public function voteCount(): int
+    {
+        return $this->ideaModel->votes()->count();
+    }
+
+    #[Computed]
+    public function hasVoted(): bool
+    {
+        return $this->ideaModel->votes()
+            ->where('user_id', Auth::id())
+            ->exists();
     }
 
     #[Computed]
@@ -125,12 +158,23 @@ new #[Title('Idea')] class extends Component {
         {{-- Main column --}}
         <div>
             <div class="flex gap-4">
-                {{-- Vote count (display only — voting not built yet) --}}
-                <div class="flex w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 py-3 dark:border-zinc-700">
-                    <flux:icon.chevron-up class="size-5 text-zinc-400" />
-                    <span class="text-lg font-extrabold text-zinc-900 dark:text-zinc-100">{{ $idea->votes_count }}</span>
-                    <span class="text-[11px] font-medium text-zinc-400">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
-                </div>
+                {{-- Vote toggle --}}
+                <button
+                    type="button"
+                    wire:click="toggleVote"
+                    wire:loading.attr="disabled"
+                    aria-pressed="{{ $this->hasVoted ? 'true' : 'false' }}"
+                    @class([
+                        'flex w-[72px] shrink-0 flex-col items-center justify-center gap-1 self-start rounded-xl border py-3 transition',
+                        'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $this->hasVoted,
+                        'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $this->hasVoted,
+                    ])
+                    data-test="vote-button"
+                >
+                    <flux:icon.chevron-up class="size-5" />
+                    <span class="text-lg font-extrabold">{{ $this->voteCount }}</span>
+                    <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
+                </button>
 
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">

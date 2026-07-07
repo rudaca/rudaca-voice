@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Idea;
+use App\Models\IdeaVote;
 use App\Models\Team;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -60,6 +61,27 @@ new #[Title('Ideas')] class extends Component {
         $this->resetPage();
     }
 
+    /**
+     * Toggle the current user's vote on an idea belonging to their current team.
+     */
+    public function toggleVote(int $ideaId): void
+    {
+        $idea = Idea::where('team_id', Auth::user()->current_team_id)->findOrFail($ideaId);
+
+        $existingVote = IdeaVote::where('idea_id', $idea->id)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if ($existingVote) {
+            $existingVote->delete();
+        } else {
+            IdeaVote::firstOrCreate([
+                'idea_id' => $idea->id,
+                'user_id' => Auth::id(),
+            ]);
+        }
+    }
+
     #[Computed]
     public function team(): Team
     {
@@ -106,6 +128,7 @@ new #[Title('Ideas')] class extends Component {
             ->where('team_id', $this->team->id)
             ->with(['board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->withCount(['votes', 'comments'])
+            ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
             ->when($this->board !== '', fn ($query) => $query->where('board_id', $this->board))
             ->when($this->category !== '', fn ($query) => $query->where('category_id', $this->category))
@@ -194,21 +217,35 @@ new #[Title('Ideas')] class extends Component {
         <div class="mt-5 space-y-3">
             @forelse ($this->ideas as $idea)
                 @php($meta = $this->statusMeta($idea->status))
-                <a
-                    href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
-                    wire:navigate
+                <div
                     class="flex gap-4 rounded-xl border border-zinc-200 bg-white p-4 transition hover:border-indigo-200 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60"
                     wire:key="idea-{{ $idea->id }}"
                     data-test="idea-row"
                 >
-                    {{-- Vote count (display only — voting not built yet) --}}
-                    <div class="flex w-12 shrink-0 flex-col items-center justify-center gap-0.5" aria-hidden="true">
-                        <flux:icon.chevron-up class="size-4 text-zinc-300 dark:text-zinc-600" />
-                        <span class="text-base font-semibold text-zinc-700 dark:text-zinc-200">{{ $idea->votes_count }}</span>
-                        <span class="text-[10px] font-medium uppercase tracking-wide text-zinc-400">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
-                    </div>
+                    {{-- Vote toggle --}}
+                    <button
+                        type="button"
+                        wire:click="toggleVote({{ $idea->id }})"
+                        wire:loading.attr="disabled"
+                        aria-pressed="{{ $idea->voted ? 'true' : 'false' }}"
+                        @class([
+                            'flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 self-start rounded-lg border py-2 transition',
+                            'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
+                            'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $idea->voted,
+                        ])
+                        data-test="vote-button"
+                    >
+                        <flux:icon.chevron-up class="size-4" />
+                        <span class="text-sm font-bold">{{ $idea->votes_count }}</span>
+                        <span class="text-[10px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
+                    </button>
 
-                    <div class="min-w-0 flex-1">
+                    <a
+                        href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
+                        wire:navigate
+                        class="min-w-0 flex-1"
+                        data-test="idea-link"
+                    >
                         <div class="flex flex-wrap items-center gap-2">
                             <flux:badge :color="$meta['color']" size="sm">{{ $meta['label'] }}</flux:badge>
                         </div>
@@ -230,8 +267,8 @@ new #[Title('Ideas')] class extends Component {
                         <div class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                             {{ implode(' · ', $metaPieces) }}
                         </div>
-                    </div>
-                </a>
+                    </a>
+                </div>
             @empty
                 <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="ideas-empty">
                     <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No ideas match these filters.') }}</flux:text>
