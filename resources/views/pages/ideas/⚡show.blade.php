@@ -3,11 +3,13 @@
 use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaComment;
+use App\Models\IdeaStatusHistory;
 use App\Models\IdeaVote;
 use App\Models\Team;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Validate;
@@ -29,10 +31,29 @@ new #[Title('Idea')] class extends Component {
         'duplicate' => ['label' => 'Duplicate', 'color' => 'zinc'],
     ];
 
+    /** @var array<string, string> */
+    public const PRIORITY_OPTIONS = ['low' => 'Low', 'medium' => 'Medium', 'high' => 'High'];
+
+    /** @var array<string, string> */
+    public const IMPACT_OPTIONS = ['low' => 'Low', 'medium' => 'Medium', 'high' => 'High'];
+
+    /** @var array<string, string> */
+    public const EFFORT_OPTIONS = ['small' => 'Small', 'medium' => 'Medium', 'large' => 'Large'];
+
     public Idea $ideaModel;
 
     #[Validate('required|string|max:2000')]
     public string $commentBody = '';
+
+    public string $status = '';
+
+    public string $priority = '';
+
+    public string $impact = '';
+
+    public string $effort = '';
+
+    public string $statusNote = '';
 
     /**
      * Resolve the idea scoped to the current team (slugs are only unique per team).
@@ -44,6 +65,61 @@ new #[Title('Idea')] class extends Component {
             ->where('slug', $idea)
             ->with(['board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->firstOrFail();
+
+        $this->status = $this->ideaModel->status;
+        $this->priority = $this->ideaModel->priority;
+        $this->impact = $this->ideaModel->impact;
+        $this->effort = $this->ideaModel->effort;
+    }
+
+    /**
+     * Whether the current user may manage this idea (owner/admin/manager).
+     */
+    #[Computed]
+    public function canManage(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Manager) ?? false;
+    }
+
+    /**
+     * Update the idea's triage fields. Records a status-history entry only when the status changes.
+     */
+    public function updateManagement(): void
+    {
+        abort_unless($this->canManage, 403);
+
+        $validated = $this->validate([
+            'status' => ['required', Rule::in(array_keys(self::STATUS_META))],
+            'priority' => ['required', Rule::in(array_keys(self::PRIORITY_OPTIONS))],
+            'impact' => ['required', Rule::in(array_keys(self::IMPACT_OPTIONS))],
+            'effort' => ['required', Rule::in(array_keys(self::EFFORT_OPTIONS))],
+            'statusNote' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $previousStatus = $this->ideaModel->status;
+
+        $this->ideaModel->update([
+            'status' => $validated['status'],
+            'priority' => $validated['priority'],
+            'impact' => $validated['impact'],
+            'effort' => $validated['effort'],
+        ]);
+
+        if ($previousStatus !== $validated['status']) {
+            IdeaStatusHistory::create([
+                'idea_id' => $this->ideaModel->id,
+                'changed_by_user_id' => Auth::id(),
+                'old_status' => $previousStatus,
+                'new_status' => $validated['status'],
+                'note' => $validated['statusNote'] !== '' ? $validated['statusNote'] : null,
+            ]);
+
+            unset($this->statusHistory);
+        }
+
+        $this->reset('statusNote');
+
+        Flux::toast(variant: 'success', text: __('Idea updated.'));
     }
 
     /**
@@ -298,8 +374,54 @@ new #[Title('Idea')] class extends Component {
             </div>
         </div>
 
-        {{-- Right rail: Activity timeline --}}
-        <aside>
+        {{-- Right rail --}}
+        <aside class="space-y-4">
+            {{-- Manage panel (owner/admin/manager only) --}}
+            @if ($this->canManage)
+                <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900" data-test="manage-panel">
+                    <flux:heading size="sm">{{ __('Manage idea') }}</flux:heading>
+
+                    <form wire:submit="updateManagement" class="mt-4 space-y-4">
+                        <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
+                            @foreach (self::STATUS_META as $value => $statusMeta)
+                                <flux:select.option value="{{ $value }}">{{ $statusMeta['label'] }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <flux:select wire:model="priority" :label="__('Priority')" size="sm" data-test="manage-priority">
+                            @foreach (self::PRIORITY_OPTIONS as $value => $label)
+                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <flux:select wire:model="impact" :label="__('Impact')" size="sm" data-test="manage-impact">
+                            @foreach (self::IMPACT_OPTIONS as $value => $label)
+                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <flux:select wire:model="effort" :label="__('Effort')" size="sm" data-test="manage-effort">
+                            @foreach (self::EFFORT_OPTIONS as $value => $label)
+                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <flux:textarea
+                            wire:model="statusNote"
+                            :label="__('Status note (optional)')"
+                            rows="2"
+                            :placeholder="__('Added to the activity log when the status changes')"
+                            data-test="manage-note"
+                        />
+
+                        <flux:button variant="primary" type="submit" size="sm" class="w-full" wire:loading.attr="disabled" data-test="manage-save">
+                            {{ __('Save changes') }}
+                        </flux:button>
+                    </form>
+                </div>
+            @endif
+
+            {{-- Activity timeline --}}
             <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
                 <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
 
