@@ -2,12 +2,15 @@
 
 use App\Enums\TeamRole;
 use App\Models\Idea;
+use App\Models\IdeaComment;
 use App\Models\IdeaVote;
 use App\Models\Team;
+use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Validate;
 use Livewire\Component;
 
 new #[Title('Idea')] class extends Component {
@@ -27,6 +30,9 @@ new #[Title('Idea')] class extends Component {
     ];
 
     public Idea $ideaModel;
+
+    #[Validate('required|string|max:2000')]
+    public string $commentBody = '';
 
     /**
      * Resolve the idea scoped to the current team (slugs are only unique per team).
@@ -57,6 +63,30 @@ new #[Title('Idea')] class extends Component {
                 'user_id' => Auth::id(),
             ]);
         }
+    }
+
+    /**
+     * Add a public comment from the current user to this idea.
+     *
+     * The idea was resolved scoped to the current team in mount(), so a comment
+     * can only ever be attached to an idea belonging to the user's current team.
+     */
+    public function addComment(): void
+    {
+        $validated = $this->validate();
+
+        IdeaComment::create([
+            'idea_id' => $this->ideaModel->id,
+            'user_id' => Auth::id(),
+            'body' => $validated['commentBody'],
+            'is_internal' => false,
+        ]);
+
+        $this->reset('commentBody');
+
+        unset($this->comments);
+
+        Flux::toast(variant: 'success', text: __('Comment added.'));
     }
 
     #[Computed]
@@ -99,7 +129,8 @@ new #[Title('Idea')] class extends Component {
         return $this->ideaModel->comments()
             ->with('user:id,name')
             ->when(! $this->canViewInternalComments, fn ($query) => $query->where('is_internal', false))
-            ->orderBy('created_at')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->get();
     }
 
@@ -207,12 +238,36 @@ new #[Title('Idea')] class extends Component {
 
             <flux:separator class="my-8" />
 
-            {{-- Comments (read-only; composer not built yet) --}}
+            {{-- Comments --}}
             <flux:heading size="lg">
                 {{ trans_choice(':count comment|:count comments', $this->comments->count(), ['count' => $this->comments->count()]) }}
             </flux:heading>
 
-            <div class="mt-4 space-y-4">
+            {{-- Composer --}}
+            <form wire:submit="addComment" class="mt-4 flex gap-3">
+                <flux:avatar size="sm" :name="auth()->user()->name" />
+                <div class="min-w-0 flex-1 space-y-2">
+                    <flux:textarea
+                        wire:model="commentBody"
+                        rows="3"
+                        :placeholder="__('Share your thoughts or add context…')"
+                        data-test="comment-body"
+                    />
+                    <div class="flex justify-end">
+                        <flux:button
+                            variant="primary"
+                            type="submit"
+                            size="sm"
+                            wire:loading.attr="disabled"
+                            data-test="add-comment-button"
+                        >
+                            {{ __('Comment') }}
+                        </flux:button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="mt-6 space-y-4">
                 @forelse ($this->comments as $comment)
                     <div
                         @class([
