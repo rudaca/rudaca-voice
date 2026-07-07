@@ -55,6 +55,20 @@ new #[Title('Idea')] class extends Component {
 
     public string $statusNote = '';
 
+    public string $duplicateOfId = '';
+
+    public string $duplicateNote = '';
+
+    /**
+     * @return array<string, string>
+     */
+    protected function validationAttributes(): array
+    {
+        return [
+            'duplicateOfId' => __('original idea'),
+        ];
+    }
+
     /**
      * Resolve the idea scoped to the current team (slugs are only unique per team).
      */
@@ -98,12 +112,19 @@ new #[Title('Idea')] class extends Component {
 
         $previousStatus = $this->ideaModel->status;
 
-        $this->ideaModel->update([
+        $attributes = [
             'status' => $validated['status'],
             'priority' => $validated['priority'],
             'impact' => $validated['impact'],
             'effort' => $validated['effort'],
-        ]);
+        ];
+
+        // Clearing the duplicate status also clears the link to the original idea.
+        if ($validated['status'] !== 'duplicate') {
+            $attributes['duplicate_of_idea_id'] = null;
+        }
+
+        $this->ideaModel->update($attributes);
 
         if ($previousStatus !== $validated['status']) {
             IdeaStatusHistory::create([
@@ -120,6 +141,104 @@ new #[Title('Idea')] class extends Component {
         $this->reset('statusNote');
 
         Flux::toast(variant: 'success', text: __('Idea updated.'));
+    }
+
+    /**
+     * Open the "mark as duplicate" modal.
+     */
+    public function openMarkDuplicate(): void
+    {
+        abort_unless($this->canManage, 403);
+
+        $this->reset('duplicateOfId', 'duplicateNote');
+        $this->resetValidation();
+        $this->dispatch('open-modal', name: 'mark-duplicate');
+    }
+
+    /**
+     * Mark this idea as a duplicate of another idea in the same team.
+     */
+    public function markDuplicate(): void
+    {
+        abort_unless($this->canManage, 403);
+
+        $teamId = $this->team->id;
+
+        $validated = $this->validate([
+            // Must be another idea in the same team (whereNot excludes this idea).
+            'duplicateOfId' => ['required', Rule::exists('ideas', 'id')->where('team_id', $teamId)->whereNot('id', $this->ideaModel->id)],
+            'duplicateNote' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $previousStatus = $this->ideaModel->status;
+
+        $this->ideaModel->update([
+            'status' => 'duplicate',
+            'duplicate_of_idea_id' => $validated['duplicateOfId'],
+        ]);
+
+        if ($previousStatus !== 'duplicate') {
+            IdeaStatusHistory::create([
+                'idea_id' => $this->ideaModel->id,
+                'changed_by_user_id' => Auth::id(),
+                'old_status' => $previousStatus,
+                'new_status' => 'duplicate',
+                'note' => $this->duplicateNote !== '' ? $this->duplicateNote : null,
+            ]);
+
+            unset($this->statusHistory);
+        }
+
+        $this->status = 'duplicate';
+        unset($this->duplicateOriginal);
+        $this->reset('duplicateOfId', 'duplicateNote');
+        $this->dispatch('close-modal', name: 'mark-duplicate');
+
+        Flux::toast(variant: 'success', text: __('Marked as duplicate.'));
+    }
+
+    /**
+     * The original idea this one duplicates, if any.
+     */
+    #[Computed]
+    public function duplicateOriginal(): ?Idea
+    {
+        if (! $this->ideaModel->duplicate_of_idea_id) {
+            return null;
+        }
+
+        return Idea::where('team_id', $this->team->id)
+            ->whereKey($this->ideaModel->duplicate_of_idea_id)
+            ->first(['id', 'title', 'slug']);
+    }
+
+    /**
+     * Ideas that have been marked as duplicates of this idea.
+     *
+     * @return Collection<int, Idea>
+     */
+    #[Computed]
+    public function duplicatesList(): Collection
+    {
+        return Idea::where('team_id', $this->team->id)
+            ->where('duplicate_of_idea_id', $this->ideaModel->id)
+            ->orderBy('title')
+            ->get(['id', 'title', 'slug', 'status']);
+    }
+
+    /**
+     * Candidate originals to mark this idea as a duplicate of (same team, excluding self and other duplicates).
+     *
+     * @return Collection<int, Idea>
+     */
+    #[Computed]
+    public function candidateIdeas(): Collection
+    {
+        return $this->team->ideas()
+            ->where('id', '!=', $this->ideaModel->id)
+            ->where('status', '!=', 'duplicate')
+            ->orderBy('title')
+            ->get(['id', 'title']);
     }
 
     /**
@@ -264,6 +383,13 @@ new #[Title('Idea')] class extends Component {
     <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
         {{-- Main column --}}
         <div>
+            @if ($this->duplicateOriginal)
+                <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200" data-test="duplicate-banner">
+                    {{ __('This idea was marked as a duplicate of') }}
+                    <a href="{{ route('ideas.show', ['idea' => $this->duplicateOriginal->slug]) }}" wire:navigate class="font-semibold underline">{{ $this->duplicateOriginal->title }}</a>.
+                </div>
+            @endif
+
             <div class="flex gap-4">
                 {{-- Vote toggle --}}
                 <button
@@ -418,7 +544,33 @@ new #[Title('Idea')] class extends Component {
                             {{ __('Save changes') }}
                         </flux:button>
                     </form>
+
+                    <flux:separator class="my-4" variant="subtle" />
+
+                    <flux:button wire:click="openMarkDuplicate" variant="ghost" size="sm" class="w-full" icon="document-duplicate" data-test="open-mark-duplicate">
+                        {{ __('Mark as duplicate') }}
+                    </flux:button>
                 </div>
+
+                {{-- Mark as duplicate modal --}}
+                <flux:modal name="mark-duplicate" class="max-w-lg" data-test="mark-duplicate-modal">
+                    <form wire:submit="markDuplicate" class="space-y-5">
+                        <flux:heading size="lg">{{ __('Mark as duplicate') }}</flux:heading>
+                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
+                            {{ __('Link this idea to the original it duplicates. Its status will change to Duplicate.') }}
+                        </flux:text>
+                        <flux:select wire:model="duplicateOfId" :label="__('Original idea')" :placeholder="__('Choose the original idea')" required data-test="duplicate-original">
+                            @foreach ($this->candidateIdeas as $candidate)
+                                <flux:select.option value="{{ $candidate->id }}">{{ $candidate->title }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:textarea wire:model="duplicateNote" :label="__('Note (optional)')" rows="2" :placeholder="__('Added to the activity log')" data-test="duplicate-note" />
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button variant="primary" type="submit" data-test="confirm-duplicate">{{ __('Mark as duplicate') }}</flux:button>
+                        </div>
+                    </form>
+                </flux:modal>
             @endif
 
             {{-- Activity timeline --}}
@@ -445,6 +597,20 @@ new #[Title('Idea')] class extends Component {
                     @endforelse
                 </div>
             </div>
+
+            {{-- Duplicates of this idea --}}
+            @if ($this->duplicatesList->isNotEmpty())
+                <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900" data-test="duplicates-of">
+                    <flux:heading size="sm">{{ __('Duplicates of this idea') }}</flux:heading>
+                    <div class="mt-3 space-y-2">
+                        @foreach ($this->duplicatesList as $duplicate)
+                            <a href="{{ route('ideas.show', ['idea' => $duplicate->slug]) }}" wire:navigate class="block truncate text-sm text-indigo-600 hover:underline dark:text-indigo-400" wire:key="dup-{{ $duplicate->id }}">
+                                {{ $duplicate->title }}
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         </aside>
     </div>
 </section>
