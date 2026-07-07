@@ -8,9 +8,15 @@ Route::view('/', 'welcome')->name('home');
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
-        Route::view('dashboard', 'dashboard')->name('dashboard');
+        Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
         Route::livewire('ideas', 'pages::ideas.index')->name('ideas.index');
         Route::livewire('ideas/create', 'pages::ideas.create')->name('ideas.create');
+        Route::livewire('ideas/review', 'pages::ideas.review')
+            ->middleware(EnsureTeamMembership::class.':manager')
+            ->name('ideas.review');
+        Route::livewire('idea-settings', 'pages::ideas.settings')
+            ->middleware(EnsureTeamMembership::class.':admin')
+            ->name('ideas.settings');
         Route::livewire('ideas/{idea}', 'pages::ideas.show')->name('ideas.show');
     });
 

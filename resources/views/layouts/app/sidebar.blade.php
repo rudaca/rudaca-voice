@@ -18,9 +18,22 @@
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
 
-                    <flux:sidebar.item icon="light-bulb" :href="route('ideas.index')" :current="request()->routeIs('ideas.*')" wire:navigate>
+                    <flux:sidebar.item icon="light-bulb" :href="route('ideas.index')" :current="request()->routeIs('ideas.index')" wire:navigate>
                         {{ __('All Ideas') }}
                     </flux:sidebar.item>
+
+                    @php($__currentTeam = auth()->user()?->currentTeam)
+                    @if ($__currentTeam && auth()->user()->teamRole($__currentTeam)?->isAtLeast(\App\Enums\TeamRole::Manager))
+                        <flux:sidebar.item icon="clipboard-document-check" :href="route('ideas.review')" :current="request()->routeIs('ideas.review')" wire:navigate>
+                            {{ __('Review Ideas') }}
+                        </flux:sidebar.item>
+                    @endif
+
+                    @if ($__currentTeam && auth()->user()->teamRole($__currentTeam)?->isAtLeast(\App\Enums\TeamRole::Admin))
+                        <flux:sidebar.item icon="adjustments-horizontal" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
+                            {{ __('Boards & Categories') }}
+                        </flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
