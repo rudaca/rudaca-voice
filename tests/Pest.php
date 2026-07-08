@@ -1,5 +1,12 @@
 <?php
 
+use App\Enums\TeamRole;
+use App\Models\Idea;
+use App\Models\IdeaBoard;
+use App\Models\IdeaBoardGroup;
+use App\Models\IdeaCategory;
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +51,73 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Create a team with a single member holding the given role, and switch that
+ * user's current team to it. Returns the team and the member.
+ *
+ * @return array{team: Team, user: User}
+ */
+function teamWithMember(TeamRole $role = TeamRole::Employee): array
 {
-    // ..
+    $team = Team::factory()->create();
+    $user = User::factory()->create();
+
+    $team->members()->attach($user, ['role' => $role->value]);
+    $user->switchTeam($team);
+
+    return ['team' => $team, 'user' => $user];
+}
+
+/**
+ * Create an active board group, board, and category scoped to the given team.
+ *
+ * @return array{group: IdeaBoardGroup, board: IdeaBoard, category: IdeaCategory}
+ */
+function boardStack(Team $team, ?User $creator = null): array
+{
+    $creatorId = $creator?->id
+        ?? $team->memberships()->value('user_id')
+        ?? User::factory()->create()->id;
+
+    $group = IdeaBoardGroup::factory()->create([
+        'team_id' => $team->id,
+        'created_by_user_id' => $creatorId,
+        'is_active' => true,
+    ]);
+
+    $board = IdeaBoard::factory()->create([
+        'team_id' => $team->id,
+        'board_group_id' => $group->id,
+        'created_by_user_id' => $creatorId,
+        'is_active' => true,
+    ]);
+
+    $category = IdeaCategory::factory()->create([
+        'team_id' => $team->id,
+        'board_id' => $board->id,
+        'is_active' => true,
+    ]);
+
+    return ['group' => $group, 'board' => $board, 'category' => $category];
+}
+
+/**
+ * Create an idea scoped to the given team. Builds a board stack automatically
+ * unless a board_id is supplied via $overrides.
+ *
+ * @param  array<string, mixed>  $overrides
+ */
+function makeIdea(Team $team, array $overrides = []): Idea
+{
+    if (! isset($overrides['board_id'])) {
+        $stack = boardStack($team);
+        $overrides['board_id'] = $stack['board']->id;
+        $overrides['board_group_id'] = $stack['board']->board_group_id;
+        $overrides['category_id'] = $stack['category']->id;
+    }
+
+    return Idea::factory()->create(array_merge([
+        'team_id' => $team->id,
+        'submitted_by_user_id' => $team->memberships()->value('user_id'),
+    ], $overrides));
 }
