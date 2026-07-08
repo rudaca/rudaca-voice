@@ -51,6 +51,9 @@ new #[Title('Review ideas')] class extends Component {
     #[Url(as: 'status')]
     public string $status = '';
 
+    #[Url(as: 'group')]
+    public string $group = '';
+
     #[Url(as: 'board')]
     public string $board = '';
 
@@ -68,7 +71,7 @@ new #[Title('Review ideas')] class extends Component {
      */
     public function updated(string $property): void
     {
-        if (in_array($property, ['status', 'board', 'priority', 'impact', 'effort'], true)) {
+        if (in_array($property, ['status', 'group', 'board', 'priority', 'impact', 'effort'], true)) {
             $this->resetPage();
         }
     }
@@ -86,6 +89,20 @@ new #[Title('Review ideas')] class extends Component {
     public function team(): Team
     {
         return Auth::user()->currentTeam;
+    }
+
+    /**
+     * Active board groups for the current team, used for the filter dropdown.
+     *
+     * @return Collection<int, \App\Models\IdeaBoardGroup>
+     */
+    #[Computed]
+    public function boardGroups(): Collection
+    {
+        return $this->team->boardGroups()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     /**
@@ -112,8 +129,9 @@ new #[Title('Review ideas')] class extends Component {
     {
         return Idea::query()
             ->where('team_id', $this->team->id)
-            ->with(['board:id,name', 'category:id,name', 'submittedBy:id,name'])
+            ->with(['boardGroup:id,name', 'board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->withCount(['votes', 'comments'])
+            ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
             ->when(
                 $this->status !== '' && array_key_exists($this->status, self::STATUS_META),
                 fn ($query) => $query->where('status', $this->status),
@@ -209,6 +227,13 @@ new #[Title('Review ideas')] class extends Component {
                 @endforeach
             </flux:select>
 
+            <flux:select wire:model.live="group" size="sm" class="w-auto min-w-36" data-test="filter-group">
+                <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
+                @foreach ($this->boardGroups as $boardGroup)
+                    <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
             <flux:select wire:model.live="board" size="sm" class="w-auto min-w-36" data-test="filter-board">
                 <flux:select.option value="">{{ __('All boards') }}</flux:select.option>
                 @foreach ($this->boards as $board)
@@ -279,6 +304,7 @@ new #[Title('Review ideas')] class extends Component {
                     <flux:heading size="lg" class="mt-2 truncate">{{ $idea->title }}</flux:heading>
 
                     @php($metaPieces = array_values(array_filter([
+                        $idea->boardGroup?->name,
                         $idea->board?->name,
                         $idea->category?->name,
                         trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]),
@@ -292,7 +318,9 @@ new #[Title('Review ideas')] class extends Component {
             </a>
         @empty
             <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="review-empty">
-                <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('Queue is clear — nothing needs attention right now. 🎉') }}</flux:text>
+                <flux:icon.check-circle class="mx-auto size-8 text-emerald-400 dark:text-emerald-500" />
+                <flux:heading class="mt-3">{{ __('Queue is clear') }}</flux:heading>
+                <flux:text class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Nothing needs attention right now. Nice work. 🎉') }}</flux:text>
             </div>
         @endforelse
     </div>

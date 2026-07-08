@@ -17,6 +17,8 @@ new #[Title('Submit idea')] class extends Component {
 
     public string $description = '';
 
+    public string $board_group_id = '';
+
     public string $board_id = '';
 
     public string $category_id = '';
@@ -24,6 +26,15 @@ new #[Title('Submit idea')] class extends Component {
     public bool $is_anonymous = false;
 
     public bool $is_private = false;
+
+    /**
+     * Reset the chosen board and category when the group changes.
+     */
+    public function updatedBoardGroupId(): void
+    {
+        $this->board_id = '';
+        $this->category_id = '';
+    }
 
     /**
      * Reset the chosen category whenever the board changes (categories are board-specific).
@@ -40,15 +51,34 @@ new #[Title('Submit idea')] class extends Component {
     }
 
     /**
-     * Active boards for the current team.
+     * Active board groups for the current team.
+     *
+     * @return Collection<int, \App\Models\IdeaBoardGroup>
+     */
+    #[Computed]
+    public function boardGroups(): Collection
+    {
+        return $this->team->boardGroups()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Active boards within the selected board group.
      *
      * @return Collection<int, IdeaBoard>
      */
     #[Computed]
     public function boards(): Collection
     {
+        if ($this->board_group_id === '') {
+            return new Collection;
+        }
+
         return $this->team->boards()
             ->where('is_active', true)
+            ->where('board_group_id', $this->board_group_id)
             ->orderBy('name')
             ->get(['id', 'name']);
     }
@@ -84,12 +114,23 @@ new #[Title('Submit idea')] class extends Component {
         return [
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
-            'board_id' => ['required', Rule::exists('idea_boards', 'id')->where('team_id', $teamId)],
+            'board_group_id' => [
+                'required',
+                Rule::exists('idea_board_groups', 'id')->where('team_id', $teamId)->where('is_active', true),
+            ],
+            'board_id' => [
+                'required',
+                Rule::exists('idea_boards', 'id')
+                    ->where('team_id', $teamId)
+                    ->where('board_group_id', $this->board_group_id)
+                    ->where('is_active', true),
+            ],
             'category_id' => [
                 'required',
                 Rule::exists('idea_categories', 'id')
                     ->where('team_id', $teamId)
-                    ->where('board_id', $this->board_id),
+                    ->where('board_id', $this->board_id)
+                    ->where('is_active', true),
             ],
             'is_anonymous' => ['boolean'],
             'is_private' => ['boolean'],
@@ -102,6 +143,7 @@ new #[Title('Submit idea')] class extends Component {
     protected function validationAttributes(): array
     {
         return [
+            'board_group_id' => __('board group'),
             'board_id' => __('board'),
             'category_id' => __('category'),
         ];
@@ -195,8 +237,21 @@ new #[Title('Submit idea')] class extends Component {
                 data-test="idea-title"
             />
 
+            <flux:select wire:model.live="board_group_id" :label="__('Board group')" :placeholder="__('Choose a board group')" required data-test="idea-board-group">
+                @foreach ($this->boardGroups as $group)
+                    <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <flux:select wire:model.live="board_id" :label="__('Board')" :placeholder="__('Choose a board')" required data-test="idea-board">
+                <flux:select
+                    wire:model.live="board_id"
+                    :label="__('Board')"
+                    :placeholder="$this->board_group_id === '' ? __('Select a board group first') : __('Choose a board')"
+                    :disabled="$this->board_group_id === ''"
+                    required
+                    data-test="idea-board"
+                >
                     @foreach ($this->boards as $board)
                         <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
                     @endforeach
@@ -222,10 +277,15 @@ new #[Title('Submit idea')] class extends Component {
                 rows="6"
                 required
                 :placeholder="__('What is the problem, and how would your idea improve things?')"
+                :description="__('Include who it affects and the outcome you\'d expect. The more context, the easier it is to prioritize.')"
                 data-test="idea-description"
             />
 
+            <flux:separator variant="subtle" />
+
             <div class="space-y-3">
+                <flux:text class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ __('Visibility') }}</flux:text>
+
                 <flux:checkbox
                     wire:model="is_anonymous"
                     :label="__('Submit anonymously')"

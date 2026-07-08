@@ -10,7 +10,9 @@ Route::prefix('{current_team}')
     ->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
         Route::livewire('ideas', 'pages::ideas.index')->name('ideas.index');
-        Route::livewire('ideas/create', 'pages::ideas.create')->name('ideas.create');
+        Route::livewire('ideas/create', 'pages::ideas.create')
+            ->middleware(EnsureTeamMembership::class.':employee')
+            ->name('ideas.create');
         Route::livewire('ideas/review', 'pages::ideas.review')
             ->middleware(EnsureTeamMembership::class.':manager')
             ->name('ideas.review');

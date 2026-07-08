@@ -36,6 +36,9 @@ new #[Title('Ideas')] class extends Component {
     #[Url(as: 'status')]
     public string $status = '';
 
+    #[Url(as: 'group')]
+    public string $group = '';
+
     #[Url(as: 'board')]
     public string $board = '';
 
@@ -47,7 +50,7 @@ new #[Title('Ideas')] class extends Component {
      */
     public function updated(string $property): void
     {
-        if (in_array($property, ['status', 'board', 'category'], true)) {
+        if (in_array($property, ['status', 'group', 'board', 'category'], true)) {
             $this->resetPage();
         }
     }
@@ -89,6 +92,20 @@ new #[Title('Ideas')] class extends Component {
     }
 
     /**
+     * Active board groups for the current team, used for the filter dropdown.
+     *
+     * @return Collection<int, \App\Models\IdeaBoardGroup>
+     */
+    #[Computed]
+    public function boardGroups(): Collection
+    {
+        return $this->team->boardGroups()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
      * Active boards for the current team, used for the filter dropdown.
      *
      * @return Collection<int, \App\Models\IdeaBoard>
@@ -126,10 +143,11 @@ new #[Title('Ideas')] class extends Component {
     {
         return Idea::query()
             ->where('team_id', $this->team->id)
-            ->with(['board:id,name', 'category:id,name', 'submittedBy:id,name'])
+            ->with(['boardGroup:id,name', 'board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->withCount(['votes', 'comments'])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
+            ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
             ->when($this->board !== '', fn ($query) => $query->where('board_id', $this->board))
             ->when($this->category !== '', fn ($query) => $query->where('category_id', $this->category))
             ->when(
@@ -197,6 +215,13 @@ new #[Title('Ideas')] class extends Component {
                     @endforeach
                 </flux:select>
 
+                <flux:select wire:model.live="group" size="sm" class="w-auto min-w-40" data-test="filter-group">
+                    <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
+                    @foreach ($this->boardGroups as $boardGroup)
+                        <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+
                 <flux:select wire:model.live="board" size="sm" class="w-auto min-w-40" data-test="filter-board">
                     <flux:select.option value="">{{ __('All boards') }}</flux:select.option>
                     @foreach ($this->boards as $board)
@@ -258,6 +283,7 @@ new #[Title('Ideas')] class extends Component {
 
                         @php($metaPieces = array_values(array_filter([
                             $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')),
+                            $idea->boardGroup?->name,
                             $idea->board?->name,
                             $idea->category?->name,
                             trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]),
@@ -271,7 +297,10 @@ new #[Title('Ideas')] class extends Component {
                 </div>
             @empty
                 <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="ideas-empty">
-                    <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No ideas match these filters.') }}</flux:text>
+                    <flux:icon.light-bulb class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+                    <flux:heading class="mt-3">{{ __('No ideas here yet') }}</flux:heading>
+                    <flux:text class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Try clearing the filters, or be the first to submit one.') }}</flux:text>
+                    <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" size="sm" class="mt-4">{{ __('New idea') }}</flux:button>
                 </div>
             @endforelse
         </div>

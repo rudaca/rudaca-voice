@@ -110,6 +110,31 @@ new #[Title('Boards & Categories')] class extends Component {
     }
 
     /**
+     * Board groups selectable when assigning a board: active groups, plus the
+     * board's currently-assigned group when editing (even if it is inactive).
+     *
+     * @return Collection<int, \App\Models\IdeaBoardGroup>
+     */
+    #[Computed]
+    public function assignableBoardGroups(): Collection
+    {
+        $groups = $this->team->boardGroups()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        if ($this->boardGroupId && ! $groups->contains('id', (int) $this->boardGroupId)) {
+            $current = $this->team->boardGroups()->find($this->boardGroupId, ['id', 'name']);
+
+            if ($current) {
+                $groups->push($current);
+            }
+        }
+
+        return $groups;
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function validationAttributes(): array
@@ -351,6 +376,14 @@ new #[Title('Boards & Categories')] class extends Component {
         </nav>
     </div>
 
+    <flux:text class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+        @switch($tab)
+            @case('boards'){{ __('Boards are where employees submit ideas. Assign each board to a group.') }}@break
+            @case('categories'){{ __('Categories classify ideas within a board.') }}@break
+            @default{{ __('Groups are the top-level areas that organize your boards.') }}
+        @endswitch
+    </flux:text>
+
     {{-- Board Groups --}}
     @if ($tab === 'groups')
         <div class="mt-5">
@@ -360,7 +393,9 @@ new #[Title('Boards & Categories')] class extends Component {
             <div class="mt-4 space-y-2">
                 @forelse ($this->boardGroups as $group)
                     <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" wire:key="group-{{ $group->id }}" data-test="group-row">
-                        <div class="min-w-0">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($group->name, 0, 1)) }}</span>
+                            <div class="min-w-0">
                             <div class="flex items-center gap-2">
                                 <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $group->name }}</span>
                                 @unless ($group->is_active)
@@ -370,6 +405,7 @@ new #[Title('Boards & Categories')] class extends Component {
                             <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
                                 {{ implode(' · ', array_filter([$group->slug, trans_choice(':count board|:count boards', $group->boards_count, ['count' => $group->boards_count]), $group->description])) }}
                             </flux:text>
+                            </div>
                         </div>
                         <div class="flex shrink-0 items-center gap-1">
                             <flux:button wire:click="toggleBoardGroup({{ $group->id }})" variant="ghost" size="sm">
@@ -396,7 +432,9 @@ new #[Title('Boards & Categories')] class extends Component {
             <div class="mt-4 space-y-2">
                 @forelse ($this->boards as $board)
                     <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" wire:key="board-{{ $board->id }}" data-test="board-row">
-                        <div class="min-w-0">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($board->name, 0, 1)) }}</span>
+                            <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $board->name }}</span>
                                 <flux:badge color="zinc" size="sm" variant="outline">{{ self::VISIBILITY_OPTIONS[$board->visibility] ?? ucfirst($board->visibility) }}</flux:badge>
@@ -411,6 +449,7 @@ new #[Title('Boards & Categories')] class extends Component {
                                     $board->description,
                                 ])) }}
                             </flux:text>
+                            </div>
                         </div>
                         <div class="flex shrink-0 items-center gap-1">
                             <flux:button wire:click="toggleBoard({{ $board->id }})" variant="ghost" size="sm">
@@ -437,7 +476,9 @@ new #[Title('Boards & Categories')] class extends Component {
             <div class="mt-4 space-y-2">
                 @forelse ($this->categories as $category)
                     <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" wire:key="category-{{ $category->id }}" data-test="category-row">
-                        <div class="min-w-0">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($category->name, 0, 1)) }}</span>
+                            <div class="min-w-0">
                             <div class="flex items-center gap-2">
                                 <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $category->name }}</span>
                                 @unless ($category->is_active)
@@ -451,6 +492,7 @@ new #[Title('Boards & Categories')] class extends Component {
                                     $category->description,
                                 ])) }}
                             </flux:text>
+                            </div>
                         </div>
                         <div class="flex shrink-0 items-center gap-1">
                             <flux:button wire:click="toggleCategory({{ $category->id }})" variant="ghost" size="sm">
@@ -491,7 +533,7 @@ new #[Title('Boards & Categories')] class extends Component {
             <flux:input wire:model="boardSlug" :label="__('Slug')" :description="__('Leave blank to generate from the name.')" />
             <flux:textarea wire:model="boardDescription" :label="__('Description')" rows="2" />
             <flux:select wire:model="boardGroupId" :label="__('Board group')" :placeholder="__('No group')">
-                @foreach ($this->boardGroups as $group)
+                @foreach ($this->assignableBoardGroups as $group)
                     <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
                 @endforeach
             </flux:select>

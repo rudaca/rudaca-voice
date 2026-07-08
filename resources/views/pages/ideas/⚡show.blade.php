@@ -77,7 +77,7 @@ new #[Title('Idea')] class extends Component {
         $this->ideaModel = Idea::query()
             ->where('team_id', Auth::user()->current_team_id)
             ->where('slug', $idea)
-            ->with(['board:id,name', 'category:id,name', 'submittedBy:id,name'])
+            ->with(['boardGroup:id,name', 'board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->firstOrFail();
 
         $this->status = $this->ideaModel->status;
@@ -418,7 +418,7 @@ new #[Title('Idea')] class extends Component {
                         @if ($idea->board)
                             <span class="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
                                 <flux:icon.rectangle-group class="size-3.5" />
-                                {{ $idea->board->name }}
+                                @if ($idea->boardGroup){{ $idea->boardGroup->name }} · @endif{{ $idea->board->name }}
                             </span>
                         @endif
                     </div>
@@ -495,7 +495,9 @@ new #[Title('Idea')] class extends Component {
                         </div>
                     </div>
                 @empty
-                    <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No comments yet.') }}</flux:text>
+                    <div class="rounded-xl border border-dashed border-zinc-300 py-8 text-center dark:border-zinc-700">
+                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('No comments yet — start the discussion above.') }}</flux:text>
+                    </div>
                 @endforelse
             </div>
         </div>
