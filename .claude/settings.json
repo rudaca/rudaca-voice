@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -d extension=__CMDSUB_OUTPUT__/php_sqlite3.dll -d extension=__CMDSUB_OUTPUT__/php_pdo_sqlite.dll vendor/bin/pest tests/Feature/HomeRedirectTest.php)"
+    ]
+  }
+}

@@ -28,10 +28,11 @@ return new class extends Migration
             $table->timestamp('last_synced_at')->nullable();
             $table->timestamps();
 
-                $table->unique(
-                    ['github_owner', 'github_repo', 'github_issue_number'],
-                    'github_issue_unique'
-                );        });
+            $table->unique(
+                ['github_owner', 'github_repo', 'github_issue_number'],
+                'github_issue_unique'
+            );
+        });
     }
 
     /**

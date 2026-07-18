@@ -1,9 +1,23 @@
 <?php
 
 use App\Http\Middleware\EnsureTeamMembership;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::get('/', function () {
+    $user = Auth::user();
+
+    if (! $user) {
+        return redirect()->route('login');
+    }
+
+    if ($team = $user->currentTeam) {
+        return redirect()->route('dashboard', ['current_team' => $team->slug]);
+    }
+
+    // Authenticated but no current team — send them to team management (fallback).
+    return redirect()->route('teams.index');
+})->name('home');
 
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])

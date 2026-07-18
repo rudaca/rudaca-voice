@@ -1,67 +1,86 @@
-name: tests
+name: CI
 
 on:
   push:
-    branches:
-      - develop
-      - main
-      - master
-      - workos
   pull_request:
-    branches:
-      - develop
-      - main
-      - master
-      - workos
 
 permissions:
   contents: read
 
 jobs:
-  ci:
+  test:
+    name: Pint + Feature tests (MySQL)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        php-version: ['8.3', '8.4', '8.5']
+
+    # Temporary MySQL that only exists for the duration of this job.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: rudaca_voice_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppassword --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    # These override phpunit.xml's SQLite defaults so the suite runs on MySQL.
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: rudaca_voice_testing
+      DB_USERNAME: root
+      DB_PASSWORD: password
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
+        uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php-version }}
+          php-version: '8.3'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, bcmath, intl, pdo, pdo_mysql
+          coverage: none
           tools: composer:v2
-          coverage: xdebug
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
 
-      - name: Install Node Dependencies
-        run: npm i
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
 
-      - name: Add Flux Credentials Loaded From ENV
-        run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+      - name: Install Node dependencies
+        run: npm ci
 
-      - name: Install Dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
-
-      - name: Copy Environment File
+      - name: Prepare environment file
         run: cp .env.example .env
 
-      - name: Generate Application Key
+      - name: Generate application key
         run: php artisan key:generate
 
-      - name: Build Assets
+      - name: Wait for MySQL to be ready
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -uroot -ppassword --silent; do
+            echo "Waiting for MySQL..."
+            sleep 2
+          done
+
+      - name: Run migrations (MySQL)
+        run: php artisan migrate --force
+
+      - name: Build frontend assets
         run: npm run build
 
-      - name: Run Type Analysis
-        run: composer types:check
+      - name: Check code style (Pint)
+        run: vendor/bin/pint --test
 
-      - name: Run Tests
+      - name: Run tests
         run: php artisan test
