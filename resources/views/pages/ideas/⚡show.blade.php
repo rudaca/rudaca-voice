@@ -19,7 +19,7 @@ new #[Title('Idea')] class extends Component {
     /**
      * Display metadata for each idea status (label + Flux badge color).
      *
-     * @var array<string, array{label: string, color: string}>
+     * @var array<string, array{label: string, color: string, class?: string}>
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc'],
@@ -28,7 +28,7 @@ new #[Title('Idea')] class extends Component {
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
         'released' => ['label' => 'Implemented', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'zinc'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-rose-700! text-white!'],
     ];
 
     /** @var array<string, string> */
@@ -362,7 +362,7 @@ new #[Title('Idea')] class extends Component {
     /**
      * Get the display metadata for a status value.
      *
-     * @return array{label: string, color: string}
+     * @return array{label: string, color: string, class?: string}
      */
     public function statusMeta(string $status): array
     {
@@ -374,10 +374,19 @@ new #[Title('Idea')] class extends Component {
 @php($meta = $this->statusMeta($idea->status))
 @php($author = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
 
-<section class="mx-auto w-full max-w-[1000px] px-6 py-7 lg:px-8">
-    <flux:link :href="route('ideas.index')" wire:navigate variant="subtle" class="inline-flex items-center gap-1 text-sm">
+@push('breadcrumbs')
+    <x-breadcrumbs :items="[
+        ['label' => __('All Ideas'), 'href' => route('ideas.index')],
+        ...($idea->boardGroup ? [['label' => $idea->boardGroup->name, 'href' => route('ideas.index', ['group' => $idea->board_group_id])]] : []),
+        ...($idea->board ? [['label' => $idea->board->name, 'href' => route('ideas.index', ['board' => $idea->board_id])]] : []),
+        ['label' => $idea->title, 'href' => null],
+    ]" />
+@endpush
+
+<section class="mx-auto w-full  px-6 pb-7 lg:px-8">
+    <flux:link as="button" x-data x-on:click="window.history.back()" variant="subtle" class="inline-flex items-center gap-1 text-sm">
         <flux:icon.arrow-left class="size-4" />
-        {{ __('Back to all ideas') }}
+        {{ __('Back') }}
     </flux:link>
 
     <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
@@ -392,26 +401,28 @@ new #[Title('Idea')] class extends Component {
 
             <div class="flex gap-4">
                 {{-- Vote toggle --}}
-                <button
-                    type="button"
-                    wire:click="toggleVote"
-                    wire:loading.attr="disabled"
-                    aria-pressed="{{ $this->hasVoted ? 'true' : 'false' }}"
-                    @class([
-                        'flex w-[72px] shrink-0 flex-col items-center justify-center gap-1 self-start rounded-xl border py-3 transition',
-                        'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $this->hasVoted,
-                        'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $this->hasVoted,
-                    ])
-                    data-test="vote-button"
-                >
-                    <flux:icon.chevron-up class="size-5" />
-                    <span class="text-lg font-extrabold">{{ $this->voteCount }}</span>
-                    <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
-                </button>
+                <flux:tooltip :content="$this->hasVoted ? __('You voted this idea..') : __('Click to vote for this idea..')">
+                    <button
+                        type="button"
+                        wire:click="toggleVote"
+                        wire:loading.attr="disabled"
+                        aria-pressed="{{ $this->hasVoted ? 'true' : 'false' }}"
+                        @class([
+                            'flex w-[72px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 self-start rounded-xl border py-3 transition',
+                            'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $this->hasVoted,
+                            'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $this->hasVoted,
+                        ])
+                        data-test="vote-button"
+                    >
+                        <flux:icon.chevron-up class="size-5" />
+                        <span class="text-lg font-extrabold">{{ $this->voteCount }}</span>
+                        <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
+                    </button>
+                </flux:tooltip>
 
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
-                        <flux:badge :color="$meta['color']" size="sm">{{ $meta['label'] }}</flux:badge>
+                        <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">{{ $meta['label'] }}</flux:badge>
                         @if ($idea->category)
                             <flux:badge color="zinc" size="sm" variant="outline">{{ $idea->category->name }}</flux:badge>
                         @endif
@@ -426,7 +437,7 @@ new #[Title('Idea')] class extends Component {
                     <flux:heading size="xl" class="mt-3">{{ $idea->title }}</flux:heading>
 
                     <div class="mt-3 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-                        <flux:avatar size="xs" :name="$author" />
+                        <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
                         <span>
                             {{ __('Submitted by') }}
                             <span class="font-medium text-zinc-700 dark:text-zinc-300">{{ $author }}</span>
@@ -447,7 +458,7 @@ new #[Title('Idea')] class extends Component {
 
             {{-- Composer --}}
             <form wire:submit="addComment" class="mt-4 flex gap-3">
-                <flux:avatar size="sm" :name="auth()->user()->name" />
+                <flux:avatar size="sm" :name="auth()->user()->name" color="auto" color:seed="{{ auth()->id() }}" />
                 <div class="min-w-0 flex-1 space-y-2">
                     <flux:textarea
                         wire:model="commentBody"
@@ -479,7 +490,7 @@ new #[Title('Idea')] class extends Component {
                         ])
                         wire:key="comment-{{ $comment->id }}"
                     >
-                        <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" />
+                        <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" color="auto" color:seed="{{ $comment->user_id ?? $comment->user?->name ?? __('Unknown') }}" />
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{{ $comment->user?->name ?? __('Unknown') }}</span>
@@ -583,7 +594,7 @@ new #[Title('Idea')] class extends Component {
                     @forelse ($this->statusHistory as $entry)
                         @php($entryMeta = $this->statusMeta($entry->new_status))
                         <div class="flex flex-col gap-1 border-l-2 border-zinc-100 pl-3 dark:border-zinc-700" wire:key="history-{{ $entry->id }}">
-                            <flux:badge :color="$entryMeta['color']" size="sm" class="self-start">{{ $entryMeta['label'] }}</flux:badge>
+                            <flux:badge :color="$entryMeta['color']" size="sm" class="self-start {{ $entryMeta['class'] ?? '' }}">{{ $entryMeta['label'] }}</flux:badge>
                             @if ($entry->note)
                                 <p class="text-sm text-zinc-600 dark:text-zinc-300">{{ $entry->note }}</p>
                             @endif

@@ -137,6 +137,14 @@ new class extends Component
     }
 }; ?>
 
+@push('breadcrumbs')
+    <x-breadcrumbs :items="[
+        ['label' => __('Settings'), 'href' => route('profile.edit')],
+        ['label' => __('Teams'), 'href' => route('teams.index')],
+        ['label' => $teamModel->name, 'href' => null],
+    ]" />
+@endpush
+
 <section class="w-full">
     @include('partials.settings-heading')
 

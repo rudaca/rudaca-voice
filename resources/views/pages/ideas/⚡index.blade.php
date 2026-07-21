@@ -7,18 +7,17 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-new #[Title('Ideas')] class extends Component {
+new class extends Component {
     use WithPagination;
 
     /**
      * Display metadata for each idea status (label + Flux badge color).
      *
-     * @var array<string, array{label: string, color: string}>
+     * @var array<string, array{label: string, color: string, class?: string}>
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc'],
@@ -27,7 +26,7 @@ new #[Title('Ideas')] class extends Component {
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
         'released' => ['label' => 'Implemented', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'zinc'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-rose-700! text-white!'],
     ];
 
     #[Url(as: 'sort')]
@@ -60,7 +59,7 @@ new #[Title('Ideas')] class extends Component {
      */
     public function sortBy(string $sort): void
     {
-        $this->sort = in_array($sort, ['newest', 'top'], true) ? $sort : 'newest';
+        $this->sort = in_array($sort, ['newest', 'top', 'trending'], true) ? $sort : 'newest';
         $this->resetPage();
     }
 
@@ -134,6 +133,32 @@ new #[Title('Ideas')] class extends Component {
     }
 
     /**
+     * The name of the board or board group currently filtering the list, if any.
+     * Used to swap the "All Ideas" heading/title for something less misleading
+     * when the view is scoped to a single board or group.
+     */
+    #[Computed]
+    public function activeFilterLabel(): ?string
+    {
+        if ($this->board !== '') {
+            return $this->boards->firstWhere('id', (int) $this->board)?->name;
+        }
+
+        if ($this->group !== '') {
+            return $this->boardGroups->firstWhere('id', (int) $this->group)?->name;
+        }
+
+        return null;
+    }
+
+    public function render()
+    {
+        return $this->view()->title(
+            $this->activeFilterLabel ? __(':name Ideas', ['name' => $this->activeFilterLabel]) : __('Ideas')
+        );
+    }
+
+    /**
      * The filtered, sorted, paginated ideas for the current team.
      *
      * @return LengthAwarePaginator<int, Idea>
@@ -141,7 +166,7 @@ new #[Title('Ideas')] class extends Component {
     #[Computed]
     public function ideas(): LengthAwarePaginator
     {
-        return Idea::query()
+        $query = Idea::query()
             ->where('team_id', $this->team->id)
             ->with(['boardGroup:id,name', 'board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->withCount(['votes', 'comments'])
@@ -149,19 +174,21 @@ new #[Title('Ideas')] class extends Component {
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
             ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
             ->when($this->board !== '', fn ($query) => $query->where('board_id', $this->board))
-            ->when($this->category !== '', fn ($query) => $query->where('category_id', $this->category))
-            ->when(
-                $this->sort === 'top',
-                fn ($query) => $query->orderByDesc('votes_count')->orderByDesc('created_at')->orderByDesc('id'),
-                fn ($query) => $query->orderByDesc('created_at')->orderByDesc('id'),
-            )
-            ->paginate(10);
+            ->when($this->category !== '', fn ($query) => $query->where('category_id', $this->category));
+
+        match ($this->sort) {
+            'top' => $query->orderByDesc('votes_count')->orderByDesc('created_at')->orderByDesc('id'),
+            'trending' => $query->orderByRaw('(votes_count + comments_count * 3) desc')->orderByDesc('id'),
+            default => $query->orderByDesc('created_at')->orderByDesc('id'),
+        };
+
+        return $query->paginate(10);
     }
 
     /**
      * Get the display metadata for a status value.
      *
-     * @return array{label: string, color: string}
+     * @return array{label: string, color: string, class?: string}
      */
     public function statusMeta(string $status): array
     {
@@ -169,17 +196,28 @@ new #[Title('Ideas')] class extends Component {
     }
 }; ?>
 
-<section class="mx-auto w-full max-w-[1080px] px-6 py-7 lg:px-8">
+@push('breadcrumbs')
+    <x-breadcrumbs :items="[
+        ['label' => __('All Ideas'), 'href' => $this->activeFilterLabel ? route('ideas.index') : null],
+        ...($this->activeFilterLabel ? [['label' => $this->activeFilterLabel, 'href' => null]] : []),
+    ]" />
+@endpush
+
+<section class="mx-auto w-full container px-6 pb-7 lg:px-8">
     <div>
         {{-- Header --}}
         <div class="flex items-start justify-between gap-4">
             <div class="flex flex-col gap-1">
-                <flux:heading size="xl">{{ __('All Ideas') }}</flux:heading>
+                <flux:heading size="xl">{{ $this->activeFilterLabel ?? __('All Ideas') }}</flux:heading>
                 <flux:text class="text-zinc-500 dark:text-zinc-400">
-                    {{ __(':ideas ideas across :boards boards', [
-                        'ideas' => $this->ideas->total(),
-                        'boards' => $this->boards->count(),
-                    ]) }}
+                    @if ($this->activeFilterLabel)
+                        {{ trans_choice(':count idea|:count ideas', $this->ideas->total(), ['count' => $this->ideas->total()]) }}
+                    @else
+                        {{ __(':ideas ideas across :boards boards', [
+                            'ideas' => $this->ideas->total(),
+                            'boards' => $this->boards->count(),
+                        ]) }}
+                    @endif
                 </flux:text>
             </div>
 
@@ -190,14 +228,38 @@ new #[Title('Ideas')] class extends Component {
 
         {{-- Controls: sort (left) + filters (right) --}}
         <div class="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800" role="group" aria-label="{{ __('Sort ideas') }}">
-                @foreach (['top' => __('Top voted'), 'newest' => __('Newest')] as $value => $label)
+            <div
+                class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+                role="group"
+                aria-label="{{ __('Sort ideas') }}"
+                data-sort="{{ $sort }}"
+                x-data="{
+                    sort: null,
+                    indicator: { left: 0, width: 0 },
+                    updateIndicator() {
+                        let el = this.$refs['sort-' + this.sort];
+                        if (el) {
+                            this.indicator = { left: el.offsetLeft, width: el.offsetWidth };
+                        }
+                    },
+                }"
+                x-init="sort = $el.dataset.sort; updateIndicator()"
+                x-effect="sort; updateIndicator()"
+            >
+                <div
+                    class="absolute inset-y-0.5 rounded-md bg-white shadow-sm transition-all duration-200 ease-out dark:bg-zinc-700"
+                    :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
+                ></div>
+
+                @foreach (['top' => __('Top voted'), 'newest' => __('Newest'), 'trending' => __('Trending')] as $value => $label)
                     <button
                         type="button"
+                        x-ref="sort-{{ $value }}"
+                        x-on:click="sort = '{{ $value }}'"
                         wire:click="sortBy('{{ $value }}')"
                         @class([
-                            'rounded-md px-3 py-1.5 text-sm font-medium transition',
-                            'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white' => $sort === $value,
+                            'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                            'text-zinc-900 dark:text-white' => $sort === $value,
                             'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200' => $sort !== $value,
                         ])
                         data-test="sort-{{ $value }}"
@@ -212,13 +274,6 @@ new #[Title('Ideas')] class extends Component {
                     <flux:select.option value="">{{ __('All statuses') }}</flux:select.option>
                     @foreach (self::STATUS_META as $value => $meta)
                         <flux:select.option value="{{ $value }}">{{ $meta['label'] }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-
-                <flux:select wire:model.live="group" size="sm" class="w-auto min-w-40" data-test="filter-group">
-                    <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
-                    @foreach ($this->boardGroups as $boardGroup)
-                        <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
                     @endforeach
                 </flux:select>
 
@@ -248,22 +303,24 @@ new #[Title('Ideas')] class extends Component {
                     data-test="idea-row"
                 >
                     {{-- Vote toggle --}}
-                    <button
-                        type="button"
-                        wire:click="toggleVote({{ $idea->id }})"
-                        wire:loading.attr="disabled"
-                        aria-pressed="{{ $idea->voted ? 'true' : 'false' }}"
-                        @class([
-                            'flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 self-start rounded-lg border py-2 transition',
-                            'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
-                            'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $idea->voted,
-                        ])
-                        data-test="vote-button"
-                    >
-                        <flux:icon.chevron-up class="size-4" />
-                        <span class="text-sm font-bold">{{ $idea->votes_count }}</span>
-                        <span class="text-[10px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
-                    </button>
+                    <flux:tooltip :content="$idea->voted ? __('You voted this idea..') : __('Click to vote for this idea..')">
+                        <button
+                            type="button"
+                            wire:click="toggleVote({{ $idea->id }})"
+                            wire:loading.attr="disabled"
+                            aria-pressed="{{ $idea->voted ? 'true' : 'false' }}"
+                            @class([
+                                'flex w-12 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 self-start rounded-lg border py-2 transition',
+                                'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
+                                'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $idea->voted,
+                            ])
+                            data-test="vote-button"
+                        >
+                            <flux:icon.chevron-up class="size-4" />
+                            <span class="text-sm font-extrabold">{{ $idea->votes_count }}</span>
+                            <span class="text-[10px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
+                        </button>
+                    </flux:tooltip>
 
                     <a
                         href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
@@ -272,7 +329,12 @@ new #[Title('Ideas')] class extends Component {
                         data-test="idea-link"
                     >
                         <div class="flex flex-wrap items-center gap-2">
-                            <flux:badge :color="$meta['color']" size="sm">{{ $meta['label'] }}</flux:badge>
+                            <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">
+                                <span class="me-1 inline-block size-1.5 rounded-full bg-current"></span>{{ $meta['label'] }}
+                            </flux:badge>
+                            @if ($idea->category)
+                                <flux:badge color="zinc" size="sm" variant="outline">{{ $idea->category->name }}</flux:badge>
+                            @endif
                         </div>
 
                         <flux:heading size="lg" class="mt-2 truncate">{{ $idea->title }}</flux:heading>
@@ -281,17 +343,25 @@ new #[Title('Ideas')] class extends Component {
                             {{ \Illuminate\Support\Str::limit(strip_tags($idea->description), 130) }}
                         </flux:text>
 
-                        @php($metaPieces = array_values(array_filter([
-                            $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')),
-                            $idea->boardGroup?->name,
-                            $idea->board?->name,
-                            $idea->category?->name,
-                            trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]),
-                            $idea->created_at->format('M j, Y'),
-                        ], fn ($piece) => filled($piece))))
+                        @php($author = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
 
-                        <div class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                            {{ implode(' · ', $metaPieces) }}
+                        <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            <div class="flex items-center gap-1.5">
+                                <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
+                                <span>{{ $author }}</span>
+                            </div>
+
+                            @if ($idea->board)
+                                <span aria-hidden="true">·</span>
+                                <span>{{ $idea->board->name }}</span>
+                            @endif
+
+                            <span aria-hidden="true">·</span>
+                            <span>{{ trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]) }}</span>
+
+                            <flux:tooltip :content="$idea->created_at->format('M j, Y \a\t g:i A')" class="ms-auto shrink-0">
+                                <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                            </flux:tooltip>
                         </div>
                     </a>
                 </div>

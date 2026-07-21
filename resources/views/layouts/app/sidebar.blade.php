@@ -1,64 +1,164 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @include('partials.head')
     </head>
     <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
+        @php
+            $__currentTeam = auth()->user()?->currentTeam;
+            $__currentRole = $__currentTeam ? auth()->user()->teamRole($__currentTeam) : null;
+            $__canSubmitIdea = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Employee) ?? false;
+            $__canReview = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Manager) ?? false;
+            $__canManageBoards = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Admin) ?? false;
+
+            $__reviewQueueCount = $__canReview
+                ? $__currentTeam->ideas()->whereIn('status', ['new', 'under_review'])->count()
+                : 0;
+
+            $__boardGroups = $__currentTeam
+                ? $__currentTeam->boardGroups()
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->orderBy('name')
+                    ->with(['boards' => fn ($query) => $query->where('is_active', true)->withCount('ideas')->orderBy('sort_order')->orderBy('name')])
+                    ->get()
+                : collect();
+
+            $__ungroupedBoards = $__currentTeam
+                ? $__currentTeam->boards()
+                    ->where('is_active', true)
+                    ->whereNull('board_group_id')
+                    ->withCount('ideas')
+                    ->orderBy('sort_order')
+                    ->orderBy('name')
+                    ->get()
+                : collect();
+        @endphp
+
+        <flux:sidebar sticky collapsible class="overflow-x-hidden border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.header>
-                <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate />
-                <flux:sidebar.collapse class="lg:hidden" />
+                <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate class="in-data-flux-sidebar-collapsed-desktop:hidden" />
+                <flux:sidebar.collapse class="in-data-flux-sidebar-on-desktop:not-in-data-flux-sidebar-collapsed-desktop:-mr-2" />
             </flux:sidebar.header>
 
-            <livewire:team-switcher />
-
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Platform')" class="grid">
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                <div class="grid">
+                    <flux:sidebar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
 
-                    <flux:sidebar.item icon="light-bulb" :href="route('ideas.index')" :current="request()->routeIs('ideas.index')" wire:navigate>
+                    <flux:sidebar.item
+                        icon="list-bullet"
+                        :href="route('ideas.index')"
+                        :current="request()->routeIs('ideas.index') && ! request()->filled('board') && ! request()->filled('group')"
+                        wire:navigate
+                    >
                         {{ __('All Ideas') }}
                     </flux:sidebar.item>
 
-                    @php($__currentTeam = auth()->user()?->currentTeam)
-                    @if ($__currentTeam && auth()->user()->teamRole($__currentTeam)?->isAtLeast(\App\Enums\TeamRole::Manager))
-                        <flux:sidebar.item icon="clipboard-document-check" :href="route('ideas.review')" :current="request()->routeIs('ideas.review')" wire:navigate>
-                            {{ __('Review Ideas') }}
+                    @if ($__canSubmitIdea)
+                        <flux:sidebar.item icon="plus" :href="route('ideas.create')" :current="request()->routeIs('ideas.create')" wire:navigate>
+                            {{ __('Submit Idea') }}
                         </flux:sidebar.item>
                     @endif
 
-                    @if ($__currentTeam && auth()->user()->teamRole($__currentTeam)?->isAtLeast(\App\Enums\TeamRole::Admin))
+                    @if ($__canManageBoards)
                         <flux:sidebar.item icon="adjustments-horizontal" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
                             {{ __('Boards & Categories') }}
                         </flux:sidebar.item>
                     @endif
-                </flux:sidebar.group>
+                </div>
             </flux:sidebar.nav>
+
+            @if ($__canReview)
+                <flux:separator variant="subtle" class="sidebar-divider" />
+
+                <flux:sidebar.nav>
+                    <div class="in-data-flux-sidebar-collapsed-desktop:hidden px-4 pt-1 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+                        {{ __('Management') }}
+                    </div>
+
+                    <div class="grid">
+                        <flux:sidebar.item
+                            icon="clipboard-document-check"
+                            :href="route('ideas.review')"
+                            :current="request()->routeIs('ideas.review')"
+                            :badge="$__reviewQueueCount > 0 ? (string) $__reviewQueueCount : null"
+                            badge:color="amber"
+                            wire:navigate
+                        >
+                            {{ __('Review Queue') }}
+                        </flux:sidebar.item>
+                    </div>
+                </flux:sidebar.nav>
+            @endif
+
+            @if ($__boardGroups->isNotEmpty() || $__ungroupedBoards->isNotEmpty())
+                <flux:separator variant="subtle" class="sidebar-divider" />
+
+                <div class="in-data-flux-sidebar-collapsed-desktop:hidden mt-2 px-3">
+                    <div class="flex items-center gap-1.5 px-1 py-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+                        <flux:icon.chalkboard class="size-3.5" />
+                        {{ __('Boards') }}
+                    </div>
+
+                    <x-boards-nav-list :groups="$__boardGroups" :ungrouped="$__ungroupedBoards" />
+                </div>
+
+                <div class="hidden in-data-flux-sidebar-collapsed-desktop:flex justify-center px-3">
+                    <div class="group/tooltip relative">
+                        <flux:dropdown position="right" align="start" data-test="sidebar-boards-dropdown">
+                            <button
+                                type="button"
+                                class="flex size-10 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-800/5 hover:text-zinc-800 dark:text-white/80 dark:hover:bg-white/[7%] dark:hover:text-white"
+                                aria-label="{{ __('Boards') }}"
+                                data-test="sidebar-boards-trigger"
+                            >
+                                <flux:icon.ellipsis-horizontal class="size-5" />
+                            </button>
+
+                            <flux:menu class="max-h-[70vh] w-64 overflow-y-auto">
+                                <flux:menu.heading>{{ __('Boards') }}</flux:menu.heading>
+
+                                <div class="mt-1 p-1">
+                                    <x-boards-nav-list :groups="$__boardGroups" :ungrouped="$__ungroupedBoards" />
+                                </div>
+                            </flux:menu>
+                        </flux:dropdown>
+
+                        <div class="pointer-events-none absolute start-full top-1/2 z-50 ms-2 -translate-y-1/2 scale-95 rounded-md bg-zinc-800 px-2 py-1 text-xs font-medium whitespace-nowrap text-white opacity-0 shadow-sm transition delay-300 duration-150 group-hover/tooltip:scale-100 group-hover/tooltip:opacity-100 dark:bg-zinc-700 dark:border dark:border-white/10">
+                            {{ __('Boards') }}
+                        </div>
+                    </div>
+                </div>
+            @endif
 
             <flux:spacer />
 
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
+            <flux:separator variant="subtle" class="sidebar-divider" />
 
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
-
-            <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
+            <x-desktop-user-menu class="hidden lg:block" :subtitle="$__currentRole?->label()" />
         </flux:sidebar>
 
-        <!-- Mobile User Menu -->
-        <flux:header class="lg:hidden">
+        <!-- Header -->
+        <flux:header sticky class="z-10 gap-3 border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
+
+            <livewire:team-switcher :compact="true" />
+
+            <div class="min-w-0 flex-1 sm:w-64 sm:flex-none md:w-96 lg:w-[28rem]">
+                <livewire:global-search />
+            </div>
 
             <flux:spacer />
 
-            <flux:dropdown position="top" align="end">
+            @if ($__canSubmitIdea)
+                <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" size="sm" data-test="header-new-idea-button">
+                    <span class="hidden sm:inline">{{ __('New Idea') }}</span>
+                </flux:button>
+            @endif
+
+            <flux:dropdown position="top" align="end" class="lg:hidden">
                 <flux:profile
                     :initials="auth()->user()->initials()"
                     icon-trailing="chevron-down"

@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 new class extends Component {
+    public bool $compact = false;
+
     public function currentTeam(): ?array
     {
         $team = Auth::user()->currentTeam;
@@ -80,15 +82,26 @@ new class extends Component {
 
 <div>
     <flux:dropdown position="bottom" align="start">
-        <flux:button variant="ghost" class="group w-full justify-start in-data-flux-sidebar-collapsed-desktop:justify-center" data-test="team-switcher-trigger">
-            <flux:icon name="users" class="hidden size-4 in-data-flux-sidebar-collapsed-desktop:block" />
-            <span class="truncate font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">{{ $this->currentTeam()['name'] ?? __('Select team') }}</span>
-            <flux:icon
-                name="chevrons-up-down"
-                variant="micro"
-                class="ms-auto size-4 in-data-flux-sidebar-collapsed-desktop:hidden"
-            />
-        </flux:button>
+        @if ($compact)
+            <button
+                type="button"
+                class="flex min-w-0 items-center gap-1 truncate text-xs text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                data-test="team-switcher-trigger"
+            >
+                <span class="truncate text-lg font-semibold">{{ $this->currentTeam()['name'] ?? __('Select team') }}</span>
+                <flux:icon name="chevron-down" variant="micro" class="size-3.5 shrink-0" />
+            </button>
+        @else
+            <flux:button variant="ghost" class="group w-full justify-start in-data-flux-sidebar-collapsed-desktop:justify-center" data-test="team-switcher-trigger">
+                <flux:icon name="users" class="hidden size-4 in-data-flux-sidebar-collapsed-desktop:block" />
+                <span class="truncate font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">{{ $this->currentTeam()['name'] ?? __('Select team') }}</span>
+                <flux:icon
+                    name="chevrons-up-down"
+                    variant="micro"
+                    class="ms-auto size-4 in-data-flux-sidebar-collapsed-desktop:hidden"
+                />
+            </flux:button>
+        @endif
 
         <flux:menu class="min-w-56">
             <flux:menu.heading>{{ __('Teams') }}</flux:menu.heading>

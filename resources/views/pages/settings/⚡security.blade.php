@@ -55,6 +55,13 @@ new #[Title('Security settings')] class extends Component {
 
 }; ?>
 
+@push('breadcrumbs')
+    <x-breadcrumbs :items="[
+        ['label' => __('Settings'), 'href' => route('profile.edit')],
+        ['label' => __('Security'), 'href' => null],
+    ]" />
+@endpush
+
 <section class="w-full">
     @include('partials.settings-heading')
 

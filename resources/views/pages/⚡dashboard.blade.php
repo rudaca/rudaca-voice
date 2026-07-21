@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\TeamRole;
 use App\Models\IdeaVote;
 use App\Models\Team;
 use Illuminate\Database\Eloquent\Collection;
@@ -11,7 +10,7 @@ use Livewire\Component;
 
 new #[Title('Dashboard')] class extends Component {
     /**
-     * @var array<string, array{label: string, color: string}>
+     * @var array<string, array{label: string, color: string, class?: string}>
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc'],
@@ -20,38 +19,13 @@ new #[Title('Dashboard')] class extends Component {
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
         'released' => ['label' => 'Implemented', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'zinc'],
-    ];
-
-    /**
-     * Soft colored tile classes for board icons, cycled by index.
-     *
-     * @var array<int, string>
-     */
-    public const BOARD_TILES = [
-        'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
-        'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300',
-        'bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
-        'bg-teal-50 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300',
-        'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300',
-        'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
-        'bg-pink-50 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300',
-        'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-300',
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-rose-700! text-white!'],
     ];
 
     #[Computed]
     public function team(): Team
     {
         return Auth::user()->currentTeam;
-    }
-
-    /**
-     * Whether the current user can access the review queue (manager and above).
-     */
-    #[Computed]
-    public function canReview(): bool
-    {
-        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Manager) ?? false;
     }
 
     /**
@@ -129,7 +103,7 @@ new #[Title('Dashboard')] class extends Component {
     }
 
     /**
-     * @return array{label: string, color: string}
+     * @return array{label: string, color: string, class?: string}
      */
     public function statusMeta(string $status): array
     {
@@ -137,24 +111,14 @@ new #[Title('Dashboard')] class extends Component {
     }
 }; ?>
 
-<div class="min-h-full bg-zinc-50 dark:bg-zinc-950">
-    <div class="mx-auto w-full max-w-[1120px] px-6 py-8 lg:px-8">
+<div class="min-h-full dark:bg-zinc-950">
+    <div class="mx-auto w-full px-6 py-8 lg:px-8">
         <livewire:pages::teams.pending-invitations-modal />
 
         {{-- Header --}}
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-                <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Welcome back, :name', ['name' => str(auth()->user()->name)->before(' ')]) }}</flux:text>
-                <flux:heading size="xl" class="mt-0.5 text-2xl font-extrabold tracking-tight">{{ __('Your ideas hub') }}</flux:heading>
-            </div>
+        <div>
+            <flux:text class="text-sm text-zinc-800 dark:text-zinc-400">{{ __('Welcome back') }} <strong>{{  Auth::user()->name }}!</strong></flux:text>
 
-            <div class="flex flex-wrap gap-2">
-                <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus">{{ __('Submit idea') }}</flux:button>
-                <flux:button :href="route('ideas.index')" wire:navigate variant="filled" icon="light-bulb">{{ __('All ideas') }}</flux:button>
-                @if ($this->canReview)
-                    <flux:button :href="route('ideas.review')" wire:navigate variant="filled" icon="clipboard-document-check">{{ __('Review ideas') }}</flux:button>
-                @endif
-            </div>
         </div>
 
         {{-- Stat cards --}}
@@ -191,13 +155,13 @@ new #[Title('Dashboard')] class extends Component {
                         >
                             <div class="flex w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-zinc-200 py-1.5 dark:border-zinc-700">
                                 <flux:icon.chevron-up class="size-4 text-zinc-400" />
-                                <span class="text-sm font-bold text-zinc-800 dark:text-zinc-100">{{ $idea->votes_count }}</span>
+                                <span class="text-sm font-extrabold text-zinc-800 dark:text-zinc-100">{{ $idea->votes_count }}</span>
                             </div>
 
                             <div class="min-w-0 flex-1">
                                 <div class="truncate font-semibold text-zinc-900 dark:text-zinc-100">{{ $idea->title }}</div>
                                 <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                                    <flux:badge :color="$meta['color']" size="sm">{{ $meta['label'] }}</flux:badge>
+                                    <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">{{ $meta['label'] }}</flux:badge>
                                     @if ($idea->board)
                                         <span>{{ $idea->board->name }}</span>
                                     @endif
@@ -227,9 +191,7 @@ new #[Title('Dashboard')] class extends Component {
                             class="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 transition last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
                             wire:key="board-{{ $board->id }}"
                         >
-                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold {{ self::BOARD_TILES[$loop->index % count(self::BOARD_TILES)] }}">
-                                {{ strtoupper(mb_substr($board->name, 0, 1)) }}
-                            </span>
+                            <x-board-avatar :name="$board->name" :index="$loop->index" />
                             <div class="min-w-0 flex-1">
                                 <div class="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{{ $board->name }}</div>
                                 <div class="text-xs text-zinc-400 dark:text-zinc-500">{{ trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]) }}</div>

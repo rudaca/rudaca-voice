@@ -350,7 +350,13 @@ new #[Title('Boards & Categories')] class extends Component {
     }
 }; ?>
 
-<section class="mx-auto w-full max-w-[900px] px-6 py-7 lg:px-8">
+@push('breadcrumbs')
+    <x-breadcrumbs :items="[
+        ['label' => __('Boards & Categories'), 'href' => null],
+    ]" />
+@endpush
+
+<section class="mx-auto w-full  px-6 pb-7 lg:px-8">
     <div class="flex flex-col gap-1">
         <flux:heading size="xl">{{ __('Boards & Categories') }}</flux:heading>
         <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('Organize where employees submit ideas.') }}</flux:text>
@@ -358,15 +364,37 @@ new #[Title('Boards & Categories')] class extends Component {
 
     {{-- Tabs --}}
     <div class="mt-6 border-b border-zinc-200 dark:border-zinc-700">
-        <nav class="-mb-px flex gap-6">
+        <nav
+            class="relative -mb-px flex gap-6"
+            data-tab="{{ $tab }}"
+            x-data="{
+                tab: null,
+                indicator: { left: 0, width: 0 },
+                updateIndicator() {
+                    let el = this.$refs['tab-' + this.tab];
+                    if (el) {
+                        this.indicator = { left: el.offsetLeft, width: el.offsetWidth };
+                    }
+                },
+            }"
+            x-init="tab = $el.dataset.tab; updateIndicator()"
+            x-effect="tab; updateIndicator()"
+        >
+            <div
+                class="absolute bottom-0 h-0.5 rounded-full bg-indigo-500 transition-all duration-300 ease-out"
+                :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
+            ></div>
+
             @foreach (['groups' => __('Board Groups'), 'boards' => __('Boards'), 'categories' => __('Categories')] as $key => $label)
                 <button
                     type="button"
+                    x-ref="tab-{{ $key }}"
+                    x-on:click="tab = '{{ $key }}'"
                     wire:click="$set('tab', '{{ $key }}')"
                     @class([
-                        'border-b-2 px-1 py-3 text-sm font-medium transition',
-                        'border-indigo-500 text-indigo-600 dark:text-indigo-400' => $tab === $key,
-                        'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200' => $tab !== $key,
+                        'px-1 py-3 text-sm font-medium transition-colors',
+                        'text-indigo-600 dark:text-indigo-400' => $tab === $key,
+                        'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200' => $tab !== $key,
                     ])
                     data-test="tab-{{ $key }}"
                 >

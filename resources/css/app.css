@@ -47,6 +47,153 @@
     }
 }
 
+[x-cloak] {
+    display: none !important;
+}
+
+/*
+Hide the global breadcrumbs bar entirely on pages that don't push any breadcrumb items...
+*/
+#breadcrumbs-bar:empty {
+    display: none;
+}
+
+/*
+Flux's sidebar layout places every direct <body> child into a fixed grid
+template ("header" row, then "sidebar main aside", then "sidebar footer aside").
+The breadcrumbs bar has no grid-area of its own, so without this override the
+grid's auto-placement algorithm drops it into the empty "aside" cell instead of
+flowing in its own row below the header.
+*/
+body:has(> [data-flux-main]) {
+    grid-template-rows: auto auto 1fr auto !important;
+    grid-template-areas:
+        "sidebar header      header"
+        "sidebar breadcrumbs breadcrumbs"
+        "sidebar main        aside"
+        "sidebar footer      aside" !important;
+}
+
+#breadcrumbs-bar {
+    grid-area: breadcrumbs;
+}
+
+/*
+Smoothly resize the sidebar when toggling desktop icon-only collapse...
+*/
+[data-flux-sidebar] {
+    transition: width 0.2s ease-in-out, padding 0.2s ease-in-out;
+}
+
+/*
+Smoothly fade + slide Flux dropdown menus open/closed instead of popping in...
+*/
+[data-flux-menu] {
+    transform-origin: top;
+    opacity: 0;
+    transform: scale(0.95) translateY(-0.375rem);
+    transition: opacity 0.12s ease-out, transform 0.12s ease-out, display 0.12s allow-discrete, overlay 0.12s allow-discrete;
+}
+
+[data-flux-menu]:popover-open {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+@starting-style {
+    [data-flux-menu]:popover-open {
+        opacity: 0;
+        transform: scale(0.95) translateY(-0.375rem);
+    }
+}
+
+[data-flux-dropdown][position^="top"] [data-flux-menu] {
+    transform-origin: bottom;
+    transform: scale(0.95) translateY(0.375rem);
+}
+
+@starting-style {
+    [data-flux-dropdown][position^="top"] [data-flux-menu]:popover-open {
+        transform: scale(0.95) translateY(0.375rem);
+    }
+}
+
+/*
+Use a pointer cursor for the sidebar collapse/expand toggle instead of Flux's
+default resize-arrow cursor, which reads as a drag handle rather than a click target.
+*/
+[data-flux-sidebar-collapse] button {
+    cursor: pointer !important;
+}
+
+/*
+Flux fades the collapse/expand toggle to opacity-0 (and detaches it via
+absolute positioning) when the sidebar is collapsed on desktop, only
+revealing it again on hover/focus. We want it always visible instead.
+*/
+[data-flux-sidebar][data-flux-sidebar-collapsed-desktop] [data-flux-sidebar-collapse] {
+    opacity: 1 !important;
+    position: static !important;
+}
+
+/*
+Rotate a dropdown trigger's trailing chevron smoothly to mirror the open state...
+*/
+[data-flux-dropdown] > [aria-expanded] svg[data-flux-icon]:last-of-type {
+    transition: transform 0.2s ease;
+}
+
+[data-flux-dropdown] > [aria-expanded="true"] svg[data-flux-icon]:last-of-type {
+    transform: rotate(180deg);
+}
+
+/*
+The Boards sidebar trigger's icon is decorative (ellipsis), not a directional
+chevron, so it shouldn't spin 180deg when its popover opens like other dropdown
+triggers do.
+*/
+[data-flux-dropdown] > [aria-expanded][data-test="sidebar-boards-trigger"] svg[data-flux-icon]:last-of-type {
+    transition: none;
+}
+
+[data-flux-dropdown] > [aria-expanded="true"][data-test="sidebar-boards-trigger"] svg[data-flux-icon]:last-of-type {
+    transform: none;
+}
+
+/*
+The sidebar section dividers should read as a thin dotted rule rather than
+Flux's default solid filled separator (a background-color div), so swap it
+for an actual border on those specific instances.
+*/
+.sidebar-divider[data-flux-separator] {
+    height: 0;
+    background-color: transparent;
+    border-top: 1px dotted var(--color-zinc-300);
+}
+
+.dark .sidebar-divider[data-flux-separator] {
+    border-top-color: rgba(255, 255, 255, 0.15);
+}
+
+/*
+The active sidebar nav item's label carries its own font-medium class directly
+(set on an inner [data-content] div), so it wins over any font-weight utility
+layered onto the outer item element. Target the label directly instead.
+*/
+[data-flux-sidebar-item][data-current] [data-content] {
+    font-weight: 600;
+}
+
+/*
+Flux's button component sets font-medium directly in its own utility class
+list, so a font-semibold class merged in via the class attribute isn't
+guaranteed to win depending on Tailwind's generated utility order. Override
+directly instead.
+*/
+.review-action-button {
+    font-weight: 600;
+}
+
 [data-flux-field]:not(ui-radio, ui-checkbox) {
     @apply grid gap-2;
 }

@@ -76,6 +76,13 @@ new #[Title('Profile settings')] class extends Component {
     }
 }; ?>
 
+@push('breadcrumbs')
+    <x-breadcrumbs :items="[
+        ['label' => __('Settings'), 'href' => route('profile.edit')],
+        ['label' => __('Profile'), 'href' => null],
+    ]" />
+@endpush
+
 <section class="w-full">
     @include('partials.settings-heading')
 
