@@ -8,10 +8,10 @@ use Livewire\Livewire;
 test('top voted sort ranks by vote count alone', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
 
-    $mostVoted = makeIdea($team, ['title' => 'Most voted idea']);
+    $mostVoted = makeIdea($team, ['title' => 'Most voted idea', 'status' => 'new']);
     IdeaVote::factory()->count(5)->create(['idea_id' => $mostVoted->id]);
 
-    $mostDiscussed = makeIdea($team, ['title' => 'Most discussed idea']);
+    $mostDiscussed = makeIdea($team, ['title' => 'Most discussed idea', 'status' => 'new']);
     IdeaVote::factory()->count(1)->create(['idea_id' => $mostDiscussed->id]);
     IdeaComment::factory()->count(3)->create(['idea_id' => $mostDiscussed->id]);
 
@@ -26,10 +26,10 @@ test('top voted sort ranks by vote count alone', function () {
 test('trending sort weighs comments alongside votes', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
 
-    $mostVoted = makeIdea($team, ['title' => 'Most voted idea']);
+    $mostVoted = makeIdea($team, ['title' => 'Most voted idea', 'status' => 'new']);
     IdeaVote::factory()->count(5)->create(['idea_id' => $mostVoted->id]);
 
-    $mostDiscussed = makeIdea($team, ['title' => 'Most discussed idea']);
+    $mostDiscussed = makeIdea($team, ['title' => 'Most discussed idea', 'status' => 'new']);
     IdeaVote::factory()->count(1)->create(['idea_id' => $mostDiscussed->id]);
     IdeaComment::factory()->count(3)->create(['idea_id' => $mostDiscussed->id]);
 

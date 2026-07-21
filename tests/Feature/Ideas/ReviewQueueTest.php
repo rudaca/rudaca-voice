@@ -117,7 +117,7 @@ test('a manager cannot decide on an idea from another team', function () {
     expect($ideaA->refresh()->status)->toBe('new');
 });
 
-test('the sidebar shows a Management section with the awaiting-review count for a manager', function () {
+test('the sidebar shows an Administration section with the awaiting-review count for a manager', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
     makeIdea($team, ['status' => 'new']);
     makeIdea($team, ['status' => 'under_review']);
@@ -127,7 +127,7 @@ test('the sidebar shows a Management section with the awaiting-review count for 
     $content = $this->actingAs($manager)
         ->get(route('ideas.review', ['current_team' => $team->slug]))
         ->assertOk()
-        ->assertSee('Management')
+        ->assertSee('Administration')
         ->assertSee('Review Queue')
         ->getContent();
 
@@ -136,12 +136,12 @@ test('the sidebar shows a Management section with the awaiting-review count for 
     expect($matches[1] ?? '')->toContain('3');
 });
 
-test('the sidebar has no Management section for an employee', function () {
+test('the sidebar has no Administration section for an employee', function () {
     ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
 
     $this->actingAs($employee)
         ->get(route('ideas.index', ['current_team' => $team->slug]))
         ->assertOk()
-        ->assertDontSee('Management')
+        ->assertDontSee('Administration')
         ->assertDontSee('Review Queue');
 });

@@ -200,7 +200,8 @@ new #[Title('Dashboard')] class extends Component {
                         </a>
                     @empty
                         <div class="px-4 py-10 text-center">
-                            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('No boards yet.') }}</flux:text>
+                            <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+                            <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ __('No boards yet.') }}</flux:text>
                         </div>
                     @endforelse
                 </div>

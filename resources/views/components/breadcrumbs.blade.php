@@ -1,16 +1,23 @@
 @props(['items' => []])
 
 @php
+    $currentTeam = auth()->user()?->currentTeam;
+
     $home = [
         'label' => __('Home'),
-        'href' => auth()->user()?->currentTeam
-            ? route('dashboard', ['current_team' => auth()->user()->currentTeam->slug])
+        'href' => $currentTeam
+            ? route('dashboard', ['current_team' => $currentTeam->slug])
             : route('teams.index'),
         'icon' => 'home',
     ];
 
-    $trail = [$home, ...$items];
-    $collapsed = count($trail) > 3;
+    $team = $currentTeam ? [
+        'label' => $currentTeam->name,
+        'href' => null,
+    ] : null;
+
+    $trail = [$home, ...($team ? [$team] : []), ...$items];
+    $collapsed = count($trail) > 4;
 
     if ($collapsed) {
         $first = $trail[0];
@@ -58,7 +65,7 @@
         </flux:breadcrumbs.item>
     @else
         @foreach ($trail as $step)
-            <flux:breadcrumbs.item :href="$step['href'] ?? null" :icon="$step['icon'] ?? null" class="{{ ($step['href'] ?? null) === null ? $activeClass : $inactiveClass }}">
+            <flux:breadcrumbs.item :href="$step['href'] ?? null" :icon="$step['icon'] ?? null" class="{{ $loop->last && ($step['href'] ?? null) === null ? $activeClass : $inactiveClass }}">
                 {{ $step['label'] }}
             </flux:breadcrumbs.item>
         @endforeach

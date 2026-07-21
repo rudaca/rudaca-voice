@@ -11,7 +11,7 @@ use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Title('Boards & Categories')] class extends Component {
+new #[Title('Organization settings')] class extends Component {
     /** @var array<string, string> */
     public const VISIBILITY_OPTIONS = [
         'public' => 'Public',
@@ -20,8 +20,18 @@ new #[Title('Boards & Categories')] class extends Component {
         'private' => 'Private',
     ];
 
+    /** @var array<string, string> */
+    public const ROLE_BADGE_COLORS = [
+        'owner' => 'pink',
+        'admin' => 'pink',
+        'manager' => 'teal',
+        'employee' => 'zinc',
+        'viewer' => 'zinc',
+        'member' => 'zinc',
+    ];
+
     #[Url(as: 'tab')]
-    public string $tab = 'groups';
+    public string $tab = 'boards';
 
     // --- Board group form ---
     public ?int $groupId = null;
@@ -61,6 +71,11 @@ new #[Title('Boards & Categories')] class extends Component {
     public string $categoryBoardId = '';
 
     public bool $categoryIsActive = true;
+
+    // --- Quick add category (Categories tab) ---
+    public string $quickCategoryName = '';
+
+    public string $quickCategoryBoardId = '';
 
     #[Computed]
     public function team(): Team
@@ -110,6 +125,15 @@ new #[Title('Boards & Categories')] class extends Component {
     }
 
     /**
+     * @return Collection<int, \App\Models\User>
+     */
+    #[Computed]
+    public function members(): Collection
+    {
+        return $this->team->members()->orderBy('name')->get();
+    }
+
+    /**
      * Board groups selectable when assigning a board: active groups, plus the
      * board's currently-assigned group when editing (even if it is inactive).
      *
@@ -148,6 +172,8 @@ new #[Title('Boards & Categories')] class extends Component {
             'categoryName' => __('name'),
             'categorySlug' => __('slug'),
             'categoryBoardId' => __('board'),
+            'quickCategoryName' => __('name'),
+            'quickCategoryBoardId' => __('board'),
         ];
     }
 
@@ -348,18 +374,50 @@ new #[Title('Boards & Categories')] class extends Component {
         $category->update(['is_active' => ! $category->is_active]);
         unset($this->categories);
     }
+
+    public function quickAddCategory(): void
+    {
+        $teamId = $this->team->id;
+
+        $validated = $this->validate([
+            'quickCategoryName' => ['required', 'string', 'max:255'],
+            'quickCategoryBoardId' => ['required', Rule::exists('idea_boards', 'id')->where('team_id', $teamId)],
+        ]);
+
+        $baseSlug = Str::slug($validated['quickCategoryName']);
+        $slug = $baseSlug;
+        $suffix = 1;
+
+        while ($this->team->categories()->where('board_id', $validated['quickCategoryBoardId'])->where('slug', $slug)->exists()) {
+            $suffix++;
+            $slug = "{$baseSlug}-{$suffix}";
+        }
+
+        $this->team->categories()->create([
+            'board_id' => $validated['quickCategoryBoardId'],
+            'name' => $validated['quickCategoryName'],
+            'slug' => $slug,
+            'is_active' => true,
+            'sort_order' => (int) $this->team->categories()->max('sort_order') + 1,
+        ]);
+
+        $this->quickCategoryName = '';
+
+        unset($this->categories);
+        Flux::toast(variant: 'success', text: __('Category saved.'));
+    }
 }; ?>
 
 @push('breadcrumbs')
     <x-breadcrumbs :items="[
-        ['label' => __('Boards & Categories'), 'href' => null],
+        ['label' => __('Organization settings'), 'href' => null],
     ]" />
 @endpush
 
 <section class="mx-auto w-full  px-6 pb-7 lg:px-8">
     <div class="flex flex-col gap-1">
-        <flux:heading size="xl">{{ __('Boards & Categories') }}</flux:heading>
-        <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('Organize where employees submit ideas.') }}</flux:text>
+        <flux:heading size="xl">{{ __('Organization settings') }}</flux:heading>
+        <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('Manage boards, categories, and members for :team.', ['team' => $this->team->name]) }}</flux:text>
     </div>
 
     {{-- Tabs --}}
@@ -385,7 +443,7 @@ new #[Title('Boards & Categories')] class extends Component {
                 :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
             ></div>
 
-            @foreach (['groups' => __('Board Groups'), 'boards' => __('Boards'), 'categories' => __('Categories')] as $key => $label)
+            @foreach (['boards' => __('Boards'), 'categories' => __('Categories'), 'members' => __('Members'), 'integrations' => __('Integrations')] as $key => $label)
                 <button
                     type="button"
                     x-ref="tab-{{ $key }}"
@@ -406,55 +464,20 @@ new #[Title('Boards & Categories')] class extends Component {
 
     <flux:text class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
         @switch($tab)
-            @case('boards'){{ __('Boards are where employees submit ideas. Assign each board to a group.') }}@break
             @case('categories'){{ __('Categories classify ideas within a board.') }}@break
-            @default{{ __('Groups are the top-level areas that organize your boards.') }}
+            @case('members'){{ __('People with access to this organization.') }}@break
+            @case('integrations'){{ __('Connect external tools to your idea workflow.') }}@break
+            @default{{ __('Boards are where employees submit ideas. Assign each board to a group.') }}
         @endswitch
     </flux:text>
-
-    {{-- Board Groups --}}
-    @if ($tab === 'groups')
-        <div class="mt-5">
-            <div class="flex items-center justify-end">
-                <flux:button wire:click="newBoardGroup" variant="primary" icon="plus" size="sm" data-test="new-group">{{ __('New group') }}</flux:button>
-            </div>
-            <div class="mt-4 space-y-2">
-                @forelse ($this->boardGroups as $group)
-                    <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" wire:key="group-{{ $group->id }}" data-test="group-row">
-                        <div class="flex min-w-0 items-center gap-3">
-                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($group->name, 0, 1)) }}</span>
-                            <div class="min-w-0">
-                            <div class="flex items-center gap-2">
-                                <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $group->name }}</span>
-                                @unless ($group->is_active)
-                                    <flux:badge color="zinc" size="sm">{{ __('Inactive') }}</flux:badge>
-                                @endunless
-                            </div>
-                            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
-                                {{ implode(' · ', array_filter([$group->slug, trans_choice(':count board|:count boards', $group->boards_count, ['count' => $group->boards_count]), $group->description])) }}
-                            </flux:text>
-                            </div>
-                        </div>
-                        <div class="flex shrink-0 items-center gap-1">
-                            <flux:button wire:click="toggleBoardGroup({{ $group->id }})" variant="ghost" size="sm">
-                                {{ $group->is_active ? __('Deactivate') : __('Activate') }}
-                            </flux:button>
-                            <flux:button wire:click="editBoardGroup({{ $group->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-group" />
-                        </div>
-                    </div>
-                @empty
-                    <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
-                        <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No board groups yet.') }}</flux:text>
-                    </div>
-                @endforelse
-            </div>
-        </div>
-    @endif
 
     {{-- Boards --}}
     @if ($tab === 'boards')
         <div class="mt-5">
-            <div class="flex items-center justify-end">
+            <div class="flex items-center justify-end gap-2">
+                <flux:modal.trigger name="manage-groups">
+                    <flux:button variant="ghost" size="sm" icon="folder" data-test="manage-groups">{{ __('Manage groups') }}</flux:button>
+                </flux:modal.trigger>
                 <flux:button wire:click="newBoard" variant="primary" icon="plus" size="sm" data-test="new-board">{{ __('New board') }}</flux:button>
             </div>
             <div class="mt-4 space-y-2">
@@ -488,7 +511,8 @@ new #[Title('Boards & Categories')] class extends Component {
                     </div>
                 @empty
                     <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
-                        <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No boards yet.') }}</flux:text>
+                        <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+                        <flux:text class="mt-2 text-zinc-500 dark:text-zinc-400">{{ __('No boards yet.') }}</flux:text>
                     </div>
                 @endforelse
             </div>
@@ -497,46 +521,144 @@ new #[Title('Boards & Categories')] class extends Component {
 
     {{-- Categories --}}
     @if ($tab === 'categories')
+        @php
+            $__categoryDotColors = ['bg-indigo-500', 'bg-emerald-500', 'bg-teal-500', 'bg-violet-500', 'bg-pink-500', 'bg-amber-500'];
+        @endphp
         <div class="mt-5">
-            <div class="flex items-center justify-end">
-                <flux:button wire:click="newCategory" variant="primary" icon="plus" size="sm" data-test="new-category">{{ __('New category') }}</flux:button>
-            </div>
-            <div class="mt-4 space-y-2">
+            <div class="flex flex-wrap gap-2">
                 @forelse ($this->categories as $category)
-                    <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" wire:key="category-{{ $category->id }}" data-test="category-row">
-                        <div class="flex min-w-0 items-center gap-3">
-                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($category->name, 0, 1)) }}</span>
-                            <div class="min-w-0">
+                    <button
+                        type="button"
+                        wire:click="editCategory({{ $category->id }})"
+                        wire:key="category-{{ $category->id }}"
+                        data-test="category-row"
+                        @class([
+                            'flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm transition hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600',
+                            'opacity-50' => ! $category->is_active,
+                        ])
+                    >
+                        <span class="size-2 rounded-full {{ $__categoryDotColors[$category->id % count($__categoryDotColors)] }}"></span>
+                        <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $category->name }}</span>
+                        <flux:badge color="zinc" size="sm" variant="outline">{{ $category->ideas_count }}</flux:badge>
+                    </button>
+                @empty
+                    <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No categories yet.') }}</flux:text>
+                @endforelse
+            </div>
+
+            <div class="mt-4 flex items-center gap-2">
+                <flux:select wire:model="quickCategoryBoardId" class="w-44" :placeholder="__('Board')" size="sm" data-test="quick-category-board">
+                    @foreach ($this->boards as $board)
+                        <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+                <flux:input wire:model="quickCategoryName" :placeholder="__('New category...')" class="max-w-xs" size="sm" data-test="quick-category-name" />
+                <flux:button wire:click="quickAddCategory" variant="primary" size="sm" data-test="quick-add-category">{{ __('Add') }}</flux:button>
+            </div>
+        </div>
+    @endif
+
+    {{-- Members --}}
+    @if ($tab === 'members')
+        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <table class="w-full text-sm">
+                <thead class="bg-zinc-50 dark:bg-zinc-800/50">
+                    <tr class="text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+                        <th class="px-4 py-2.5 text-start">{{ __('Member') }}</th>
+                        <th class="px-4 py-2.5 text-start">{{ __('Email') }}</th>
+                        <th class="px-4 py-2.5 text-start">{{ __('Role') }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    @foreach ($this->members as $member)
+                        <tr wire:key="member-{{ $member->id }}" data-test="member-row">
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-3">
+                                    <flux:avatar :name="$member->name" size="xs" color="auto" color:seed="{{ $member->id }}" />
+                                    <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $member->name }}</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-zinc-500 dark:text-zinc-400">{{ $member->email }}</td>
+                            <td class="px-4 py-3">
+                                <flux:badge size="sm" :color="self::ROLE_BADGE_COLORS[$member->pivot->role->value] ?? 'zinc'">
+                                    {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Admin / Owner') : $member->pivot->role->label() }}
+                                </flux:badge>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
+    {{-- Integrations --}}
+    @if ($tab === 'integrations')
+        <div class="mt-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <flux:icon.code-bracket-square class="size-8 text-zinc-800 dark:text-zinc-200" />
+                    <div>
+                        <flux:heading>{{ __('GitHub') }}</flux:heading>
+                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Turn approved ideas into tracked issues.') }}</flux:text>
+                    </div>
+                </div>
+                <flux:badge color="green" size="sm">{{ __('Connected') }}</flux:badge>
+            </div>
+
+            <div class="mt-5 space-y-1">
+                <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Default repository') }}</flux:text>
+                <flux:input value="rudaca/rudaca-voice" disabled data-test="integration-repo" />
+            </div>
+
+            <div class="mt-5 flex items-center justify-between gap-4">
+                <div>
+                    <flux:text class="font-medium text-zinc-900 dark:text-zinc-100">{{ __('Auto-create issues on approval') }}</flux:text>
+                    <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Draft an issue whenever an idea is approved for development.') }}</flux:text>
+                </div>
+                <flux:switch :checked="false" disabled data-test="integration-auto-create" />
+            </div>
+        </div>
+    @endif
+
+    {{-- Manage board groups modal --}}
+    <flux:modal name="manage-groups" class="max-w-xl" data-test="manage-groups-modal">
+        <div class="flex items-center justify-between">
+            <flux:heading size="lg">{{ __('Board groups') }}</flux:heading>
+            <flux:button wire:click="newBoardGroup" variant="primary" icon="plus" size="sm" data-test="new-group">{{ __('New group') }}</flux:button>
+        </div>
+
+        <div class="mt-4 space-y-2">
+            @forelse ($this->boardGroups as $group)
+                <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900" wire:key="group-{{ $group->id }}" data-test="group-row">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($group->name, 0, 1)) }}</span>
+                        <div class="min-w-0">
                             <div class="flex items-center gap-2">
-                                <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $category->name }}</span>
-                                @unless ($category->is_active)
+                                <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $group->name }}</span>
+                                @unless ($group->is_active)
                                     <flux:badge color="zinc" size="sm">{{ __('Inactive') }}</flux:badge>
                                 @endunless
                             </div>
                             <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
-                                {{ implode(' · ', array_filter([
-                                    $category->board?->name,
-                                    trans_choice(':count idea|:count ideas', $category->ideas_count, ['count' => $category->ideas_count]),
-                                    $category->description,
-                                ])) }}
+                                {{ implode(' · ', array_filter([$group->slug, trans_choice(':count board|:count boards', $group->boards_count, ['count' => $group->boards_count]), $group->description])) }}
                             </flux:text>
-                            </div>
-                        </div>
-                        <div class="flex shrink-0 items-center gap-1">
-                            <flux:button wire:click="toggleCategory({{ $category->id }})" variant="ghost" size="sm">
-                                {{ $category->is_active ? __('Deactivate') : __('Activate') }}
-                            </flux:button>
-                            <flux:button wire:click="editCategory({{ $category->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-category" />
                         </div>
                     </div>
-                @empty
-                    <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
-                        <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No categories yet.') }}</flux:text>
+                    <div class="flex shrink-0 items-center gap-1">
+                        <flux:button wire:click="toggleBoardGroup({{ $group->id }})" variant="ghost" size="sm">
+                            {{ $group->is_active ? __('Deactivate') : __('Activate') }}
+                        </flux:button>
+                        <flux:button wire:click="editBoardGroup({{ $group->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-group" />
                     </div>
-                @endforelse
-            </div>
+                </div>
+            @empty
+                <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
+                    <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+                    <flux:text class="mt-2 text-zinc-500 dark:text-zinc-400">{{ __('No board groups yet.') }}</flux:text>
+                </div>
+            @endforelse
         </div>
-    @endif
+    </flux:modal>
 
     {{-- Board group modal --}}
     <flux:modal name="board-group" class="max-w-lg" data-test="group-modal">

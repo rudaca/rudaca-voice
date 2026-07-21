@@ -43,7 +43,7 @@ test('another team\'s idea slug is not resolvable within your own team', functio
 
 test('an owner sees and can open their own team\'s idea', function () {
     ['team' => $teamA, 'user' => $userA] = teamWithMember(TeamRole::Owner);
-    $ideaA = makeIdea($teamA, ['title' => 'Team A visible idea']);
+    $ideaA = makeIdea($teamA, ['title' => 'Team A visible idea', 'status' => 'new']);
 
     Livewire::actingAs($userA)
         ->test('pages::ideas.index')

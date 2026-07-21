@@ -44,12 +44,21 @@ new class extends Component {
     #[Url(as: 'category')]
     public string $category = '';
 
+    #[Url(as: 'hide_duplicates')]
+    public bool $hideDuplicates = true;
+
     /**
      * Reset pagination whenever a filter changes.
      */
     public function updated(string $property): void
     {
-        if (in_array($property, ['status', 'group', 'board', 'category'], true)) {
+        // Selecting the Duplicate status while "hide duplicates" is on would
+        // otherwise return zero results, so switch it off automatically.
+        if ($property === 'status' && $this->status === 'duplicate') {
+            $this->hideDuplicates = false;
+        }
+
+        if (in_array($property, ['status', 'group', 'board', 'category', 'hideDuplicates'], true)) {
             $this->resetPage();
         }
     }
@@ -174,7 +183,8 @@ new class extends Component {
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
             ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
             ->when($this->board !== '', fn ($query) => $query->where('board_id', $this->board))
-            ->when($this->category !== '', fn ($query) => $query->where('category_id', $this->category));
+            ->when($this->category !== '', fn ($query) => $query->where('category_id', $this->category))
+            ->when($this->hideDuplicates, fn ($query) => $query->where('status', '!=', 'duplicate'));
 
         match ($this->sort) {
             'top' => $query->orderByDesc('votes_count')->orderByDesc('created_at')->orderByDesc('id'),
@@ -208,7 +218,14 @@ new class extends Component {
         {{-- Header --}}
         <div class="flex items-start justify-between gap-4">
             <div class="flex flex-col gap-1">
-                <flux:heading size="xl">{{ $this->activeFilterLabel ?? __('All Ideas') }}</flux:heading>
+                <flux:heading size="xl" class="flex items-center gap-2">
+                    @if ($this->activeFilterLabel)
+                        <flux:tooltip :content="$this->board !== '' ? __('Board') : __('Board group')">
+                            <flux:icon.chalkboard class="size-6 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                        </flux:tooltip>
+                    @endif
+                    {{ $this->activeFilterLabel ?? __('All Ideas') }}
+                </flux:heading>
                 <flux:text class="text-zinc-500 dark:text-zinc-400">
                     @if ($this->activeFilterLabel)
                         {{ trans_choice(':count idea|:count ideas', $this->ideas->total(), ['count' => $this->ideas->total()]) }}
@@ -226,8 +243,15 @@ new class extends Component {
             </flux:button>
         </div>
 
-        {{-- Controls: sort (left) + filters (right) --}}
-        <div class="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        {{-- Controls: sort (left) + filters (right). Sticks below the app header while the list scrolls. --}}
+        <div
+            class="sticky z-10 mt-6 flex flex-col gap-3 border-b py-3 lg:flex-row lg:items-center lg:justify-between bg-white dark:bg-zinc-800"
+            x-data="{ top: 0, stuck: false }"
+            x-init="top = (document.querySelector('[data-flux-header]')?.getBoundingClientRect().height ?? 0) + (document.querySelector('#breadcrumbs-bar')?.getBoundingClientRect().height ?? 0)"
+            x-on:scroll.window="stuck = $el.getBoundingClientRect().top <= top"
+            :style="`top: ${top}px`"
+            :class="stuck ? 'border-zinc-200 dark:border-zinc-700' : 'border-transparent'"
+        >
             <div
                 class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
                 role="group"
@@ -270,6 +294,8 @@ new class extends Component {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
+                <flux:checkbox wire:model.live="hideDuplicates" :label="__('Do not show duplicates')" data-test="filter-hide-duplicates" />
+
                 <flux:select wire:model.live="status" size="sm" class="w-auto min-w-40" data-test="filter-status">
                     <flux:select.option value="">{{ __('All statuses') }}</flux:select.option>
                     @foreach (self::STATUS_META as $value => $meta)

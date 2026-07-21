@@ -61,34 +61,36 @@
                             {{ __('Submit Idea') }}
                         </flux:sidebar.item>
                     @endif
-
-                    @if ($__canManageBoards)
-                        <flux:sidebar.item icon="adjustments-horizontal" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
-                            {{ __('Boards & Categories') }}
-                        </flux:sidebar.item>
-                    @endif
                 </div>
             </flux:sidebar.nav>
 
-            @if ($__canReview)
+            @if ($__canReview || $__canManageBoards)
                 <flux:separator variant="subtle" class="sidebar-divider" />
 
                 <flux:sidebar.nav>
                     <div class="in-data-flux-sidebar-collapsed-desktop:hidden px-4 pt-1 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
-                        {{ __('Management') }}
+                        {{ __('Administration') }}
                     </div>
 
                     <div class="grid">
-                        <flux:sidebar.item
-                            icon="clipboard-document-check"
-                            :href="route('ideas.review')"
-                            :current="request()->routeIs('ideas.review')"
-                            :badge="$__reviewQueueCount > 0 ? (string) $__reviewQueueCount : null"
-                            badge:color="amber"
-                            wire:navigate
-                        >
-                            {{ __('Review Queue') }}
-                        </flux:sidebar.item>
+                        @if ($__canReview)
+                            <flux:sidebar.item
+                                icon="clipboard-document-check"
+                                :href="route('ideas.review')"
+                                :current="request()->routeIs('ideas.review')"
+                                :badge="$__reviewQueueCount > 0 ? (string) $__reviewQueueCount : null"
+                                badge:color="amber"
+                                wire:navigate
+                            >
+                                {{ __('Review Queue') }}
+                            </flux:sidebar.item>
+                        @endif
+
+                        @if ($__canManageBoards)
+                            <flux:sidebar.item icon="cog" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
+                                {{ __('Organization') }}
+                            </flux:sidebar.item>
+                        @endif
                     </div>
                 </flux:sidebar.nav>
             @endif
