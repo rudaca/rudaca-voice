@@ -16,6 +16,7 @@ class StartViewAsSession
      */
     public function handle(User $superAdmin, User $target, Team $team, TeamRole $role): ViewAsSession
     {
+        abort_unless(config('view-as.enabled'), 403);
         abort_unless($superAdmin->is_super_admin, 403);
         abort_if($target->is_super_admin, 403);
         abort_if($target->is($superAdmin), 403);

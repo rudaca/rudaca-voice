@@ -4,6 +4,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Enable View As
+    |--------------------------------------------------------------------------
+    |
+    | When disabled, Super Admins cannot start a "View As" session and the
+    | trigger button is hidden entirely, regardless of the is_super_admin flag.
+    |
+    */
+
+    'enabled' => (bool) env('ENABLE_VIEW_AS_SUPER_ADMIN', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | View As Inactivity Timeout
     |--------------------------------------------------------------------------
     |

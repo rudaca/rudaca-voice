@@ -79,7 +79,7 @@ new class extends Component {
 }; ?>
 
 <div>
-    @if (auth()->user()->is_super_admin && auth()->user()->currentTeam)
+    @if (config('view-as.enabled') && auth()->user()->is_super_admin && auth()->user()->currentTeam)
         <flux:dropdown position="bottom" align="end" class="group">
             <flux:tooltip content="{{ __('View As') }}" position="bottom">
                 <flux:button variant="outline" size="sm" data-test="view-as-trigger">

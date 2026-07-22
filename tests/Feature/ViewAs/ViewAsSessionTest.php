@@ -15,6 +15,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 function teamWithSuperAdmin(): array
 {
+    config(['view-as.enabled' => true]);
+
     $team = Team::factory()->create();
     $superAdmin = User::factory()->create(['is_super_admin' => true]);
 
@@ -92,6 +94,22 @@ test('an expired view as session automatically ends and reverts auth on the next
 
     expect(Auth::id())->toBe($superAdmin->id)
         ->and($session->fresh()->ended_reason)->toBe(ViewAsSessionEndReason::Timeout);
+});
+
+test('view as is disabled by default and blocks starting a session', function () {
+    config(['view-as.enabled' => false]);
+
+    $team = Team::factory()->create();
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $employee = User::factory()->create();
+    $team->members()->attach($superAdmin, ['role' => TeamRole::Owner->value]);
+    $team->members()->attach($employee, ['role' => TeamRole::Employee->value]);
+    $superAdmin->switchTeam($team);
+
+    $this->actingAs($superAdmin);
+
+    expect(fn () => app(StartViewAsSession::class)->handle($superAdmin, $employee, $team, TeamRole::Employee))
+        ->toThrow(HttpException::class);
 });
 
 test('requests during an active session are recorded', function () {

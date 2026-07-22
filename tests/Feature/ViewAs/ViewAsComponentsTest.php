@@ -84,6 +84,15 @@ test('view as banner only renders during an active session', function () {
         ->assertSee($employee->name);
 });
 
+test('view as trigger is hidden when the feature flag is disabled', function () {
+    ['superAdmin' => $superAdmin] = teamWithSuperAdmin();
+    config(['view-as.enabled' => false]);
+
+    $this->actingAs($superAdmin);
+
+    Livewire::test('view-as-switcher')->assertDontSee('view-as-trigger');
+});
+
 test('exiting the banner ends the session and reverts auth', function () {
     ['team' => $team, 'superAdmin' => $superAdmin] = teamWithSuperAdmin();
     $employee = User::factory()->create();
