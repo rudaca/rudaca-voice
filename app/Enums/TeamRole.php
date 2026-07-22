@@ -36,12 +36,7 @@ enum TeamRole: string
     {
         return match ($this) {
             self::Owner => TeamPermission::cases(),
-            self::Admin => [
-                TeamPermission::UpdateTeam,
-                TeamPermission::CreateInvitation,
-                TeamPermission::CancelInvitation,
-            ],
-            self::Manager, self::Employee, self::Viewer, self::Member => [],
+            self::Admin, self::Manager, self::Employee, self::Viewer, self::Member => [],
         };
     }
 

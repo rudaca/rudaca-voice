@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\TeamRole;
 use Database\Factories\IdeaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -174,6 +176,26 @@ class Idea extends Model
     public function githubLinks(): HasMany
     {
         return $this->hasMany(IdeaGithubLink::class);
+    }
+
+    /**
+     * Scope a query to ideas visible to a user holding the given team role:
+     * private ideas are hidden from everyone except Manager+ and the
+     * original submitter.
+     *
+     * @param  Builder<Idea>  $query
+     * @return Builder<Idea>
+     */
+    public function scopeVisibleTo(Builder $query, ?TeamRole $role, int $userId): Builder
+    {
+        if ($role?->isAtLeast(TeamRole::Manager)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query) use ($userId) {
+            $query->where('is_private', false)
+                ->orWhere('submitted_by_user_id', $userId);
+        });
     }
 
     /**

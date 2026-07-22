@@ -47,6 +47,23 @@ test('team invitations cannot be created by members', function () {
         ->assertForbidden();
 });
 
+test('team invitations cannot be created by admins', function () {
+    $owner = User::factory()->create();
+    $admin = User::factory()->create();
+    $team = Team::factory()->create();
+
+    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+    $team->members()->attach($admin, ['role' => TeamRole::Admin->value]);
+
+    $this->actingAs($admin);
+
+    Livewire::test('pages::teams.invite-member-modal', ['team' => $team])
+        ->set('inviteEmail', 'invited@example.com')
+        ->set('inviteRole', TeamRole::Member->value)
+        ->call('createInvitation')
+        ->assertForbidden();
+});
+
 test('team invitations can be cancelled by owner', function () {
     $owner = User::factory()->create();
     $team = Team::factory()->create();
@@ -66,6 +83,31 @@ test('team invitations can be cancelled by owner', function () {
         ->assertHasNoErrors();
 
     $this->assertDatabaseMissing('team_invitations', [
+        'id' => $invitation->id,
+    ]);
+});
+
+test('team invitations cannot be cancelled by admins', function () {
+    $owner = User::factory()->create();
+    $admin = User::factory()->create();
+    $team = Team::factory()->create();
+
+    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+    $team->members()->attach($admin, ['role' => TeamRole::Admin->value]);
+
+    $invitation = TeamInvitation::factory()->create([
+        'team_id' => $team->id,
+        'invited_by' => $owner->id,
+    ]);
+
+    $this->actingAs($admin);
+
+    Livewire::test('pages::teams.cancel-invitation-modal', ['team' => $team])
+        ->set('invitationCode', $invitation->code)
+        ->call('cancelInvitation')
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('team_invitations', [
         'id' => $invitation->id,
     ]);
 });

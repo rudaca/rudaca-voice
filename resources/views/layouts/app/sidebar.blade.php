@@ -17,12 +17,14 @@
                 ? $__currentTeam->ideas()->whereIn('status', ['new', 'under_review'])->count()
                 : 0;
 
+            $__ideasCountScope = fn ($query) => $query->visibleTo($__currentRole, auth()->id());
+
             $__boardGroups = $__currentTeam
                 ? $__currentTeam->boardGroups()
                     ->where('is_active', true)
                     ->orderBy('sort_order')
                     ->orderBy('name')
-                    ->with(['boards' => fn ($query) => $query->where('is_active', true)->withCount('ideas')->orderBy('sort_order')->orderBy('name')])
+                    ->with(['boards' => fn ($query) => $query->where('is_active', true)->withCount(['ideas' => $__ideasCountScope])->orderBy('sort_order')->orderBy('name')])
                     ->get()
                 : collect();
 
@@ -30,7 +32,7 @@
                 ? $__currentTeam->boards()
                     ->where('is_active', true)
                     ->whereNull('board_group_id')
-                    ->withCount('ideas')
+                    ->withCount(['ideas' => $__ideasCountScope])
                     ->orderBy('sort_order')
                     ->orderBy('name')
                     ->get()
@@ -91,6 +93,15 @@
                         @if ($__canManageBoards)
                             <flux:sidebar.item icon="cog" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
                                 {{ __('Organization') }}
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item
+                                icon="chat-bubble-left-right"
+                                :href="route('ideas.moderate-comments')"
+                                :current="request()->routeIs('ideas.moderate-comments')"
+                                wire:navigate
+                            >
+                                {{ __('Moderate Comments') }}
                             </flux:sidebar.item>
                         @endif
                     </div>

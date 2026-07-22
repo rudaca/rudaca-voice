@@ -111,3 +111,27 @@ test('manager, employee and viewer cannot access Idea Settings', function (TeamR
     'employee' => TeamRole::Employee,
     'viewer' => TeamRole::Viewer,
 ]);
+
+// 6. Moderate Comments — owner and admin only.
+test('owner and admin can access Moderate Comments', function (TeamRole $role) {
+    ['team' => $team, 'user' => $user] = teamWithMember($role);
+
+    $this->actingAs($user)
+        ->get(route('ideas.moderate-comments', ['current_team' => $team->slug]))
+        ->assertOk();
+})->with([
+    'owner' => TeamRole::Owner,
+    'admin' => TeamRole::Admin,
+]);
+
+test('manager, employee and viewer cannot access Moderate Comments', function (TeamRole $role) {
+    ['team' => $team, 'user' => $user] = teamWithMember($role);
+
+    $this->actingAs($user)
+        ->get(route('ideas.moderate-comments', ['current_team' => $team->slug]))
+        ->assertForbidden();
+})->with([
+    'manager' => TeamRole::Manager,
+    'employee' => TeamRole::Employee,
+    'viewer' => TeamRole::Viewer,
+]);

@@ -82,6 +82,22 @@ test('teams can be updated by owners', function () {
     ]);
 });
 
+test('teams cannot be updated by admins', function () {
+    $owner = User::factory()->create();
+    $admin = User::factory()->create();
+    $team = Team::factory()->create();
+
+    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+    $team->members()->attach($admin, ['role' => TeamRole::Admin->value]);
+
+    $this->actingAs($admin);
+
+    Livewire::test('pages::teams.edit', ['team' => $team])
+        ->set('teamName', 'Updated Name')
+        ->call('updateTeam')
+        ->assertForbidden();
+});
+
 test('teams cannot be updated by members', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();
@@ -363,6 +379,22 @@ test('teams cannot be deleted by non owners', function () {
     $team->members()->attach($member, ['role' => TeamRole::Member->value]);
 
     $this->actingAs($member);
+
+    Livewire::test('pages::teams.delete-team-modal', ['team' => $team])
+        ->set('deleteName', $team->name)
+        ->call('deleteTeam')
+        ->assertForbidden();
+});
+
+test('teams cannot be deleted by admins', function () {
+    $owner = User::factory()->create();
+    $admin = User::factory()->create();
+    $team = Team::factory()->create();
+
+    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+    $team->members()->attach($admin, ['role' => TeamRole::Admin->value]);
+
+    $this->actingAs($admin);
 
     Livewire::test('pages::teams.delete-team-modal', ['team' => $team])
         ->set('deleteName', $team->name)

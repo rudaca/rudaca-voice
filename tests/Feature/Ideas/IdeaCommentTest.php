@@ -22,6 +22,47 @@ test('owner, admin, manager and employee can comment on an idea', function (Team
     'employee' => TeamRole::Employee,
 ]);
 
+test('a manager can post an internal comment', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->set('commentBody', 'Internal note for staff.')
+        ->set('isInternal', true)
+        ->call('addComment')
+        ->assertHasNoErrors();
+
+    $comment = IdeaComment::where('idea_id', $idea->id)->where('user_id', $manager->id)->first();
+
+    expect($comment->is_internal)->toBeTrue();
+});
+
+test('an employee cannot force a comment to be internal', function () {
+    ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($employee)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->set('commentBody', 'Trying to sneak an internal note.')
+        ->set('isInternal', true)
+        ->call('addComment')
+        ->assertHasNoErrors();
+
+    $comment = IdeaComment::where('idea_id', $idea->id)->where('user_id', $employee->id)->first();
+
+    expect($comment->is_internal)->toBeFalse();
+});
+
+test('the internal note checkbox is hidden from employees', function () {
+    ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($employee)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertDontSee('Internal note');
+});
+
 test('a viewer cannot comment on an idea', function () {
     ['team' => $team, 'user' => $viewer] = teamWithMember(TeamRole::Viewer);
     $idea = makeIdea($team);

@@ -33,6 +33,9 @@ Route::prefix('{current_team}')
         Route::livewire('idea-settings', 'pages::ideas.settings')
             ->middleware(EnsureTeamMembership::class.':admin')
             ->name('ideas.settings');
+        Route::livewire('ideas/moderate-comments', 'pages::ideas.moderate-comments')
+            ->middleware(EnsureTeamMembership::class.':admin')
+            ->name('ideas.moderate-comments');
         Route::livewire('ideas/{idea}', 'pages::ideas.show')->name('ideas.show');
     });
 

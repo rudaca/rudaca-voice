@@ -80,7 +80,9 @@ new class extends Component {
     {
         abort_unless($this->canParticipate, 403);
 
-        $idea = Idea::where('team_id', Auth::user()->current_team_id)->findOrFail($ideaId);
+        $idea = Idea::where('team_id', Auth::user()->current_team_id)
+            ->visibleTo(Auth::user()->teamRole($this->team), Auth::id())
+            ->findOrFail($ideaId);
 
         $existingVote = IdeaVote::where('idea_id', $idea->id)
             ->where('user_id', Auth::id())
@@ -189,6 +191,7 @@ new class extends Component {
     {
         $query = Idea::query()
             ->where('team_id', $this->team->id)
+            ->visibleTo(Auth::user()->teamRole($this->team), Auth::id())
             ->with(['boardGroup:id,name', 'board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->withCount(['votes', 'comments'])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])

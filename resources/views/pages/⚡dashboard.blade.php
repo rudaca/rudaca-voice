@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\TeamRole;
 use App\Models\IdeaVote;
 use App\Models\Team;
 use Illuminate\Database\Eloquent\Collection;
@@ -26,6 +27,15 @@ new #[Title('Dashboard')] class extends Component {
     public function team(): Team
     {
         return Auth::user()->currentTeam;
+    }
+
+    /**
+     * Whether the current user may see private ideas (Manager and above).
+     */
+    #[Computed]
+    public function role(): ?TeamRole
+    {
+        return Auth::user()->teamRole($this->team);
     }
 
     /**
@@ -56,13 +66,13 @@ new #[Title('Dashboard')] class extends Component {
             ],
             [
                 'label' => __('In progress'),
-                'value' => $team->ideas()->where('status', 'in_progress')->count(),
+                'value' => $team->ideas()->visibleTo($this->role, $userId)->where('status', 'in_progress')->count(),
                 'caption' => __('moving forward'),
                 'dot' => 'bg-violet-500',
             ],
             [
                 'label' => __('Implemented'),
-                'value' => $team->ideas()->where('status', 'released')->count(),
+                'value' => $team->ideas()->visibleTo($this->role, $userId)->where('status', 'released')->count(),
                 'caption' => __('shipped org-wide'),
                 'dot' => 'bg-emerald-500',
             ],
@@ -78,6 +88,7 @@ new #[Title('Dashboard')] class extends Component {
     public function trending(): Collection
     {
         return $this->team->ideas()
+            ->visibleTo($this->role, Auth::id())
             ->with('board:id,name')
             ->withCount(['votes', 'comments'])
             ->orderByRaw('(votes_count + comments_count * 3) desc')
@@ -96,7 +107,7 @@ new #[Title('Dashboard')] class extends Component {
     {
         return $this->team->boards()
             ->where('is_active', true)
-            ->withCount('ideas')
+            ->withCount(['ideas' => fn ($query) => $query->visibleTo($this->role, Auth::id())])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get(['id', 'name', 'slug']);

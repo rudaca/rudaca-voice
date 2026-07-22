@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaBoard;
 use App\Models\Team;
@@ -59,10 +60,11 @@ new class extends Component {
             'boards' => Idea::query()
                 ->where('team_id', $teamId)
                 ->where('submitted_by_user_id', $person->id)
+                ->visibleTo($this->role, Auth::id())
                 ->distinct('board_id')
                 ->count('board_id'),
-            'ideas' => $person->submittedIdeas()->where('team_id', $teamId)->count(),
-            'comments' => $person->ideaComments()->whereHas('idea', fn ($query) => $query->where('team_id', $teamId))->count(),
+            'ideas' => $person->submittedIdeas()->where('team_id', $teamId)->visibleTo($this->role, Auth::id())->count(),
+            'comments' => $person->ideaComments()->whereHas('idea', fn ($query) => $query->where('team_id', $teamId)->visibleTo($this->role, Auth::id()))->count(),
         ];
     }
 
@@ -78,6 +80,12 @@ new class extends Component {
     public function team(): ?Team
     {
         return Auth::user()?->currentTeam;
+    }
+
+    #[Computed]
+    public function role(): ?TeamRole
+    {
+        return $this->team ? Auth::user()?->teamRole($this->team) : null;
     }
 
     #[Computed]
@@ -98,6 +106,7 @@ new class extends Component {
 
         return Idea::query()
             ->where('team_id', $this->team->id)
+            ->visibleTo($this->role, Auth::id())
             ->where('title', 'like', $this->likeTerm())
             ->with('submittedBy:id,name')
             ->withCount(['votes', 'comments'])
