@@ -45,6 +45,8 @@ new #[Title('Idea')] class extends Component {
     #[Validate('required|string|max:2000')]
     public string $commentBody = '';
 
+    public bool $isInternal = false;
+
     public string $status = '';
 
     public string $priority = '';
@@ -74,9 +76,12 @@ new #[Title('Idea')] class extends Component {
      */
     public function mount(string $idea): void
     {
+        $team = Auth::user()->currentTeam;
+
         $this->ideaModel = Idea::query()
-            ->where('team_id', Auth::user()->current_team_id)
+            ->where('team_id', $team->id)
             ->where('slug', $idea)
+            ->visibleTo(Auth::user()->teamRole($team), Auth::id())
             ->with(['boardGroup:id,name', 'board:id,name', 'category:id,name', 'submittedBy:id,name'])
             ->firstOrFail();
 
@@ -102,6 +107,24 @@ new #[Title('Idea')] class extends Component {
     public function canParticipate(): bool
     {
         return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Employee) ?? false;
+    }
+
+    /**
+     * Whether the current user may delete this idea or its comments (owner only).
+     */
+    #[Computed]
+    public function canDelete(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Owner) ?? false;
+    }
+
+    /**
+     * Whether the current user may post internal (manager-only) comments.
+     */
+    #[Computed]
+    public function canPostInternal(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Manager) ?? false;
     }
 
     /**
@@ -150,6 +173,20 @@ new #[Title('Idea')] class extends Component {
         $this->reset('statusNote');
 
         Flux::toast(variant: 'success', text: __('Idea updated.'));
+    }
+
+    /**
+     * Soft-delete this idea (owner only) and return to the idea list.
+     */
+    public function deleteIdea(): void
+    {
+        abort_unless($this->canDelete, 403);
+
+        $this->ideaModel->delete();
+
+        Flux::toast(variant: 'success', text: __('Idea deleted.'));
+
+        $this->redirectRoute('ideas.index', navigate: true);
     }
 
     /**
@@ -287,14 +324,28 @@ new #[Title('Idea')] class extends Component {
             'idea_id' => $this->ideaModel->id,
             'user_id' => Auth::id(),
             'body' => $validated['commentBody'],
-            'is_internal' => false,
+            'is_internal' => $this->canPostInternal && $this->isInternal,
         ]);
 
-        $this->reset('commentBody');
+        $this->reset('commentBody', 'isInternal');
 
         unset($this->comments);
 
         Flux::toast(variant: 'success', text: __('Comment added.'));
+    }
+
+    /**
+     * Soft-delete a comment on this idea (owner only).
+     */
+    public function deleteComment(int $commentId): void
+    {
+        abort_unless($this->canDelete, 403);
+
+        $this->ideaModel->comments()->whereKey($commentId)->firstOrFail()->delete();
+
+        unset($this->comments);
+
+        Flux::toast(variant: 'success', text: __('Comment deleted.'));
     }
 
     #[Computed]
@@ -309,6 +360,22 @@ new #[Title('Idea')] class extends Component {
         return $this->ideaModel->votes()
             ->where('user_id', Auth::id())
             ->exists();
+    }
+
+    /**
+     * Votes for this idea with their voter loaded, most recent first.
+     *
+     * @return Collection<int, IdeaVote>
+     */
+    #[Computed]
+    public function voters(): Collection
+    {
+        return $this->ideaModel->votes()
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn (IdeaVote $vote) => $vote->user !== null);
     }
 
     #[Computed]
@@ -335,6 +402,7 @@ new #[Title('Idea')] class extends Component {
     public function comments(): Collection
     {
         return $this->ideaModel->comments()
+            ->notHidden()
             ->with('user:id,name')
             ->when(! $this->canViewInternalComments, fn ($query) => $query->where('is_internal', false))
             ->orderByDesc('created_at')
@@ -397,10 +465,52 @@ new #[Title('Idea')] class extends Component {
 @endpush
 
 <section class="mx-auto w-full  px-6 pb-7 lg:px-8">
-    <flux:link as="button" x-data x-on:click="window.history.back()" variant="subtle" class="inline-flex items-center gap-1 text-sm">
-        <flux:icon.arrow-left class="size-4" />
-        {{ __('Back') }}
-    </flux:link>
+    <div class="flex items-center justify-between gap-3">
+        <flux:link as="button" x-data x-on:click="window.history.back()" variant="subtle" class="inline-flex items-center gap-1 text-sm">
+            <flux:icon.arrow-left class="size-4" />
+            {{ __('Back') }}
+        </flux:link>
+
+        <flux:dropdown position="bottom" align="end">
+            <flux:button
+                variant="outline"
+                size="sm"
+                icon="hand-thumb-up"
+                icon:trailing="chevron-down"
+                class="border-indigo-700! text-indigo-700! hover:bg-indigo-50! dark:border-indigo-400! dark:text-indigo-400! dark:hover:bg-indigo-500/10!"
+                data-test="who-voted-trigger"
+            >
+                {{ __('Who voted') }}
+            </flux:button>
+
+            <flux:menu class="min-w-80">
+                <div class="max-h-64 overflow-y-auto">
+                    @forelse ($this->voters as $vote)
+                        <flux:menu.item class="cursor-default" wire:key="voter-{{ $vote->id }}">
+                            <div class="flex items-center gap-2">
+                                <flux:avatar size="xs" :name="$vote->user->name" color="auto" color:seed="{{ $vote->user_id }}" />
+                                <div class="min-w-0">
+                                    <div class="truncate">
+                                        {{ $vote->user->name }}
+                                        @if ($vote->user_id === Auth::id())
+                                            <span class="text-zinc-400">({{ __('You') }})</span>
+                                        @endif
+                                    </div>
+                                    <flux:tooltip content="{{ __('Date Voted') }}">
+                                        <div style="font-size:9px" class="truncate  text-zinc-400">{{ $vote->created_at->format('M j, Y g:i A') }}</div>
+                                    </flux:tooltip>
+                                </div>
+                            </div>
+                        </flux:menu.item>
+                    @empty
+                        <flux:menu.item class="cursor-default text-zinc-400">
+                            {{ __('No votes yet') }}
+                        </flux:menu.item>
+                    @endforelse
+                </div>
+            </flux:menu>
+        </flux:dropdown>
+    </div>
 
     <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
         {{-- Main column --}}
@@ -457,7 +567,7 @@ new #[Title('Idea')] class extends Component {
                         <span>
                             {{ __('Submitted by') }}
                             <span class="font-medium text-zinc-700 dark:text-zinc-300">{{ $author }}</span>
-                            · {{ $idea->created_at->format('M j, Y') }}
+                            · {{ $idea->created_at->format('M j, Y g:i A') }}
                         </span>
                     </div>
                 </div>
@@ -483,7 +593,17 @@ new #[Title('Idea')] class extends Component {
                             :placeholder="__('Share your thoughts or add context…')"
                             data-test="comment-body"
                         />
-                        <div class="flex justify-end">
+                        <div class="flex items-center justify-between gap-3">
+                            @if ($this->canPostInternal)
+                                <flux:checkbox
+                                    wire:model="isInternal"
+                                    :label="__('Internal note (staff only)')"
+                                    data-test="comment-internal"
+                                />
+                            @else
+                                <span></span>
+                            @endif
+
                             <flux:button
                                 variant="primary"
                                 type="submit"
@@ -522,10 +642,23 @@ new #[Title('Idea')] class extends Component {
                                 @if ($comment->is_internal)
                                     <flux:badge color="amber" size="sm">{{ __('Internal') }}</flux:badge>
                                 @endif
-                                <span class="text-xs text-zinc-400">{{ $comment->created_at->diffForHumans() }}</span>
+                                <flux:tooltip content="{{ $comment->created_at->format('M j, Y g:i A') }}">
+                                    <span class="text-xs text-zinc-400">{{ $comment->created_at->diffForHumans() }}</span>
+                                </flux:tooltip>
                             </div>
                             <div class="mt-1 whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-300">{{ $comment->body }}</div>
                         </div>
+                        @if ($this->canDelete)
+                            <flux:button
+                                wire:click="deleteComment({{ $comment->id }})"
+                                wire:confirm="{{ __('Delete this comment?') }}"
+                                variant="ghost"
+                                size="sm"
+                                icon="trash"
+                                class="text-red-600"
+                                data-test="delete-comment"
+                            />
+                        @endif
                     </div>
                 @empty
                     <div class="rounded-xl border border-dashed border-zinc-300 py-8 text-center dark:border-zinc-700">
@@ -585,7 +718,33 @@ new #[Title('Idea')] class extends Component {
                     <flux:button wire:click="openMarkDuplicate" variant="ghost" size="sm" class="w-full" icon="document-duplicate" data-test="open-mark-duplicate">
                         {{ __('Mark as duplicate') }}
                     </flux:button>
+
+                    @if ($this->canDelete)
+                        <flux:modal.trigger name="delete-idea">
+                            <flux:button variant="danger" size="sm" class="mt-2 w-full" icon="trash" data-test="delete-idea-button">
+                                {{ __('Delete idea') }}
+                            </flux:button>
+                        </flux:modal.trigger>
+                    @endif
                 </div>
+
+                @if ($this->canDelete)
+                    {{-- Delete idea modal --}}
+                    <flux:modal name="delete-idea" class="max-w-lg" data-test="delete-idea-modal">
+                        <div class="space-y-5">
+                            <div>
+                                <flux:heading size="lg">{{ __('Delete this idea?') }}</flux:heading>
+                                <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                                    {{ __('This will remove ":title" and its comments from the idea list. This cannot be undone from the UI.', ['title' => $idea->title]) }}
+                                </flux:text>
+                            </div>
+                            <div class="flex justify-end gap-2">
+                                <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                                <flux:button wire:click="deleteIdea" variant="danger" data-test="confirm-delete-idea">{{ __('Delete idea') }}</flux:button>
+                            </div>
+                        </div>
+                    </flux:modal>
+                @endif
 
                 {{-- Mark as duplicate modal --}}
                 <flux:modal name="mark-duplicate" class="max-w-lg" data-test="mark-duplicate-modal">
