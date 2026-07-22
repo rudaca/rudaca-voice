@@ -4,6 +4,8 @@
         @include('partials.head')
     </head>
     <body class="min-h-screen bg-white dark:bg-zinc-800">
+        <livewire:view-as-banner />
+
         @php
             $__currentTeam = auth()->user()?->currentTeam;
             $__currentRole = $__currentTeam ? auth()->user()->teamRole($__currentTeam) : null;
@@ -143,7 +145,7 @@
         </flux:sidebar>
 
         <!-- Header -->
-        <flux:header sticky class="z-10 gap-3 border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+        <flux:header sticky class="z-30 gap-3 border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
             <livewire:team-switcher :compact="true" />
@@ -159,6 +161,8 @@
                     <span class="hidden sm:inline">{{ __('New Idea') }}</span>
                 </flux:button>
             @endif
+
+            <livewire:view-as-switcher />
 
             <flux:dropdown position="top" align="end" class="lg:hidden">
                 <flux:profile

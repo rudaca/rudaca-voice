@@ -4,6 +4,7 @@ use App\Data\UserTeam;
 use App\Models\Team;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 new class extends Component {
@@ -21,19 +22,46 @@ new class extends Component {
     }
 
     /**
+     * Get the teams this user actually belongs to.
+     *
      * @return Collection<int, UserTeam>
      */
-    public function teams(): Collection
+    public function ownedTeams(): Collection
     {
         return Auth::user()->toUserTeams(includeCurrent: true);
+    }
+
+    /**
+     * Get every other team in the system, visible only to Super Admins so
+     * they can switch into any team to use View As there.
+     *
+     * @return Collection<int, UserTeam>
+     */
+    public function otherTeams(): Collection
+    {
+        $user = Auth::user();
+
+        if (! $user->is_super_admin) {
+            return collect();
+        }
+
+        $ownedIds = $user->teams()->pluck('teams.id');
+
+        return Team::query()
+            ->whereNotIn('id', $ownedIds)
+            ->get()
+            ->map(fn (Team $team) => $user->toUserTeam($team))
+            ->sortBy(fn (UserTeam $team) => Str::lower($team->name))
+            ->values();
     }
 
     public function switchTeam(string $slug): void
     {
         $user = Auth::user();
+        $team = Team::where('slug', $slug)->firstOrFail();
 
         abort_unless(
-            $user->belongsToTeam($team = Team::where('slug', $slug)->firstOrFail()),
+            $user->belongsToTeam($team) || $user->is_super_admin,
             403
         );
 
@@ -103,23 +131,51 @@ new class extends Component {
             </flux:button>
         @endif
 
-        <flux:menu class="min-w-56">
-            <flux:menu.heading>{{ __('Teams') }}</flux:menu.heading>
+        <flux:menu class="min-w-96">
+            <flux:menu.heading>{{ __('Owned Teams') }}</flux:menu.heading>
 
-            @foreach ($this->teams() as $team)
+            @foreach ($this->ownedTeams() as $team)
                 <flux:menu.item
                     wire:click="switchTeam('{{ $team->slug }}')"
-                    class="cursor-pointer"
+                    class="cursor-pointer {{ $team->isCurrent ? 'bg-zinc-50 font-semibold dark:bg-white/10' : '' }}"
                     data-test="team-switcher-item"
                 >
-                    <div class="flex w-full items-center justify-between">
-                        <span>{{ $team->name }}</span>
+                    <div class="flex w-full items-center justify-between gap-2">
+                        <span class="truncate">{{ $team->name }}</span>
                         @if ($team->isCurrent)
-                            <flux:icon name="check" class="size-4" />
+                            <flux:icon name="check" class="size-4 shrink-0" />
                         @endif
                     </div>
                 </flux:menu.item>
             @endforeach
+
+            @if ($this->otherTeams()->isNotEmpty())
+                <flux:menu.separator />
+
+                <flux:menu.heading>{{ __('Other Teams') }}</flux:menu.heading>
+
+                <div class="max-h-64 overflow-y-auto">
+                    @foreach ($this->otherTeams() as $team)
+                        <flux:menu.item
+                            wire:click="switchTeam('{{ $team->slug }}')"
+                            class="cursor-pointer {{ $team->isCurrent ? 'bg-zinc-50 font-semibold dark:bg-white/10' : '' }}"
+                            data-test="team-switcher-item"
+                        >
+                            <div class="flex w-full items-center justify-between gap-2">
+                                <span class="truncate">{{ $team->name }}</span>
+                                <div class="flex shrink-0 items-center gap-1.5">
+                                    <flux:tooltip content="{{ __('View only') }}">
+                                        <flux:icon name="eye" variant="outline" class="size-4 text-zinc-400" />
+                                    </flux:tooltip>
+                                    @if ($team->isCurrent)
+                                        <flux:icon name="check" class="size-4" />
+                                    @endif
+                                </div>
+                            </div>
+                        </flux:menu.item>
+                    @endforeach
+                </div>
+            @endif
 
             <flux:menu.separator />
 

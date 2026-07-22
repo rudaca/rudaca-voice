@@ -20,7 +20,8 @@ class EnsureTeamMembership
     {
         [$user, $team] = [$request->user(), $this->team($request)];
 
-        abort_if(! $user || ! $team || ! $user->belongsToTeam($team), 403);
+        abort_if(! $user || ! $team, 403);
+        abort_if(! $user->belongsToTeam($team) && ! $user->is_super_admin, 403);
 
         $this->ensureTeamMemberHasRequiredRole($user, $team, $minimumRole);
 
@@ -33,10 +34,14 @@ class EnsureTeamMembership
 
     /**
      * Ensure the given user has at least the given role, if applicable.
+     *
+     * Super Admins bypass this check so they can browse any team; they still
+     * have no TeamRole of their own there, so they can't act on the team's
+     * behalf without starting a View As session.
      */
     protected function ensureTeamMemberHasRequiredRole(User $user, Team $team, ?string $minimumRole): void
     {
-        if ($minimumRole === null) {
+        if ($minimumRole === null || $user->is_super_admin) {
             return;
         }
 

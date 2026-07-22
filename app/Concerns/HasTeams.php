@@ -78,10 +78,13 @@ trait HasTeams
 
     /**
      * Switch to the given team.
+     *
+     * Super Admins may switch into any team, even ones they don't belong to,
+     * so they can reach the View As switcher for that team's members.
      */
     public function switchTeam(Team $team): bool
     {
-        if (! $this->belongsToTeam($team)) {
+        if (! $this->belongsToTeam($team) && ! $this->is_super_admin) {
             return false;
         }
 
