@@ -141,7 +141,14 @@ new class extends Component {
                     data-test="team-switcher-item"
                 >
                     <div class="flex w-full items-center justify-between gap-2">
-                        <span class="truncate">{{ $team->name }}</span>
+                        <div class="flex min-w-0 items-center gap-1.5">
+                            <span class="truncate">{{ $team->name }}</span>
+                            @if ($team->isPersonal)
+                                <flux:tooltip content="{{ __('Personal') }}">
+                                    <flux:icon name="lock-closed" variant="outline" class="size-4 shrink-0 text-rose-900 dark:text-rose-400" />
+                                </flux:tooltip>
+                            @endif
+                        </div>
                         @if ($team->isCurrent)
                             <flux:icon name="check" class="size-4 shrink-0" />
                         @endif
@@ -162,7 +169,14 @@ new class extends Component {
                             data-test="team-switcher-item"
                         >
                             <div class="flex w-full items-center justify-between gap-2">
-                                <span class="truncate">{{ $team->name }}</span>
+                                <div class="flex min-w-0 items-center gap-1.5">
+                                    <span class="truncate">{{ $team->name }}</span>
+                                    @if ($team->isPersonal)
+                                        <flux:tooltip content="{{ __('Private') }}">
+                                            <flux:icon name="lock-closed" variant="outline" class="size-4 shrink-0 text-rose-900 dark:text-rose-400" />
+                                        </flux:tooltip>
+                                    @endif
+                                </div>
                                 <div class="flex shrink-0 items-center gap-1.5">
                                     <flux:tooltip content="{{ __('View only') }}">
                                         <flux:icon name="eye" variant="outline" class="size-4 text-zinc-400" />

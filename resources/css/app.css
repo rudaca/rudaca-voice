@@ -52,6 +52,13 @@
 }
 
 /*
+Blur the page content behind modals instead of Flux's default plain dim overlay.
+*/
+[data-flux-modal] > dialog::backdrop {
+    backdrop-filter: blur(4px);
+}
+
+/*
 Hide the global breadcrumbs bar entirely on pages that don't push any breadcrumb items...
 */
 #breadcrumbs-bar:empty {
