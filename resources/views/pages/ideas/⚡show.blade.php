@@ -96,6 +96,15 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
+     * Whether the current user may vote and comment (employee and above; viewers are read-only).
+     */
+    #[Computed]
+    public function canParticipate(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Employee) ?? false;
+    }
+
+    /**
      * Update the idea's triage fields. Records a status-history entry only when the status changes.
      */
     public function updateManagement(): void
@@ -246,6 +255,8 @@ new #[Title('Idea')] class extends Component {
      */
     public function toggleVote(): void
     {
+        abort_unless($this->canParticipate, 403);
+
         $existingVote = IdeaVote::where('idea_id', $this->ideaModel->id)
             ->where('user_id', Auth::id())
             ->first();
@@ -268,6 +279,8 @@ new #[Title('Idea')] class extends Component {
      */
     public function addComment(): void
     {
+        abort_unless($this->canParticipate, 403);
+
         $validated = $this->validate();
 
         IdeaComment::create([
@@ -401,14 +414,17 @@ new #[Title('Idea')] class extends Component {
 
             <div class="flex gap-4">
                 {{-- Vote toggle --}}
-                <flux:tooltip :content="$this->hasVoted ? __('You voted this idea..') : __('Click to vote for this idea..')">
+                <flux:tooltip :content="$this->canParticipate ? ($this->hasVoted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
                     <button
                         type="button"
                         wire:click="toggleVote"
                         wire:loading.attr="disabled"
+                        @disabled(! $this->canParticipate)
                         aria-pressed="{{ $this->hasVoted ? 'true' : 'false' }}"
                         @class([
-                            'flex w-[72px] shrink-0 cursor-pointer flex-col items-center justify-center gap-1 self-start rounded-xl border py-3 transition',
+                            'flex w-[72px] shrink-0 flex-col items-center justify-center gap-1 self-start rounded-xl border py-3 transition',
+                            'cursor-not-allowed opacity-60' => ! $this->canParticipate,
+                            'cursor-pointer' => $this->canParticipate,
                             'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $this->hasVoted,
                             'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $this->hasVoted,
                         ])
@@ -457,28 +473,34 @@ new #[Title('Idea')] class extends Component {
             </flux:heading>
 
             {{-- Composer --}}
-            <form wire:submit="addComment" class="mt-4 flex gap-3">
-                <flux:avatar size="sm" :name="auth()->user()->name" color="auto" color:seed="{{ auth()->id() }}" />
-                <div class="min-w-0 flex-1 space-y-2">
-                    <flux:textarea
-                        wire:model="commentBody"
-                        rows="3"
-                        :placeholder="__('Share your thoughts or add context…')"
-                        data-test="comment-body"
-                    />
-                    <div class="flex justify-end">
-                        <flux:button
-                            variant="primary"
-                            type="submit"
-                            size="sm"
-                            wire:loading.attr="disabled"
-                            data-test="add-comment-button"
-                        >
-                            {{ __('Comment') }}
-                        </flux:button>
+            @if ($this->canParticipate)
+                <form wire:submit="addComment" class="mt-4 flex gap-3">
+                    <flux:avatar size="sm" :name="auth()->user()->name" color="auto" color:seed="{{ auth()->id() }}" />
+                    <div class="min-w-0 flex-1 space-y-2">
+                        <flux:textarea
+                            wire:model="commentBody"
+                            rows="3"
+                            :placeholder="__('Share your thoughts or add context…')"
+                            data-test="comment-body"
+                        />
+                        <div class="flex justify-end">
+                            <flux:button
+                                variant="primary"
+                                type="submit"
+                                size="sm"
+                                wire:loading.attr="disabled"
+                                data-test="add-comment-button"
+                            >
+                                {{ __('Comment') }}
+                            </flux:button>
+                        </div>
                     </div>
-                </div>
-            </form>
+                </form>
+            @else
+                <flux:text class="mt-4 text-sm text-zinc-500 dark:text-zinc-400" data-test="viewer-read-only-notice">
+                    {{ __('Viewers have read-only access and cannot comment.') }}
+                </flux:text>
+            @endif
 
             <div class="mt-6 space-y-4">
                 @forelse ($this->comments as $comment)

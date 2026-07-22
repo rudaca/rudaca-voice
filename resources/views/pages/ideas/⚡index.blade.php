@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaVote;
 use App\Models\Team;
@@ -77,6 +78,8 @@ new class extends Component {
      */
     public function toggleVote(int $ideaId): void
     {
+        abort_unless($this->canParticipate, 403);
+
         $idea = Idea::where('team_id', Auth::user()->current_team_id)->findOrFail($ideaId);
 
         $existingVote = IdeaVote::where('idea_id', $idea->id)
@@ -97,6 +100,15 @@ new class extends Component {
     public function team(): Team
     {
         return Auth::user()->currentTeam;
+    }
+
+    /**
+     * Whether the current user may vote and comment (employee and above; viewers are read-only).
+     */
+    #[Computed]
+    public function canParticipate(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Employee) ?? false;
     }
 
     /**
@@ -329,14 +341,17 @@ new class extends Component {
                     data-test="idea-row"
                 >
                     {{-- Vote toggle --}}
-                    <flux:tooltip :content="$idea->voted ? __('You voted this idea..') : __('Click to vote for this idea..')">
+                    <flux:tooltip :content="$this->canParticipate ? ($idea->voted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
                         <button
                             type="button"
                             wire:click="toggleVote({{ $idea->id }})"
                             wire:loading.attr="disabled"
+                            @disabled(! $this->canParticipate)
                             aria-pressed="{{ $idea->voted ? 'true' : 'false' }}"
                             @class([
-                                'flex w-12 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 self-start rounded-lg border py-2 transition',
+                                'flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 self-start rounded-lg border py-2 transition',
+                                'cursor-not-allowed opacity-60' => ! $this->canParticipate,
+                                'cursor-pointer' => $this->canParticipate,
                                 'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
                                 'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $idea->voted,
                             ])

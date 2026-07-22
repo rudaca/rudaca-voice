@@ -93,16 +93,26 @@ test('a user cannot vote on another team\'s idea', function () {
     expect(IdeaVote::where('idea_id', $ideaA->id)->where('user_id', $userB->id)->count())->toBe(0);
 });
 
-// Current behavior: voting is NOT role-gated, so a viewer can vote. Reported for
-// a follow-up decision; not changed here.
-test('a viewer can currently vote (voting is not yet restricted for viewers)', function () {
+test('a viewer cannot vote', function () {
     ['team' => $team, 'user' => $viewer] = teamWithMember(TeamRole::Viewer);
     $idea = makeIdea($team);
 
     Livewire::actingAs($viewer)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->call('toggleVote')
-        ->assertHasNoErrors();
+        ->assertStatus(403);
 
-    expect(IdeaVote::where('idea_id', $idea->id)->where('user_id', $viewer->id)->count())->toBe(1);
+    expect(IdeaVote::where('idea_id', $idea->id)->where('user_id', $viewer->id)->count())->toBe(0);
+});
+
+test('a viewer cannot vote from the All Ideas list', function () {
+    ['team' => $team, 'user' => $viewer] = teamWithMember(TeamRole::Viewer);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($viewer)
+        ->test('pages::ideas.index')
+        ->call('toggleVote', $idea->id)
+        ->assertStatus(403);
+
+    expect(IdeaVote::where('idea_id', $idea->id)->where('user_id', $viewer->id)->count())->toBe(0);
 });
