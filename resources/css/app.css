@@ -52,6 +52,22 @@
 }
 
 /*
+Livewire's wire:navigate briefly strips the JS-managed `dark` class off
+<html> on every navigation (it copies the freshly-fetched page's <html>
+attributes onto the live one, and the server never renders `dark` since only
+client JS adds it — see vendor/livewire/livewire/dist/livewire.js,
+replaceHtmlAttributes). resources/js/app.js restores the class right after,
+but there's a real transient gap in between that can paint as a flash on fast
+transitions. This media query covers that gap with zero class/JS dependency,
+for anyone whose OS/browser prefers dark.
+*/
+@media (prefers-color-scheme: dark) {
+    html {
+        background-color: var(--color-zinc-800);
+    }
+}
+
+/*
 Blur the page content behind modals instead of Flux's default plain dim overlay.
 */
 [data-flux-modal] > dialog::backdrop {

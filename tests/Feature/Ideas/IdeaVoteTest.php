@@ -105,6 +105,27 @@ test('a viewer cannot vote', function () {
     expect(IdeaVote::where('idea_id', $idea->id)->where('user_id', $viewer->id)->count())->toBe(0);
 });
 
+test('who voted is sorted alphabetically by name with the current user always first', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+
+    $user->update(['name' => 'Mia Current']);
+
+    $zoe = User::factory()->create(['name' => 'Zoe Adams']);
+    $bob = User::factory()->create(['name' => 'Bob Smith']);
+    $amy = User::factory()->create(['name' => 'Amy Jones']);
+
+    foreach ([$zoe, $bob, $amy, $user] as $voter) {
+        IdeaVote::factory()->create(['idea_id' => $idea->id, 'user_id' => $voter->id]);
+    }
+
+    $component = Livewire::actingAs($user)->test('pages::ideas.show', ['idea' => $idea->slug]);
+
+    $names = $component->instance()->voters->map(fn (IdeaVote $vote) => $vote->user->name)->all();
+
+    expect($names)->toBe(['Mia Current', 'Amy Jones', 'Bob Smith', 'Zoe Adams']);
+});
+
 test('a viewer cannot vote from the All Ideas list', function () {
     ['team' => $team, 'user' => $viewer] = teamWithMember(TeamRole::Viewer);
     $idea = makeIdea($team);

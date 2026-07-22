@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -22,6 +23,12 @@ new #[Title('Review queue')] class extends Component {
      * @var array<int, string>
      */
     public const QUEUE_STATUSES = ['new', 'under_review'];
+
+    /**
+     * Which queue status the table below is narrowed to; 'all' shows the full queue.
+     */
+    #[Url(as: 'status')]
+    public string $filter = 'all';
 
     /**
      * Display metadata for each queue status (label + Flux badge color).
@@ -67,6 +74,7 @@ new #[Title('Review queue')] class extends Component {
     public function ideas(): LengthAwarePaginator
     {
         return $this->queueQuery()
+            ->when($this->filter !== 'all', fn (Builder $query) => $query->where('status', $this->filter))
             ->with(['board:id,name', 'submittedBy:id,name'])
             ->withCount(['votes', 'comments'])
             ->orderByDesc('votes_count')
@@ -184,7 +192,15 @@ new #[Title('Review queue')] class extends Component {
     </div>
 
     {{-- Queue table --}}
-    <div class="mt-6">
+    <x-sticky-toolbar class="mt-6 flex items-center gap-2 py-3">
+        <flux:radio.group wire:model.live="filter" variant="segmented" size="sm">
+            <flux:radio value="all">{{ __('All') }}</flux:radio>
+            <flux:radio value="new">{{ __('New') }}</flux:radio>
+            <flux:radio value="under_review">{{ __('Under Review') }}</flux:radio>
+        </flux:radio.group>
+    </x-sticky-toolbar>
+
+    <div class="mt-4">
         <flux:table>
             <flux:table.columns>
                 <flux:table.column>{{ __('Votes') }}</flux:table.column>

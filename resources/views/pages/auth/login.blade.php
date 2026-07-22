@@ -22,7 +22,7 @@
                 required
                 autofocus
                 autocomplete="email"
-                placeholder="email@example.com"
+                placeholder="email@ellisontravel.com"
             />
 
             <!-- Password -->

@@ -259,14 +259,7 @@ new class extends Component {
         </div>
 
         {{-- Controls: sort (left) + filters (right). Sticks below the app header while the list scrolls. --}}
-        <div
-            class="sticky z-10 mt-6 flex flex-col gap-3 border-b py-3 lg:flex-row lg:items-center lg:justify-between bg-white dark:bg-zinc-800"
-            x-data="{ top: 0, stuck: false }"
-            x-init="top = (document.querySelector('[data-flux-header]')?.getBoundingClientRect().height ?? 0) + (document.querySelector('#breadcrumbs-bar')?.getBoundingClientRect().height ?? 0)"
-            x-on:scroll.window="stuck = $el.getBoundingClientRect().top <= top"
-            :style="`top: ${top}px`"
-            :class="stuck ? 'border-zinc-200 dark:border-zinc-700' : 'border-transparent'"
-        >
+        <x-sticky-toolbar class="mt-6 flex flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div
                 class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
                 role="group"
@@ -332,7 +325,7 @@ new class extends Component {
                     @endforeach
                 </flux:select>
             </div>
-        </div>
+        </x-sticky-toolbar>
 
         {{-- Ideas list --}}
         <div class="mt-5 space-y-3">

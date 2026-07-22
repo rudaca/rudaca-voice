@@ -40,6 +40,21 @@ test('the queue lists ideas highest-voted first', function () {
         ->assertSeeInOrder(['High votes idea', 'Low votes idea']);
 });
 
+test('the status filter narrows the queue without changing the stats', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+
+    makeIdea($team, ['status' => 'new', 'title' => 'A new idea']);
+    makeIdea($team, ['status' => 'under_review', 'title' => 'An under-review idea']);
+
+    $component = Livewire::actingAs($manager)
+        ->test('pages::ideas.review')
+        ->set('filter', 'new');
+
+    $component->assertSee('A new idea')
+        ->assertDontSee('An under-review idea')
+        ->assertSet('stats.awaiting', 2);
+});
+
 test('a manager can approve a queued idea and a history record is created', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
     $idea = makeIdea($team, ['status' => 'under_review']);

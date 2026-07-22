@@ -9,6 +9,7 @@ use App\Models\Team;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -363,7 +364,8 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
-     * Votes for this idea with their voter loaded, most recent first.
+     * Votes for this idea with their voter loaded, sorted alphabetically by
+     * voter name — except the current user's own vote, which always leads.
      *
      * @return Collection<int, IdeaVote>
      */
@@ -372,10 +374,13 @@ new #[Title('Idea')] class extends Component {
     {
         return $this->ideaModel->votes()
             ->with('user:id,name')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
             ->get()
-            ->filter(fn (IdeaVote $vote) => $vote->user !== null);
+            ->filter(fn (IdeaVote $vote) => $vote->user !== null)
+            ->sortBy([
+                fn (IdeaVote $a, IdeaVote $b) => ($b->user_id === Auth::id()) <=> ($a->user_id === Auth::id()),
+                fn (IdeaVote $a, IdeaVote $b) => Str::lower($a->user->name) <=> Str::lower($b->user->name),
+            ])
+            ->values();
     }
 
     #[Computed]

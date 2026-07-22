@@ -2,6 +2,7 @@
     <div
         id="breadcrumbs-bar"
         x-data="{ scrolled: false }"
+        x-cloak
         x-bind:style="{ position: 'sticky', top: $el.offsetTop + 'px' }"
         x-on:scroll.window="scrolled = window.scrollY > 4"
         x-bind:class="scrolled ? 'border-zinc-200 dark:border-white/10' : 'border-transparent'"

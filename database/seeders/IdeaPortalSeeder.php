@@ -27,22 +27,22 @@ class IdeaPortalSeeder extends Seeder
     public function run(): void
     {
         $team = Team::factory()->create([
-            'name' => 'Rudaca Travel',
-            'slug' => 'rudaca-travel',
+            'name' => 'Ellison Travel',
+            'slug' => 'ellison-travel',
             'is_personal' => false,
         ]);
 
         // --- Users & memberships (starter-kit team_members structure) ---
-        $owner = $this->addMember($team, 'Olivia Owner', 'owner@rudaca.test', TeamRole::Owner);
-        $admin = $this->addMember($team, 'Amir Admin', 'admin@rudaca.test', TeamRole::Admin);
-        $manager = $this->addMember($team, 'Maria Manager', 'manager@rudaca.test', TeamRole::Manager);
-        $viewer = $this->addMember($team, 'Vince Viewer', 'viewer@rudaca.test', TeamRole::Viewer);
+        $owner = $this->addMember($team, 'Aaron Asuncion', 'aarona@ellisontravel.com', TeamRole::Owner);
+        $admin = $this->addMember($team, 'Priya Shah', 'admin@ellisontravel.com', TeamRole::Admin);
+        $manager = $this->addMember($team, 'Marcus Bennett', 'manager@ellisontravel.com', TeamRole::Manager);
+        $viewer = $this->addMember($team, 'Grace Kim', 'viewer@ellisontravel.com', TeamRole::Viewer);
 
         $employees = collect([
-            'Test User' => 'test@example.com',
-            'Ella Employee' => 'ella@rudaca.test',
-            'Ben Employee' => 'ben@rudaca.test',
-            'Carla Employee' => 'carla@rudaca.test',
+            'Sofia Ramirez' => 'sofia@ellisontravel.com',
+            'Jake Thompson' => 'jake@ellisontravel.com',
+            'Priya Patel' => 'priya.patel@ellisontravel.com',
+            'Noah Fischer' => 'noah@ellisontravel.com',
         ])->map(fn (string $email, string $name) => $this->addMember($team, $name, $email, TeamRole::Employee))
             ->values();
 
@@ -112,42 +112,48 @@ class IdeaPortalSeeder extends Seeder
             }
         }
 
-        // --- Ideas ---
-        $ideasData = $this->ideasData();
+        // --- Ideas: 20 curated templates (2 per category) repeated 5x each = 100 ideas ---
+        $templates = $this->ideaTemplates();
+        $statusPool = ['new', 'under_review', 'planned', 'in_progress', 'released', 'not_doing'];
 
         /** @var Collection<int, Idea> $ideas */
         $ideas = new Collection;
 
-        foreach ($ideasData as $data) {
-            $board = $boards[$data['board']];
+        foreach ($templates as $template) {
+            $board = $boards[$template['board']];
+            $originalIndex = null;
 
-            $ideas->push(
-                Idea::factory()
-                    ->when($data['anonymous'] ?? false, fn ($factory) => $factory->anonymous())
-                    ->when($data['private'] ?? false, fn ($factory) => $factory->private())
+            for ($repeat = 0; $repeat < 5; $repeat++) {
+                $isFirst = $repeat === 0;
+                $markDuplicate = ! $isFirst && $originalIndex !== null && fake()->boolean(25);
+
+                $idea = Idea::factory()
+                    ->when(fake()->boolean(8), fn ($factory) => $factory->anonymous())
+                    ->when(fake()->boolean(12), fn ($factory) => $factory->private())
                     ->create([
                         'team_id' => $team->id,
                         'board_group_id' => $board->board_group_id,
                         'board_id' => $board->id,
-                        'category_id' => $categories[$data['board']][$data['category']]->id,
+                        'category_id' => $categories[$template['board']][$template['category']]->id,
                         'submitted_by_user_id' => $contributors->random()->id,
-                        'title' => $data['title'],
-                        'slug' => Str::slug($data['title']),
-                        'description' => $data['description'],
-                        'status' => $data['status'],
-                        'priority' => $data['priority'],
-                        'impact' => $data['impact'],
-                        'effort' => $data['effort'],
-                    ])
-            );
-        }
+                        'title' => $template['title'],
+                        'slug' => Str::slug($template['title']).'-'.($ideas->count() + 1),
+                        'description' => $template['description'],
+                        'status' => $markDuplicate ? 'duplicate' : ($isFirst ? $template['status'] : fake()->randomElement($statusPool)),
+                        'priority' => $isFirst ? $template['priority'] : fake()->randomElement(['low', 'medium', 'high']),
+                        'impact' => $isFirst ? $template['impact'] : fake()->randomElement(['low', 'medium', 'high']),
+                        'effort' => $isFirst ? $template['effort'] : fake()->randomElement(['small', 'medium', 'large']),
+                    ]);
 
-        // Wire up the duplicate relationship (idea marked "duplicate" points at its original).
-        foreach ($ideasData as $index => $data) {
-            if (isset($data['duplicate_of'])) {
-                $ideas[$index]->update([
-                    'duplicate_of_idea_id' => $ideas[$data['duplicate_of']]->id,
-                ]);
+                if ($markDuplicate) {
+                    $idea->update(['duplicate_of_idea_id' => $ideas[$originalIndex]->id]);
+                }
+
+                $ideas->push($idea);
+
+                if ($isFirst) {
+                    $originalIndex = $ideas->count() - 1;
+                }
             }
         }
 
@@ -163,21 +169,32 @@ class IdeaPortalSeeder extends Seeder
             });
         }
 
-        // --- Comments: public discussion on most ideas, plus some internal notes ---
-        foreach ($ideas as $idea) {
-            IdeaComment::factory()
-                ->count(fake()->numberBetween(0, 3))
-                ->create([
-                    'idea_id' => $idea->id,
-                    'user_id' => $allUsers->random()->id,
-                ]);
+        // --- Comments: exactly 50 total, spread as single comments and small threads ---
+        $commentBudget = 50;
+        $commentPool = $ideas->shuffle()->values();
+        $remaining = $commentBudget;
+        $ideaIndex = 0;
 
-            if (fake()->boolean(35)) {
-                IdeaComment::factory()->internal()->create([
-                    'idea_id' => $idea->id,
-                    'user_id' => $reviewers->random()->id,
-                ]);
+        while ($remaining > 0 && $ideaIndex < $commentPool->count()) {
+            $threadSize = min($remaining, fake()->randomElement([1, 1, 1, 2, 2, 3]));
+            $idea = $commentPool[$ideaIndex];
+
+            for ($i = 0; $i < $threadSize; $i++) {
+                if (fake()->boolean(20)) {
+                    IdeaComment::factory()->internal()->create([
+                        'idea_id' => $idea->id,
+                        'user_id' => $reviewers->random()->id,
+                    ]);
+                } else {
+                    IdeaComment::factory()->create([
+                        'idea_id' => $idea->id,
+                        'user_id' => $allUsers->random()->id,
+                    ]);
+                }
             }
+
+            $remaining -= $threadSize;
+            $ideaIndex++;
         }
 
         // --- Status history: any idea that has moved past "new" gets a history entry ---
@@ -214,7 +231,11 @@ class IdeaPortalSeeder extends Seeder
         ]);
 
         $this->command?->info("Seeded '{$team->name}' with {$ideas->count()} ideas across {$boards->count()} boards.");
-        $this->command?->info('Sample owner login: owner@rudaca.test / password');
+        $this->command?->info('Sample logins (all password: "password"):');
+        $this->command?->info('  Owner:   aarona@ellisontravel.com');
+        $this->command?->info('  Admin:   admin@ellisontravel.com');
+        $this->command?->info('  Manager: manager@ellisontravel.com');
+        $this->command?->info('  Viewer:  viewer@ellisontravel.com');
     }
 
     /**
@@ -234,72 +255,26 @@ class IdeaPortalSeeder extends Seeder
     }
 
     /**
-     * Realistic sample ideas for a travel business improvement portal.
+     * Realistic sample idea templates for a travel business improvement portal.
+     * Two templates per category (10 categories = 20 templates); each is
+     * repeated 5x in run() to reach 100 ideas, with later repeats getting
+     * randomized status/priority/impact/effort and some marked as duplicates.
      *
      * @return array<int, array<string, mixed>>
      */
-    private function ideasData(): array
+    private function ideaTemplates(): array
     {
         return [
+            // operations / process-improvement
             [
-                'title' => 'Automate weekly commission reconciliation',
-                'board' => 'accounting',
-                'category' => 'automation',
-                'status' => 'in_progress',
-                'priority' => 'high',
-                'impact' => 'high',
-                'effort' => 'medium',
-                'description' => 'Finance spends most of Monday matching supplier commission statements to bookings by hand. An automated match-and-flag report would save hours and reduce errors.',
-            ],
-            [
-                'title' => 'Self-service booking change portal for tour leaders',
-                'board' => 'technology',
-                'category' => 'software-request',
-                'status' => 'planned',
-                'priority' => 'high',
-                'impact' => 'high',
-                'effort' => 'large',
-                'description' => 'Tour leaders currently email the office for every itinerary change. A simple portal would let them request approved changes directly and cut back-and-forth.',
-            ],
-            [
-                'title' => 'Reduce duplicate data entry between Atlas and accounting',
+                'title' => 'Reduce duplicate data entry between our booking system and accounting',
                 'board' => 'operations',
                 'category' => 'process-improvement',
                 'status' => 'under_review',
                 'priority' => 'high',
                 'impact' => 'medium',
                 'effort' => 'medium',
-                'description' => 'The same booking details are keyed into Atlas and then again into the accounting system. A one-way sync would remove double entry and mismatches.',
-            ],
-            [
-                'title' => 'Improve the new employee onboarding checklist',
-                'board' => 'operations',
-                'category' => 'process-improvement',
-                'status' => 'new',
-                'priority' => 'medium',
-                'impact' => 'medium',
-                'effort' => 'small',
-                'description' => 'New starters often miss access to key systems in week one. A shared onboarding checklist with owners for each step would smooth this out.',
-            ],
-            [
-                'title' => 'Faster passport and visa document collection',
-                'board' => 'operations',
-                'category' => 'customer-service',
-                'status' => 'under_review',
-                'priority' => 'medium',
-                'impact' => 'medium',
-                'effort' => 'medium',
-                'description' => 'Chasing travellers for passport and visa documents is manual and slow. Automated reminders with secure upload links would speed this up.',
-            ],
-            [
-                'title' => 'Show multi-currency pricing on the website',
-                'board' => 'website',
-                'category' => 'software-request',
-                'status' => 'planned',
-                'priority' => 'medium',
-                'impact' => 'high',
-                'effort' => 'large',
-                'description' => 'International visitors want to see prices in their own currency. Displaying converted prices could improve conversion on the public site.',
+                'description' => 'The same booking details are keyed into our booking system and then again into the accounting system. A one-way sync would remove double entry and mismatches.',
             ],
             [
                 'title' => 'Standardize supplier contract templates',
@@ -311,57 +286,28 @@ class IdeaPortalSeeder extends Seeder
                 'effort' => 'small',
                 'description' => 'Every supplier contract is written from scratch. A set of approved templates would save time and keep terms consistent.',
             ],
+            // operations / customer-service
             [
-                'title' => 'Automated reminders for outstanding client payments',
-                'board' => 'accounting',
-                'category' => 'automation',
-                'status' => 'in_progress',
-                'priority' => 'high',
-                'impact' => 'high',
-                'effort' => 'medium',
-                'description' => 'Overdue balances are tracked in a spreadsheet and chased manually. Scheduled reminder emails at set intervals would improve cash flow.',
-            ],
-            [
-                'title' => 'Central dashboard for trip profitability',
-                'board' => 'accounting',
-                'category' => 'reporting',
-                'status' => 'under_review',
-                'priority' => 'high',
-                'impact' => 'high',
-                'effort' => 'large',
-                'private' => true,
-                'description' => 'Managers cannot easily see margin per trip. A profitability dashboard would help prioritise the most valuable products.',
-            ],
-            [
-                'title' => 'Improve communication between sales and operations',
+                'title' => 'Faster passport and visa document collection',
                 'board' => 'operations',
-                'category' => 'process-improvement',
+                'category' => 'customer-service',
+                'status' => 'under_review',
+                'priority' => 'medium',
+                'impact' => 'medium',
+                'effort' => 'medium',
+                'description' => 'Chasing travellers for passport and visa documents is manual and slow. Automated reminders with secure upload links would speed this up.',
+            ],
+            [
+                'title' => 'Proactive check-in reminders for clients ahead of departure',
+                'board' => 'operations',
+                'category' => 'customer-service',
                 'status' => 'new',
                 'priority' => 'medium',
                 'impact' => 'medium',
                 'effort' => 'small',
-                'description' => 'Details agreed by sales are not always passed cleanly to operations. A short handover template per booking would reduce dropped details.',
+                'description' => 'Clients often forget to complete online check-in before their flight, leading to last-minute panic calls to the office. Automated reminders a few days out would cut down on these calls.',
             ],
-            [
-                'title' => 'Self-service knowledge base for common client questions',
-                'board' => 'website',
-                'category' => 'customer-service',
-                'status' => 'planned',
-                'priority' => 'medium',
-                'impact' => 'medium',
-                'effort' => 'medium',
-                'description' => 'A searchable FAQ / knowledge base would deflect repetitive client questions and free up the reservations team.',
-            ],
-            [
-                'title' => 'Bulk itinerary PDF generation',
-                'board' => 'technology',
-                'category' => 'automation',
-                'status' => 'released',
-                'priority' => 'medium',
-                'impact' => 'medium',
-                'effort' => 'medium',
-                'description' => 'Generating itinerary PDFs one at a time is tedious for large group departures. Bulk generation would save the operations team time.',
-            ],
+            // operations / reporting
             [
                 'title' => 'Track and reduce refund processing time',
                 'board' => 'operations',
@@ -373,6 +319,90 @@ class IdeaPortalSeeder extends Seeder
                 'description' => 'We have no visibility on how long refunds take. Tracking the time from request to payout would help us set and hit a service target.',
             ],
             [
+                'title' => 'Weekly operations KPI snapshot for leadership',
+                'board' => 'operations',
+                'category' => 'reporting',
+                'status' => 'under_review',
+                'priority' => 'medium',
+                'impact' => 'medium',
+                'effort' => 'medium',
+                'description' => 'Leadership currently asks for ad-hoc numbers on bookings, refunds, and response times. A short automated weekly snapshot would save the team from rebuilding the same report by hand.',
+            ],
+            // accounting / automation
+            [
+                'title' => 'Automate weekly commission reconciliation',
+                'board' => 'accounting',
+                'category' => 'automation',
+                'status' => 'in_progress',
+                'priority' => 'high',
+                'impact' => 'high',
+                'effort' => 'medium',
+                'description' => 'Finance spends most of Monday matching supplier commission statements to bookings by hand. An automated match-and-flag report would save hours and reduce errors.',
+            ],
+            [
+                'title' => 'Automated reminders for outstanding client payments',
+                'board' => 'accounting',
+                'category' => 'automation',
+                'status' => 'in_progress',
+                'priority' => 'high',
+                'impact' => 'high',
+                'effort' => 'medium',
+                'description' => 'Overdue balances are tracked in a spreadsheet and chased manually. Scheduled reminder emails at set intervals would improve cash flow.',
+            ],
+            // accounting / reporting
+            [
+                'title' => 'Central dashboard for trip profitability',
+                'board' => 'accounting',
+                'category' => 'reporting',
+                'status' => 'under_review',
+                'priority' => 'high',
+                'impact' => 'high',
+                'effort' => 'large',
+                'description' => 'Managers cannot easily see margin per trip. A profitability dashboard would help prioritise the most valuable products.',
+            ],
+            [
+                'title' => 'Automated month-end close checklist',
+                'board' => 'accounting',
+                'category' => 'reporting',
+                'status' => 'planned',
+                'priority' => 'high',
+                'impact' => 'medium',
+                'effort' => 'small',
+                'description' => 'Month-end close relies on one person remembering every step from memory. A shared checklist with automated reminders would reduce the risk of a missed reconciliation.',
+            ],
+            // accounting / cost-savings
+            [
+                'title' => 'Renegotiate merchant processing fees across suppliers',
+                'board' => 'accounting',
+                'category' => 'cost-savings',
+                'status' => 'under_review',
+                'priority' => 'medium',
+                'impact' => 'high',
+                'effort' => 'medium',
+                'description' => "We're paying different card-processing rates across suppliers with no consolidated view. Reviewing and renegotiating as a group could meaningfully cut transaction costs.",
+            ],
+            [
+                'title' => 'Consolidate software subscriptions across departments',
+                'board' => 'accounting',
+                'category' => 'cost-savings',
+                'status' => 'new',
+                'priority' => 'low',
+                'impact' => 'medium',
+                'effort' => 'small',
+                'description' => 'Several teams pay for overlapping tools separately. An audit of active subscriptions could cut unnecessary spend and simplify renewals.',
+            ],
+            // technology / software-request
+            [
+                'title' => 'Self-service booking change portal for tour leaders',
+                'board' => 'technology',
+                'category' => 'software-request',
+                'status' => 'planned',
+                'priority' => 'high',
+                'impact' => 'high',
+                'effort' => 'large',
+                'description' => 'Tour leaders currently email the office for every itinerary change. A simple portal would let them request approved changes directly and cut back-and-forth.',
+            ],
+            [
                 'title' => 'Mobile-friendly expense submission for tour leaders',
                 'board' => 'technology',
                 'category' => 'software-request',
@@ -382,17 +412,68 @@ class IdeaPortalSeeder extends Seeder
                 'effort' => 'medium',
                 'description' => 'Tour leaders want to submit expenses from their phones on the road. Reviewed but deferred in favour of higher-impact tooling this year.',
             ],
+            // technology / automation
+            [
+                'title' => 'Bulk itinerary PDF generation',
+                'board' => 'technology',
+                'category' => 'automation',
+                'status' => 'released',
+                'priority' => 'medium',
+                'impact' => 'medium',
+                'effort' => 'medium',
+                'description' => 'Generating itinerary PDFs one at a time is tedious for large group departures. Bulk generation would save the operations team time.',
+            ],
             [
                 'title' => 'Automate commission report generation',
-                'board' => 'accounting',
+                'board' => 'technology',
                 'category' => 'automation',
-                'status' => 'duplicate',
+                'status' => 'new',
                 'priority' => 'low',
                 'impact' => 'medium',
                 'effort' => 'small',
-                'anonymous' => true,
-                'duplicate_of' => 0,
-                'description' => 'Generate the weekly commission report automatically instead of building it by hand. Covered by the existing commission reconciliation idea.',
+                'description' => 'Generate the weekly commission report automatically instead of building it by hand, feeding off the same data as the reconciliation tool.',
+            ],
+            // website / software-request
+            [
+                'title' => 'Show multi-currency pricing on the website',
+                'board' => 'website',
+                'category' => 'software-request',
+                'status' => 'planned',
+                'priority' => 'medium',
+                'impact' => 'high',
+                'effort' => 'large',
+                'description' => 'International visitors want to see prices in their own currency. Displaying converted prices could improve conversion on the public site.',
+            ],
+            [
+                'title' => 'Add live chat widget to the booking site',
+                'board' => 'website',
+                'category' => 'software-request',
+                'status' => 'planned',
+                'priority' => 'medium',
+                'impact' => 'high',
+                'effort' => 'medium',
+                'description' => 'Visitors abandon the booking flow when they have a quick question and no one to ask. A live chat widget during business hours could recover some of those bookings.',
+            ],
+            // website / customer-service
+            [
+                'title' => 'Self-service knowledge base for common client questions',
+                'board' => 'website',
+                'category' => 'customer-service',
+                'status' => 'planned',
+                'priority' => 'medium',
+                'impact' => 'medium',
+                'effort' => 'medium',
+                'description' => 'A searchable FAQ / knowledge base would deflect repetitive client questions and free up the reservations team.',
+            ],
+            [
+                'title' => 'Post-trip feedback survey automation',
+                'board' => 'website',
+                'category' => 'customer-service',
+                'status' => 'new',
+                'priority' => 'low',
+                'impact' => 'medium',
+                'effort' => 'small',
+                'description' => 'Feedback surveys currently go out manually and inconsistently. An automatic survey triggered a day after return would give us more reliable data to act on.',
             ],
         ];
     }

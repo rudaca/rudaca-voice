@@ -18,8 +18,8 @@ class IdeaGithubLinkFactory extends Factory
      */
     public function definition(): array
     {
-        $owner = 'rudaca';
-        $repo = fake()->randomElement(['atlas', 'website', 'tour-leader-app', 'internal-tools']);
+        $owner = 'ellisontravel';
+        $repo = fake()->randomElement(['booking-system', 'website', 'tour-leader-app', 'internal-tools']);
         $number = fake()->unique()->numberBetween(1, 9999);
 
         return [

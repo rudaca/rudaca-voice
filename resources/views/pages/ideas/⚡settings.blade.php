@@ -421,7 +421,7 @@ new #[Title('Organization settings')] class extends Component {
     </div>
 
     {{-- Tabs --}}
-    <div class="mt-6 border-b border-zinc-200 dark:border-zinc-700">
+    <x-sticky-toolbar class="mt-6">
         <nav
             class="relative -mb-px flex gap-6"
             data-tab="{{ $tab }}"
@@ -460,7 +460,7 @@ new #[Title('Organization settings')] class extends Component {
                 </button>
             @endforeach
         </nav>
-    </div>
+    </x-sticky-toolbar>
 
     <flux:text class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
         @switch($tab)

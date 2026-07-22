@@ -100,14 +100,14 @@ new #[Title('Moderate comments')] class extends Component {
         </flux:text>
     </div>
 
-    <div class="mt-6 flex items-center gap-2">
+    <x-sticky-toolbar class="mt-6 flex items-center gap-2 py-3">
         <flux:radio.group wire:model.live="filter" variant="segmented" size="sm">
             <flux:radio value="all">{{ __('All comments') }}</flux:radio>
             <flux:radio value="hidden">{{ __('Hidden only') }}</flux:radio>
         </flux:radio.group>
-    </div>
+    </x-sticky-toolbar>
 
-    <div class="mt-6">
+    <div class="mt-4">
         <flux:table>
             <flux:table.columns>
                 <flux:table.column>{{ __('Comment') }}</flux:table.column>
