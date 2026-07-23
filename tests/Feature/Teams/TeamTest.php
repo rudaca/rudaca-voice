@@ -5,6 +5,18 @@ use App\Models\Team;
 use App\Models\User;
 use Livewire\Livewire;
 
+test('teams allow anonymous ideas by default', function () {
+    $team = Team::factory()->create();
+
+    expect($team->allowsAnonymousIdeas())->toBeTrue();
+});
+
+test('teams can disallow anonymous ideas', function () {
+    $team = Team::factory()->disallowingAnonymousIdeas()->create();
+
+    expect($team->allowsAnonymousIdeas())->toBeFalse();
+});
+
 test('teams index page can be rendered', function () {
     $user = User::factory()->create();
 
@@ -29,6 +41,37 @@ test('teams can be created', function () {
         'name' => 'Test Team',
         'is_personal' => false,
     ]);
+});
+
+test('teams created via the create team modal disallow anonymous ideas by default', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Test Team')
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $team = Team::where('name', 'Test Team')->firstOrFail();
+
+    expect($team->allowsAnonymousIdeas())->toBeFalse();
+});
+
+test('anonymous ideas can be allowed when creating a team', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Allows Anon Team')
+        ->set('allowAnonymousIdeas', true)
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $team = Team::where('name', 'Allows Anon Team')->firstOrFail();
+
+    expect($team->allowsAnonymousIdeas())->toBeTrue();
 });
 
 test('team slug uses next available suffix', function () {

@@ -9,17 +9,19 @@ use Livewire\Component;
 new class extends Component {
     public string $teamName = '';
 
+    public bool $allowAnonymousIdeas = false;
+
     public function createTeam(CreateTeam $createTeam): void
     {
         $validated = $this->validate([
             'teamName' => ['required', 'string', 'max:255', new TeamName],
         ]);
 
-        $team = $createTeam->handle(Auth::user(), $validated['teamName']);
+        $team = $createTeam->handle(Auth::user(), $validated['teamName'], allowAnonymousIdeas: $this->allowAnonymousIdeas);
 
         $this->dispatch('close-modal', name: 'create-team-switcher');
 
-        $this->reset('teamName');
+        $this->reset('teamName', 'allowAnonymousIdeas');
 
         Flux::toast(variant: 'success', text: __('Team created.'));
 
@@ -35,6 +37,12 @@ new class extends Component {
         </div>
 
         <flux:input wire:model="teamName" :label="__('Team name')" type="text" required autofocus data-test="switcher-create-team-name" />
+
+        <flux:checkbox
+            wire:model="allowAnonymousIdeas"
+            :label="__('Allow anonymous posting of ideas')"
+            data-test="switcher-create-team-allow-anonymous-ideas"
+        />
 
         <div class="flex justify-end space-x-2 rtl:space-x-reverse">
             <flux:modal.close>

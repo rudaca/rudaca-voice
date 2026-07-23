@@ -15,17 +15,19 @@ use Livewire\Component;
 new #[Title('Teams')] class extends Component {
     public string $name = '';
 
+    public bool $allowAnonymousIdeas = false;
+
     public function createTeam(CreateTeam $createTeam): void
     {
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255', new TeamName],
         ]);
 
-        $team = $createTeam->handle(Auth::user(), $validated['name']);
+        $team = $createTeam->handle(Auth::user(), $validated['name'], allowAnonymousIdeas: $this->allowAnonymousIdeas);
 
         $this->dispatch('close-modal', name: 'create-team');
 
-        $this->reset('name');
+        $this->reset('name', 'allowAnonymousIdeas');
 
         Flux::toast(variant: 'success', text: __('Team created.'));
 
@@ -171,6 +173,12 @@ new #[Title('Teams')] class extends Component {
             </div>
 
             <flux:input wire:model="name" :label="__('Team name')" type="text" required autofocus data-test="create-team-name" />
+
+            <flux:checkbox
+                wire:model="allowAnonymousIdeas"
+                :label="__('Allow anonymous posting of ideas')"
+                data-test="create-team-allow-anonymous-ideas"
+            />
 
             <div class="flex justify-end space-x-2 rtl:space-x-reverse">
                 <flux:modal.close>

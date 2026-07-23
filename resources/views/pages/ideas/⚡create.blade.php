@@ -51,6 +51,15 @@ new #[Title('Submit idea')] class extends Component {
     }
 
     /**
+     * Whether the current team allows submitting ideas anonymously.
+     */
+    #[Computed]
+    public function allowsAnonymousIdeas(): bool
+    {
+        return $this->team->allowsAnonymousIdeas();
+    }
+
+    /**
      * Active board groups for the current team.
      *
      * @return Collection<int, \App\Models\IdeaBoardGroup>
@@ -169,7 +178,7 @@ new #[Title('Submit idea')] class extends Component {
             'slug' => $this->uniqueSlug($validated['title'], $team->id),
             'description' => $validated['description'],
             'status' => 'new',
-            'is_anonymous' => $this->is_anonymous,
+            'is_anonymous' => $team->allowsAnonymousIdeas() && $this->is_anonymous,
             'is_private' => $this->is_private,
         ]);
 
@@ -293,12 +302,14 @@ new #[Title('Submit idea')] class extends Component {
             <div class="space-y-3">
                 <flux:text class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ __('Visibility') }}</flux:text>
 
-                <flux:checkbox
-                    wire:model="is_anonymous"
-                    :label="__('Submit anonymously')"
-                    :description="__('Your name won\'t be shown to other employees.')"
-                    data-test="idea-anonymous"
-                />
+                @if ($this->allowsAnonymousIdeas)
+                    <flux:checkbox
+                        wire:model="is_anonymous"
+                        :label="__('Submit anonymously')"
+                        :description="__('Your name won\'t be shown to other employees.')"
+                        data-test="idea-anonymous"
+                    />
+                @endif
 
                 <flux:checkbox
                     wire:model="is_private"

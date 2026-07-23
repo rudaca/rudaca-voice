@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string $slug
  * @property bool $is_personal
+ * @property bool $allow_anonymous_ideas
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -30,7 +31,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, IdeaCategory> $categories
  * @property-read Collection<int, Idea> $ideas
  */
-#[Fillable(['name', 'slug', 'is_personal'])]
+#[Fillable(['name', 'slug', 'is_personal', 'allow_anonymous_ideas'])]
 class Team extends Model
 {
     /** @use HasFactory<TeamFactory> */
@@ -140,6 +141,14 @@ class Team extends Model
     }
 
     /**
+     * Whether members of this team may submit ideas anonymously.
+     */
+    public function allowsAnonymousIdeas(): bool
+    {
+        return $this->allow_anonymous_ideas;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -148,6 +157,7 @@ class Team extends Model
     {
         return [
             'is_personal' => 'boolean',
+            'allow_anonymous_ideas' => 'boolean',
         ];
     }
 

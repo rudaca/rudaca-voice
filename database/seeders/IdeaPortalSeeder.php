@@ -30,6 +30,7 @@ class IdeaPortalSeeder extends Seeder
             'name' => 'Ellison Travel',
             'slug' => 'ellison-travel',
             'is_personal' => false,
+            'allow_anonymous_ideas' => false,
         ]);
 
         // --- Users & memberships (starter-kit team_members structure) ---

@@ -2,6 +2,8 @@
 
 use App\Enums\TeamRole;
 use App\Models\Idea;
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -38,6 +40,50 @@ test('an employee can submit an idea scoped to their team', function () {
         ->and($idea->status)->toBe('new')
         ->and($idea->is_anonymous)->toBeTrue()
         ->and($idea->is_private)->toBeFalse();
+});
+
+test('the anonymous checkbox is visible when the team allows anonymous ideas', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.create')
+        ->assertSeeHtml('data-test="idea-anonymous"');
+});
+
+test('the anonymous checkbox is hidden when the team disallows anonymous ideas', function () {
+    $team = Team::factory()->disallowingAnonymousIdeas()->create();
+    $user = User::factory()->create();
+    $team->members()->attach($user, ['role' => TeamRole::Employee->value]);
+    $user->switchTeam($team);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.create')
+        ->assertDontSeeHtml('data-test="idea-anonymous"');
+});
+
+test('an idea cannot be submitted anonymously when the team disallows it, even if forced', function () {
+    $team = Team::factory()->disallowingAnonymousIdeas()->create();
+    $user = User::factory()->create();
+    $team->members()->attach($user, ['role' => TeamRole::Employee->value]);
+    $user->switchTeam($team);
+
+    ['group' => $group, 'board' => $board, 'category' => $category] = boardStack($team, $user);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.create')
+        ->set('board_group_id', (string) $group->id)
+        ->set('board_id', (string) $board->id)
+        ->set('category_id', (string) $category->id)
+        ->set('title', 'Idea submitted despite disabled anonymity')
+        ->set('description', 'The team does not allow anonymous ideas.')
+        ->set('is_anonymous', true)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $idea = Idea::where('team_id', $team->id)->first();
+
+    expect($idea)->not->toBeNull()
+        ->and($idea->is_anonymous)->toBeFalse();
 });
 
 test('idea slugs are unique within a team', function () {

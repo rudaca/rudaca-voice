@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Team;
+use App\Rules\TeamName;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -76,6 +77,17 @@ new #[Title('Organization settings')] class extends Component {
     public string $quickCategoryName = '';
 
     public string $quickCategoryBoardId = '';
+
+    // --- Team settings form (Settings tab) ---
+    public string $orgTeamName = '';
+
+    public bool $orgAllowAnonymousIdeas = true;
+
+    public function mount(): void
+    {
+        $this->orgTeamName = $this->team->name;
+        $this->orgAllowAnonymousIdeas = $this->team->allowsAnonymousIdeas();
+    }
 
     #[Computed]
     public function team(): Team
@@ -174,7 +186,29 @@ new #[Title('Organization settings')] class extends Component {
             'categoryBoardId' => __('board'),
             'quickCategoryName' => __('name'),
             'quickCategoryBoardId' => __('board'),
+            'orgTeamName' => __('team name'),
         ];
+    }
+
+    // ----- Team settings -----
+
+    public function saveTeamSettings(): void
+    {
+        $validated = $this->validate([
+            'orgTeamName' => ['required', 'string', 'max:255', new TeamName],
+            'orgAllowAnonymousIdeas' => ['boolean'],
+        ]);
+
+        $team = $this->team;
+
+        $team->update([
+            'name' => $validated['orgTeamName'],
+            'allow_anonymous_ideas' => $this->orgAllowAnonymousIdeas,
+        ]);
+
+        Flux::toast(variant: 'success', text: __('Team settings saved.'));
+
+        $this->redirectRoute('ideas.settings', ['current_team' => $team->fresh()->slug, 'tab' => 'settings'], navigate: true);
     }
 
     // ----- Board groups -----
@@ -423,7 +457,7 @@ new #[Title('Organization settings')] class extends Component {
     {{-- Tabs --}}
     <x-sticky-toolbar class="mt-6">
         <nav
-            class="relative -mb-px flex gap-6"
+            class="relative -mb-px flex gap-6 border-b border-zinc-200 dark:border-zinc-700"
             data-tab="{{ $tab }}"
             x-data="{
                 tab: null,
@@ -443,7 +477,13 @@ new #[Title('Organization settings')] class extends Component {
                 :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
             ></div>
 
-            @foreach (['boards' => __('Boards'), 'categories' => __('Categories'), 'members' => __('Members'), 'integrations' => __('Integrations')] as $key => $label)
+            @foreach ([
+                'boards' => __('Boards'),
+                'categories' => __('Categories'),
+                'members' => __('Members'),
+                // 'integrations' => __('Integrations'), // hidden — replaced by the Settings tab
+                'settings' => __('Settings'),
+            ] as $key => $label)
                 <button
                     type="button"
                     x-ref="tab-{{ $key }}"
@@ -466,7 +506,8 @@ new #[Title('Organization settings')] class extends Component {
         @switch($tab)
             @case('categories'){{ __('Categories classify ideas within a board.') }}@break
             @case('members'){{ __('People with access to this organization.') }}@break
-            @case('integrations'){{ __('Connect external tools to your idea workflow.') }}@break
+            {{-- @case('integrations'){{ __('Connect external tools to your idea workflow.') }}@break --}}
+            @case('settings'){{ __('Manage your team\'s name and idea submission preferences.') }}@break
             @default{{ __('Boards are where employees submit ideas. Assign each board to a group.') }}
         @endswitch
     </flux:text>
@@ -591,7 +632,8 @@ new #[Title('Organization settings')] class extends Component {
         </div>
     @endif
 
-    {{-- Integrations --}}
+    {{--
+        Integrations — hidden for now, replaced by the Settings tab below.
     @if ($tab === 'integrations')
         <div class="mt-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
             <div class="flex items-center justify-between gap-4">
@@ -617,6 +659,32 @@ new #[Title('Organization settings')] class extends Component {
                 </div>
                 <flux:switch :checked="false" disabled data-test="integration-auto-create" />
             </div>
+        </div>
+    @endif
+    --}}
+
+    {{-- Settings --}}
+    @if ($tab === 'settings')
+        <div class="mt-5 max-w-lg">
+            <form wire:submit="saveTeamSettings" class="space-y-6">
+                <flux:input
+                    wire:model="orgTeamName"
+                    :label="__('Team name')"
+                    required
+                    data-test="org-team-name-input"
+                />
+
+                <flux:checkbox
+                    wire:model="orgAllowAnonymousIdeas"
+                    :label="__('Allow anonymous posting of ideas')"
+                    :description="__('When disabled, employees won\'t see the option to submit ideas anonymously.')"
+                    data-test="org-allow-anonymous-ideas"
+                />
+
+                <flux:button variant="primary" type="submit" data-test="org-settings-save-button">
+                    {{ __('Save') }}
+                </flux:button>
+            </form>
         </div>
     @endif
 
@@ -679,20 +747,23 @@ new #[Title('Organization settings')] class extends Component {
     <flux:modal name="board" class="max-w-lg" data-test="board-modal">
         <form wire:submit="saveBoard" class="space-y-5">
             <flux:heading size="lg">{{ $boardId ? __('Edit board') : __('New board') }}</flux:heading>
-            <flux:input wire:model="boardName" :label="__('Name')" required />
-            <flux:input wire:model="boardSlug" :label="__('Slug')" :description="__('Leave blank to generate from the name.')" />
-            <flux:textarea wire:model="boardDescription" :label="__('Description')" rows="2" />
-            <flux:select wire:model="boardGroupId" :label="__('Board group')" :placeholder="__('No group')">
+            <flux:input wire:model="boardName" :label="__('Name')" required data-test="board-name-input" />
+            <flux:select wire:model="boardGroupId" :label="__('Board group')" :placeholder="__('No group')" data-test="board-group-select">
                 @foreach ($this->assignableBoardGroups as $group)
                     <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
                 @endforeach
             </flux:select>
-            <flux:select wire:model="boardVisibility" :label="__('Visibility')">
-                @foreach (self::VISIBILITY_OPTIONS as $value => $label)
-                    <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                @endforeach
-            </flux:select>
-            <flux:checkbox wire:model="boardIsActive" :label="__('Active')" />
+
+            @if ($boardId)
+                <flux:input wire:model="boardSlug" :label="__('Slug')" :description="__('Leave blank to generate from the name.')" />
+                <flux:textarea wire:model="boardDescription" :label="__('Description')" rows="2" />
+                <flux:select wire:model="boardVisibility" :label="__('Visibility')">
+                    @foreach (self::VISIBILITY_OPTIONS as $value => $label)
+                        <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+                <flux:checkbox wire:model="boardIsActive" :label="__('Active')" />
+            @endif
             <div class="flex justify-end gap-2">
                 <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
                 <flux:button variant="primary" type="submit" data-test="save-board">{{ __('Save') }}</flux:button>

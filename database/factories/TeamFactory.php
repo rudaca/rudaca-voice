@@ -24,6 +24,7 @@ class TeamFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name),
             'is_personal' => false,
+            'allow_anonymous_ideas' => true,
         ];
     }
 
@@ -34,6 +35,16 @@ class TeamFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_personal' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the team does not allow anonymous idea submissions.
+     */
+    public function disallowingAnonymousIdeas(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'allow_anonymous_ideas' => false,
         ]);
     }
 

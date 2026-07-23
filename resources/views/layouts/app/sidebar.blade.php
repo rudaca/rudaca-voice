@@ -91,10 +91,6 @@
                         @endif
 
                         @if ($__canManageBoards)
-                            <flux:sidebar.item icon="cog" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
-                                {{ __('Organization') }}
-                            </flux:sidebar.item>
-
                             <flux:sidebar.item
                                 icon="chat-bubble-left-right"
                                 :href="route('ideas.moderate-comments')"
@@ -102,6 +98,10 @@
                                 wire:navigate
                             >
                                 {{ __('Moderate Comments') }}
+                            </flux:sidebar.item>
+
+                            <flux:sidebar.item icon="cog" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
+                                {{ __('Organization Settings') }}
                             </flux:sidebar.item>
                         @endif
                     </div>
