@@ -124,6 +124,10 @@ new #[Title('Dashboard')] class extends Component {
      */
     private function forYouStats(): array
     {
+        if ($this->role?->isAtLeast(TeamRole::Admin)) {
+            return $this->adminStats();
+        }
+
         if ($this->role === TeamRole::Manager) {
             return $this->managerStats();
         }
@@ -198,6 +202,44 @@ new #[Title('Dashboard')] class extends Component {
                 'value' => $team->ideas()->count(),
                 'caption' => __('across all boards'),
                 'dot' => 'bg-slate-500',
+            ],
+        ];
+    }
+
+    /**
+     * Organization-wide "For You" cards for Admins and Owners: headline
+     * counts across the whole team, rather than personal participation.
+     *
+     * @return array<int, array{label: string, value: int, caption: string, dot: string, caption_bold?: bool}>
+     */
+    private function adminStats(): array
+    {
+        $team = $this->team;
+
+        return [
+            [
+                'label' => __('Total ideas'),
+                'value' => $team->ideas()->count(),
+                'caption' => __('all time'),
+                'dot' => 'bg-indigo-500',
+            ],
+            [
+                'label' => __('Members'),
+                'value' => $team->memberships()->count(),
+                'caption' => __('in :team', ['team' => $team->name]),
+                'dot' => 'bg-rose-500',
+            ],
+            [
+                'label' => __('Awaiting review'),
+                'value' => $team->ideas()->whereIn('status', ['new', 'under_review'])->count(),
+                'caption' => __('need a decision'),
+                'dot' => 'bg-amber-500',
+            ],
+            [
+                'label' => __('Implemented'),
+                'value' => $team->ideas()->where('status', 'released')->count(),
+                'caption' => __('shipped'),
+                'dot' => 'bg-emerald-500',
             ],
         ];
     }
@@ -294,6 +336,25 @@ new #[Title('Dashboard')] class extends Component {
     }
 
     /**
+     * The team's highest-voted ideas across every status. Shown to Admins
+     * and Owners in place of "Trending ideas", as an org-wide pulse check.
+     *
+     * @return Collection<int, \App\Models\Idea>
+     */
+    #[Computed]
+    public function highestVoted(): Collection
+    {
+        return $this->team->ideas()
+            ->with('board:id,name')
+            ->withCount(['votes', 'comments'])
+            ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
+            ->orderByDesc('votes_count')
+            ->orderByDesc('id')
+            ->limit(4)
+            ->get();
+    }
+
+    /**
      * Active boards for the current team with their idea counts.
      *
      * @return Collection<int, \App\Models\IdeaBoard>
@@ -357,16 +418,31 @@ new #[Title('Dashboard')] class extends Component {
 
         {{-- Trending (left) + Boards (right) --}}
         <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.6fr_1fr]">
-            {{-- Trending ideas / Top of the queue --}}
-            @php($isQueueView = $this->role === TeamRole::Manager)
+            {{-- Trending ideas / Top of the queue / Highest voted --}}
+            @php($panelMode = match (true) {
+                $this->role?->isAtLeast(TeamRole::Admin) => 'admin',
+                $this->role === TeamRole::Manager => 'manager',
+                default => 'personal',
+            })
             <div>
                 <div class="mb-3 flex items-center justify-between">
-                    <flux:heading size="lg">{{ $isQueueView ? __('Top of the queue') : __('Trending ideas') }}</flux:heading>
-                    <flux:link :href="$isQueueView ? route('ideas.review') : route('ideas.index', ['sort' => 'top'])" wire:navigate variant="subtle" class="text-sm">{{ __('View all →') }}</flux:link>
+                    <flux:heading size="lg">
+                        {{ match ($panelMode) {
+                            'admin' => __('Highest voted'),
+                            'manager' => __('Top of the queue'),
+                            default => __('Trending ideas'),
+                        } }}
+                    </flux:heading>
+                    <flux:link
+                        :href="$panelMode === 'manager' ? route('ideas.review') : route('ideas.index', ['sort' => 'top'])"
+                        wire:navigate
+                        variant="subtle"
+                        class="text-sm"
+                    >{{ __('View all →') }}</flux:link>
                 </div>
 
                 <div class="space-y-3">
-                    @forelse (($isQueueView ? $this->queueTop : $this->trending) as $idea)
+                    @forelse (($panelMode === 'admin' ? $this->highestVoted : ($panelMode === 'manager' ? $this->queueTop : $this->trending)) as $idea)
                         @php($meta = $this->statusMeta($idea->status))
                         <div
                             class="flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:border-indigo-200 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60"
@@ -413,7 +489,7 @@ new #[Title('Dashboard')] class extends Component {
                         <div class="rounded-xl border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
                             <flux:icon.light-bulb class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
                             <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
-                                {{ $isQueueView ? __('Queue is clear — nothing needs a decision right now.') : __('No ideas yet — be the first to submit one.') }}
+                                {{ $panelMode === 'manager' ? __('Queue is clear — nothing needs a decision right now.') : __('No ideas yet — be the first to submit one.') }}
                             </flux:text>
                         </div>
                     @endforelse

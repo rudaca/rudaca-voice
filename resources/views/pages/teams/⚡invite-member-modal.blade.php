@@ -68,11 +68,22 @@ new class extends Component {
         <div class="space-y-4">
             <flux:input wire:model="inviteEmail" type="email" :label="__('Email address')" required data-test="invite-email" />
 
-            <flux:select wire:model="inviteRole" :label="__('Role')" data-test="invite-role">
+            <flux:select wire:model.live="inviteRole" :label="__('Role')" data-test="invite-role">
                 @foreach ($this->availableRoles as $role)
                     <flux:select.option value="{{ $role['value'] }}">{{ $role['label'] }}</flux:select.option>
                 @endforeach
             </flux:select>
+
+            @if ($selectedRole = TeamRole::tryFrom($inviteRole))
+                <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-800" data-test="invite-role-description">
+                    <flux:text class="font-medium text-zinc-900 dark:text-zinc-100">{{ $selectedRole->description() }}</flux:text>
+                    <ul class="mt-2 list-disc space-y-1 ps-4 text-zinc-600 dark:text-zinc-400">
+                        @foreach ($selectedRole->permissionSummary() as $permission)
+                            <li>{{ $permission }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
         </div>
 
         <div class="flex justify-end space-x-2 rtl:space-x-reverse">

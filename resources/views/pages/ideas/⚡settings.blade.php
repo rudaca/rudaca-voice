@@ -42,6 +42,12 @@ new #[Title('Organization Settings')] class extends Component {
 
     public string $groupSlug = '';
 
+    /**
+     * The last slug we auto-generated from the name, so we know whether the
+     * slug field still tracks the name or the user has since typed their own.
+     */
+    public string $groupAutoSlug = '';
+
     public string $groupDescription = '';
 
     public bool $groupIsActive = true;
@@ -233,7 +239,7 @@ new #[Title('Organization Settings')] class extends Component {
 
     public function newBoardGroup(): void
     {
-        $this->reset('groupId', 'groupName', 'groupSlug', 'groupDescription', 'groupIsActive');
+        $this->reset('groupId', 'groupName', 'groupSlug', 'groupAutoSlug', 'groupDescription', 'groupIsActive');
         $this->resetValidation();
         $this->dispatch('modal-show', name: 'board-group');
     }
@@ -245,11 +251,24 @@ new #[Title('Organization Settings')] class extends Component {
         $this->groupId = $group->id;
         $this->groupName = $group->name;
         $this->groupSlug = $group->slug;
+        $this->groupAutoSlug = Str::slug($group->name);
         $this->groupDescription = $group->description ?? '';
         $this->groupIsActive = $group->is_active;
 
         $this->resetValidation();
         $this->dispatch('modal-show', name: 'board-group');
+    }
+
+    /**
+     * Keep the slug field in sync as the admin types the group name, as long
+     * as they haven't since typed a custom slug of their own.
+     */
+    public function updatedGroupName(): void
+    {
+        if ($this->groupSlug === '' || $this->groupSlug === $this->groupAutoSlug) {
+            $this->groupAutoSlug = Str::slug($this->groupName);
+            $this->groupSlug = $this->groupAutoSlug;
+        }
     }
 
     public function saveBoardGroup(): void
@@ -821,8 +840,8 @@ new #[Title('Organization Settings')] class extends Component {
     <flux:modal name="board-group" class="w-full max-w-xl" :dismissible="false" data-test="group-modal">
         <form wire:submit="saveBoardGroup" class="space-y-5">
             <flux:heading size="lg">{{ $groupId ? __('Edit board group') : __('New board group') }}</flux:heading>
-            <flux:input wire:model="groupName" :label="__('Name')" required />
-            <flux:input wire:model="groupSlug" :label="__('Slug')" :description="__('Leave blank to generate from the name.')" />
+            <flux:input wire:model.live="groupName" :label="__('Name')" required data-test="group-name-input" />
+            <flux:input wire:model="groupSlug" :label="__('Slug')" :description="__('Automatically generated from the name — feel free to customize it.')" data-test="group-slug-input" />
             <flux:textarea wire:model="groupDescription" :label="__('Description')" rows="2" />
             <flux:checkbox wire:model="groupIsActive" :label="__('Active')" />
             <div class="flex justify-end gap-2">

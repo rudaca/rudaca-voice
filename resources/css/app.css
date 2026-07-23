@@ -84,13 +84,15 @@ Hide the global breadcrumbs bar entirely on pages that don't push any breadcrumb
 /*
 Flux's sidebar layout places every direct <body> child into a fixed grid
 template ("header" row, then "sidebar main aside", then "sidebar footer aside").
-The breadcrumbs bar has no grid-area of its own, so without this override the
-grid's auto-placement algorithm drops it into the empty "aside" cell instead of
-flowing in its own row below the header.
+The breadcrumbs bar and the "view as" banner both have no grid-area of their
+own, so without this override the grid's auto-placement algorithm drops them
+into the empty "aside" cell instead of flowing in their own row above/below
+the header.
 */
 body:has(> [data-flux-main]) {
-    grid-template-rows: auto auto 1fr auto !important;
+    grid-template-rows: auto auto auto 1fr auto !important;
     grid-template-areas:
+        "sidebar viewas      viewas"
         "sidebar header      header"
         "sidebar breadcrumbs breadcrumbs"
         "sidebar main        aside"
@@ -99,6 +101,10 @@ body:has(> [data-flux-main]) {
 
 #breadcrumbs-bar {
     grid-area: breadcrumbs;
+}
+
+#view-as-banner {
+    grid-area: viewas;
 }
 
 /*

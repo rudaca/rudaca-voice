@@ -156,6 +156,51 @@ test('an employee still sees Trending ideas and personal For You cards', functio
         ->assertDontSeeText('Awaiting review');
 });
 
+test('an admin/owner sees organization-wide For You cards instead of the personal participation cards', function (TeamRole $role) {
+    ['team' => $team, 'user' => $admin] = teamWithMember($role);
+    $team->members()->attach(User::factory()->count(2)->create(), ['role' => TeamRole::Employee->value]);
+
+    makeIdea($team, ['status' => 'new']);
+    makeIdea($team, ['status' => 'under_review']);
+    makeIdea($team, ['status' => 'released']);
+
+    Livewire::actingAs($admin)
+        ->test('pages::dashboard')
+        ->assertSeeText('Total ideas')
+        ->assertSeeText('all time')
+        ->assertSeeText('Members')
+        ->assertSeeText("in {$team->name}")
+        ->assertSeeText('Awaiting review')
+        ->assertSeeText('need a decision')
+        ->assertSeeText('Implemented')
+        ->assertSeeText('shipped')
+        ->assertDontSeeText('Your ideas')
+        ->assertDontSeeText('Votes cast');
+})->with([
+    'admin' => TeamRole::Admin,
+    'owner' => TeamRole::Owner,
+]);
+
+test('an admin/owner sees Highest voted instead of Trending ideas, ranked by votes across every status', function (TeamRole $role) {
+    ['team' => $team, 'user' => $admin] = teamWithMember($role);
+
+    $lowVotes = makeIdea($team, ['status' => 'in_progress', 'title' => 'Low votes idea']);
+    $highVotes = makeIdea($team, ['status' => 'released', 'title' => 'High votes idea']);
+
+    IdeaVote::factory()->count(1)->for($lowVotes)->create();
+    IdeaVote::factory()->count(5)->for($highVotes)->create();
+
+    Livewire::actingAs($admin)
+        ->test('pages::dashboard')
+        ->assertSeeText('Highest voted')
+        ->assertDontSeeText('Trending ideas')
+        ->assertDontSeeText('Top of the queue')
+        ->assertSeeInOrder(['High votes idea', 'Low votes idea']);
+})->with([
+    'admin' => TeamRole::Admin,
+    'owner' => TeamRole::Owner,
+]);
+
 test('a viewer does not see the For You / By Status tab toggle', function () {
     ['user' => $viewer] = teamWithMember(TeamRole::Viewer);
 

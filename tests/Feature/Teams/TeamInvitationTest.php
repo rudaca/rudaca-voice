@@ -31,6 +31,26 @@ test('team invitations can be created', function () {
     ]);
 });
 
+test('invite modal shows role description and permissions', function () {
+    $owner = User::factory()->create();
+    $team = Team::factory()->create();
+
+    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+
+    $this->actingAs($owner);
+
+    Livewire::test('pages::teams.invite-member-modal', ['team' => $team])
+        ->set('inviteRole', TeamRole::Admin->value)
+        ->assertSee('Can manage most operational settings.')
+        ->assertSee('Manage boards')
+        ->assertSee('Moderate comments')
+        ->set('inviteRole', TeamRole::Manager->value)
+        ->assertSee('Can review and prioritize ideas.')
+        ->assertSee('Add internal comments')
+        ->assertSee('Set priority, impact, and effort')
+        ->assertDontSee('Moderate comments');
+});
+
 test('team invitations cannot be created by members', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();

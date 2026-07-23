@@ -482,14 +482,14 @@ new #[Title('Idea')] class extends Component {
                 size="sm"
                 icon="hand-thumb-up"
                 icon:trailing="chevron-down"
-                class="border-indigo-700! text-indigo-700! hover:bg-indigo-50! dark:border-indigo-400! dark:text-indigo-400! dark:hover:bg-indigo-500/10!"
+                class="border-slate-500! text-slate-500! hover:bg-slate-50! dark:border-slate-400! dark:text-slate-400! dark:hover:bg-slate-500/10!"
                 data-test="who-voted-trigger"
             >
                 {{ __('Who voted') }}
             </flux:button>
 
             <flux:menu class="min-w-80">
-                <div class="max-h-64 overflow-y-auto">
+                <div class="max-h-98 overflow-y-auto">
                     @forelse ($this->voters as $vote)
                         <flux:menu.item class="cursor-default" wire:key="voter-{{ $vote->id }}">
                             <div class="flex items-center gap-2">
@@ -677,61 +677,71 @@ new #[Title('Idea')] class extends Component {
         <aside class="space-y-4">
             {{-- Manage panel (owner/admin/manager only) --}}
             @if ($this->canManage)
-                <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900" data-test="manage-panel">
-                    <flux:heading size="sm">{{ __('Manage idea') }}</flux:heading>
+                <ui-disclosure class="group/disclosure block overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900" data-test="manage-panel">
+                    <button type="button" class="group/disclosure-button flex w-full items-center justify-between p-5" data-test="manage-panel-toggle">
+                        <flux:heading size="sm">{{ __('Manage idea') }}</flux:heading>
+                        <flux:icon.chevron-right class="size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:hidden rtl:rotate-180" />
+                        <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:block" />
+                    </button>
 
-                    <form wire:submit="updateManagement" class="mt-4 space-y-4">
-                        <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
-                            @foreach (self::STATUS_META as $value => $statusMeta)
-                                <flux:select.option value="{{ $value }}">{{ $statusMeta['label'] }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
+                    <div class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out data-open:grid-rows-[1fr]">
+                        <div class="overflow-hidden">
+                            <div class="px-5 pb-5">
+                                <form wire:submit="updateManagement" class="space-y-4">
+                                    <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
+                                        @foreach (self::STATUS_META as $value => $statusMeta)
+                                            <flux:select.option value="{{ $value }}">{{ $statusMeta['label'] }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
 
-                        <flux:select wire:model="priority" :label="__('Priority')" size="sm" data-test="manage-priority">
-                            @foreach (self::PRIORITY_OPTIONS as $value => $label)
-                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
+                                    <flux:select wire:model="priority" :label="__('Priority')" size="sm" data-test="manage-priority">
+                                        @foreach (self::PRIORITY_OPTIONS as $value => $label)
+                                            <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
 
-                        <flux:select wire:model="impact" :label="__('Impact')" size="sm" data-test="manage-impact">
-                            @foreach (self::IMPACT_OPTIONS as $value => $label)
-                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
+                                    <flux:select wire:model="impact" :label="__('Impact')" size="sm" data-test="manage-impact">
+                                        @foreach (self::IMPACT_OPTIONS as $value => $label)
+                                            <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
 
-                        <flux:select wire:model="effort" :label="__('Effort')" size="sm" data-test="manage-effort">
-                            @foreach (self::EFFORT_OPTIONS as $value => $label)
-                                <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
+                                    <flux:select wire:model="effort" :label="__('Effort')" size="sm" data-test="manage-effort">
+                                        @foreach (self::EFFORT_OPTIONS as $value => $label)
+                                            <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
 
-                        <flux:textarea
-                            wire:model="statusNote"
-                            :label="__('Status note (optional)')"
-                            rows="2"
-                            :placeholder="__('Added to the activity log when the status changes')"
-                            data-test="manage-note"
-                        />
+                                    <flux:textarea
+                                        wire:model="statusNote"
+                                        :label="__('Status note (optional)')"
+                                        rows="2"
+                                        :placeholder="__('Added to the activity log when the status changes')"
+                                        data-test="manage-note"
+                                    />
 
-                        <flux:button variant="primary" type="submit" size="sm" class="w-full" wire:loading.attr="disabled" data-test="manage-save">
-                            {{ __('Save changes') }}
-                        </flux:button>
-                    </form>
+                                    <flux:button variant="primary" type="submit" size="sm" class="w-full" wire:loading.attr="disabled" data-test="manage-save">
+                                        {{ __('Save changes') }}
+                                    </flux:button>
+                                </form>
 
-                    <flux:separator class="my-4" variant="subtle" />
+                                <flux:separator class="my-4" variant="subtle" />
 
-                    <flux:button wire:click="openMarkDuplicate" variant="ghost" size="sm" class="w-full" icon="document-duplicate" data-test="open-mark-duplicate">
-                        {{ __('Mark as duplicate') }}
-                    </flux:button>
+                                <flux:button wire:click="openMarkDuplicate" variant="ghost" size="sm" class="w-full bg-slate-100!" icon="document-duplicate" data-test="open-mark-duplicate">
+                                    {{ __('Mark as duplicate') }}
+                                </flux:button>
 
-                    @if ($this->canDelete)
-                        <flux:modal.trigger name="delete-idea">
-                            <flux:button variant="danger" size="sm" class="mt-2 w-full" icon="trash" data-test="delete-idea-button">
-                                {{ __('Delete idea') }}
-                            </flux:button>
-                        </flux:modal.trigger>
-                    @endif
-                </div>
+                                @if ($this->canDelete)
+                                    <flux:modal.trigger name="delete-idea">
+                                        <flux:button variant="danger" size="sm" class="mt-2 w-full" icon="trash" data-test="delete-idea-button">
+                                            {{ __('Delete idea') }}
+                                        </flux:button>
+                                    </flux:modal.trigger>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </ui-disclosure>
 
                 @if ($this->canDelete)
                     {{-- Delete idea modal --}}
@@ -773,37 +783,45 @@ new #[Title('Idea')] class extends Component {
             @endif
 
             {{-- Activity timeline --}}
-            <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
-                <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
+            <ui-disclosure open class="group/disclosure block overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+                <button type="button" class="group/disclosure-button flex w-full items-center justify-between p-5" data-test="activity-panel-toggle">
+                    <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
+                    <flux:icon.chevron-right class="size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:hidden rtl:rotate-180" />
+                    <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:block" />
+                </button>
 
-                <div class="mt-4">
-                    @forelse ($this->statusHistory as $entry)
-                        @php($entryMeta = $this->statusMeta($entry->new_status))
-                        <div class="flex gap-3" wire:key="history-{{ $entry->id }}">
-                            <div class="flex flex-col items-center">
-                                <span class="mt-1.5 size-2.5 shrink-0 rounded-full {{ $loop->first ? 'bg-indigo-500' : 'bg-zinc-300 dark:bg-zinc-600' }}"></span>
-                                @unless ($loop->last)
-                                    <span class="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
-                                @endunless
-                            </div>
-                            <div class="min-w-0 flex-1 {{ $loop->last ? '' : 'pb-4' }}">
-                                <flux:badge :color="$entryMeta['color']" size="sm" class="{{ $entryMeta['class'] ?? '' }}">{{ $entryMeta['label'] }}</flux:badge>
-                                @if ($entry->note)
-                                    <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{{ $entry->note }}</p>
-                                @endif
-                                <p class="mt-1 text-xs text-slate-500">
-                                    {{ $entry->changedBy?->name ?? __('Unknown') }}
-                                    @if ($entry->created_at)
-                                        · {{ $entry->created_at->diffForHumans() }}
-                                    @endif
-                                </p>
-                            </div>
+                <div class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out data-open:grid-rows-[1fr]" data-open>
+                    <div class="overflow-hidden">
+                        <div class="px-5 pb-5">
+                            @forelse ($this->statusHistory as $entry)
+                                @php($entryMeta = $this->statusMeta($entry->new_status))
+                                <div class="flex gap-3" wire:key="history-{{ $entry->id }}">
+                                    <div class="flex flex-col items-center">
+                                        <span class="mt-1.5 size-2.5 shrink-0 rounded-full {{ $loop->first ? 'bg-indigo-500' : 'bg-zinc-300 dark:bg-zinc-600' }}"></span>
+                                        @unless ($loop->last)
+                                            <span class="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
+                                        @endunless
+                                    </div>
+                                    <div class="min-w-0 flex-1 {{ $loop->last ? '' : 'pb-4' }}">
+                                        <flux:badge :color="$entryMeta['color']" size="sm" class="{{ $entryMeta['class'] ?? '' }}">{{ $entryMeta['label'] }}</flux:badge>
+                                        @if ($entry->note)
+                                            <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{{ $entry->note }}</p>
+                                        @endif
+                                        <p class="mt-1 text-xs text-slate-500">
+                                            {{ $entry->changedBy?->name ?? __('Unknown') }}
+                                            @if ($entry->created_at)
+                                                · {{ $entry->created_at->diffForHumans() }}
+                                            @endif
+                                        </p>
+                                    </div>
+                                </div>
+                            @empty
+                                <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('No activity yet.') }}</flux:text>
+                            @endforelse
                         </div>
-                    @empty
-                        <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('No activity yet.') }}</flux:text>
-                    @endforelse
+                    </div>
                 </div>
-            </div>
+            </ui-disclosure>
 
             {{-- Duplicates of this idea --}}
             @if ($this->duplicatesList->isNotEmpty())

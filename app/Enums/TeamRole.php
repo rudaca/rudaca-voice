@@ -28,6 +28,66 @@ enum TeamRole: string
     }
 
     /**
+     * Get a short summary of what the role can do, for display alongside
+     * the role picker when inviting or changing a member's role.
+     */
+    public function description(): string
+    {
+        return match ($this) {
+            self::Owner => __('Can manage everything in the organization.'),
+            self::Admin => __('Can manage most operational settings.'),
+            self::Manager => __('Can review and prioritize ideas.'),
+            self::Employee, self::Member => __('Can submit and participate.'),
+            self::Viewer => __('Read-only access.'),
+        };
+    }
+
+    /**
+     * Get the human-readable list of permissions for the role, for display
+     * alongside the role picker when inviting or changing a member's role.
+     *
+     * @return array<int, string>
+     */
+    public function permissionSummary(): array
+    {
+        return match ($this) {
+            self::Owner => [
+                __('Manage organization settings'),
+                __('Manage users'),
+                __('Manage boards'),
+                __('Manage categories'),
+                __('Manage all ideas'),
+                __('Change statuses'),
+                __('Delete ideas/comments if needed'),
+            ],
+            self::Admin => [
+                __('Manage boards'),
+                __('Manage categories'),
+                __('Review ideas'),
+                __('Change statuses'),
+                __('Moderate comments'),
+            ],
+            self::Manager => [
+                __('View ideas'),
+                __('Comment'),
+                __('Add internal comments'),
+                __('Update idea status'),
+                __('Set priority, impact, and effort'),
+            ],
+            self::Employee, self::Member => [
+                __('Submit ideas'),
+                __('Vote on ideas'),
+                __('Comment on ideas'),
+                __('View visible boards and ideas'),
+            ],
+            self::Viewer => [
+                __('View visible boards and ideas'),
+                __('No voting or commenting'),
+            ],
+        };
+    }
+
+    /**
      * Get all the permissions for this role.
      *
      * @return array<TeamPermission>

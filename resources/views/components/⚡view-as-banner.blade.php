@@ -14,11 +14,11 @@ new class extends Component {
     {
         $this->activeSession()?->end(ViewAsSessionEndReason::Manual);
 
-        $this->redirect(route('home'));
+        $this->js('window.location.reload()');
     }
 }; ?>
 
-<div>
+<div id="view-as-banner">
     @if ($session = $this->activeSession())
         <div
             class="flex w-full items-center justify-center gap-3 bg-amber-500 px-4 py-2 text-sm font-medium text-white dark:bg-amber-600"

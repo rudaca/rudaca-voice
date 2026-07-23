@@ -83,6 +83,50 @@ test('the Settings tab requires a team name', function () {
     expect($team->fresh()->name)->toBe($team->name);
 });
 
+test('the new board group modal auto-fills the slug as the admin types the name', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'groups')
+        ->call('newBoardGroup')
+        ->set('groupName', 'Customer Success')
+        ->assertSet('groupSlug', 'customer-success')
+        ->call('saveBoardGroup')
+        ->assertHasNoErrors();
+
+    $group = IdeaBoardGroup::where('team_id', $team->id)->where('name', 'Customer Success')->firstOrFail();
+
+    expect($group->slug)->toBe('customer-success');
+});
+
+test('typing a custom group slug stops it from being overwritten as the name keeps changing', function () {
+    ['user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'groups')
+        ->call('newBoardGroup')
+        ->set('groupName', 'Customer Success')
+        ->assertSet('groupSlug', 'customer-success')
+        ->set('groupSlug', 'cx-team')
+        ->set('groupName', 'Customer Success Team')
+        ->assertSet('groupSlug', 'cx-team');
+});
+
+test('editing an existing board group keeps its custom slug in sync only until the name diverges from it', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $group = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'name' => 'Ops', 'slug' => 'custom-ops-slug']);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'groups')
+        ->call('editBoardGroup', $group->id)
+        ->assertSet('groupSlug', 'custom-ops-slug')
+        ->set('groupName', 'Operations')
+        ->assertSet('groupSlug', 'custom-ops-slug');
+});
+
 test('opening the new board modal dispatches the event Flux actually listens for', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
 

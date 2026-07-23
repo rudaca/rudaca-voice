@@ -101,7 +101,8 @@ test('exiting the banner ends the session and reverts auth', function () {
     $this->actingAs($superAdmin);
     app(StartViewAsSession::class)->handle($superAdmin, $employee, $team, TeamRole::Employee);
 
-    Livewire::test('view-as-banner')->call('exit');
+    $component = Livewire::test('view-as-banner')->call('exit');
 
-    expect(Auth::id())->toBe($superAdmin->id);
+    expect(Auth::id())->toBe($superAdmin->id)
+        ->and($component->effects)->not->toHaveKey('redirect');
 });
