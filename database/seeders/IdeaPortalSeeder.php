@@ -54,6 +54,10 @@ class IdeaPortalSeeder extends Seeder
         ])->map(fn (string $email, string $name) => $this->addMember($team, $name, $email, TeamRole::Employee))
             ->values();
 
+        // Viewers and employees can't create or own a team, so drop the
+        // personal team the User factory automatically creates for them.
+        collect([$viewer])->merge($employees)->each($this->removePersonalTeam(...));
+
         $contributors = $employees->push($manager);            // people who submit ideas
         $reviewers = collect([$owner, $admin, $manager]);       // people who review / change status
         $allUsers = $employees->merge([$owner, $admin, $viewer])->unique('id')->values();
@@ -288,6 +292,22 @@ class IdeaPortalSeeder extends Seeder
         $user->switchTeam($team);
 
         return $user;
+    }
+
+    /**
+     * Delete the personal team the User factory automatically creates,
+     * along with the user's membership in it.
+     */
+    private function removePersonalTeam(User $user): void
+    {
+        $personalTeam = $user->personalTeam();
+
+        if (! $personalTeam) {
+            return;
+        }
+
+        $personalTeam->memberships()->delete();
+        $personalTeam->delete();
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Enums\TeamPermission;
+use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
 
@@ -26,10 +27,16 @@ class TeamPolicy
 
     /**
      * Determine whether the user can create models.
+     *
+     * Viewers and employees are restricted to the team(s) they're added to
+     * and may not create their own; everyone else (including users with no
+     * current team yet) may.
      */
     public function create(User $user): bool
     {
-        return true;
+        $role = $user->currentTeam ? $user->teamRole($user->currentTeam) : null;
+
+        return $role === null || $role->isAtLeast(TeamRole::Manager);
     }
 
     /**

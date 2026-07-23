@@ -55,7 +55,7 @@ new #[Title('Dashboard')] class extends Component {
     {
         return match (true) {
             $this->role?->isAtLeast(TeamRole::Admin) => __('Organization Overview'),
-            $this->role === TeamRole::Manager => __('Team Ideas Overview'),
+            $this->role === TeamRole::Manager => __('Organization Ideas Overview'),
             default => __('Your Ideas Hub'),
         };
     }

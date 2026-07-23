@@ -1,6 +1,7 @@
 <?php
 
 use App\Data\UserTeam;
+use App\Enums\TeamRole;
 use App\Models\Team;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -29,6 +30,21 @@ new class extends Component {
     public function ownedTeams(): Collection
     {
         return Auth::user()->toUserTeams(includeCurrent: true);
+    }
+
+    /**
+     * Heading for the team list: "Owned Organization(s)" when the user is
+     * Owner on their current team, otherwise just "Organization(s)".
+     */
+    public function ownedTeamsHeading(): string
+    {
+        $label = Str::plural('Organization', $this->ownedTeams()->count());
+
+        $role = Auth::user()->currentTeam
+            ? Auth::user()->teamRole(Auth::user()->currentTeam)
+            : null;
+
+        return $role === TeamRole::Owner ? "Owned {$label}" : $label;
     }
 
     /**
@@ -116,13 +132,13 @@ new class extends Component {
                 class="flex min-w-0 items-center gap-1 truncate text-xs text-slate-700 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 data-test="team-switcher-trigger"
             >
-                <span class="truncate text-lg font-semibold">{{ $this->currentTeam()['name'] ?? __('Select team') }}</span>
+                <span class="truncate text-lg font-semibold">{{ $this->currentTeam()['name'] ?? __('Select organization') }}</span>
                 <flux:icon name="chevron-down" variant="micro" class="size-3.5 shrink-0" />
             </button>
         @else
             <flux:button variant="ghost" class="group w-full justify-start in-data-flux-sidebar-collapsed-desktop:justify-center" data-test="team-switcher-trigger">
                 <flux:icon name="users" class="hidden size-4 in-data-flux-sidebar-collapsed-desktop:block" />
-                <span class="truncate font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">{{ $this->currentTeam()['name'] ?? __('Select team') }}</span>
+                <span class="truncate font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">{{ $this->currentTeam()['name'] ?? __('Select organization') }}</span>
                 <flux:icon
                     name="chevrons-up-down"
                     variant="micro"
@@ -132,7 +148,7 @@ new class extends Component {
         @endif
 
         <flux:menu class="min-w-96">
-            <flux:menu.heading>{{ __('Owned Teams') }}</flux:menu.heading>
+            <flux:menu.heading>{{ __($this->ownedTeamsHeading()) }}</flux:menu.heading>
 
             @foreach ($this->ownedTeams() as $team)
                 <flux:menu.item
@@ -159,7 +175,7 @@ new class extends Component {
             @if ($this->otherTeams()->isNotEmpty())
                 <flux:menu.separator />
 
-                <flux:menu.heading>{{ __('Other Teams') }}</flux:menu.heading>
+                <flux:menu.heading>{{ __('Other Organizations') }}</flux:menu.heading>
 
                 <div class="max-h-64 overflow-y-auto">
                     @foreach ($this->otherTeams() as $team)
@@ -191,13 +207,15 @@ new class extends Component {
                 </div>
             @endif
 
-            <flux:menu.separator />
+            @can('create', Team::class)
+                <flux:menu.separator />
 
-            <flux:modal.trigger name="create-team-switcher">
-                <flux:menu.item icon="plus" class="cursor-pointer" data-test="team-switcher-new-team">
-                    {{ __('New team') }}
-                </flux:menu.item>
-            </flux:modal.trigger>
+                <flux:modal.trigger name="create-team-switcher">
+                    <flux:menu.item icon="plus" class="cursor-pointer" data-test="team-switcher-new-team">
+                        {{ __('New organization') }}
+                    </flux:menu.item>
+                </flux:modal.trigger>
+            @endcan
         </flux:menu>
     </flux:dropdown>
 </div>

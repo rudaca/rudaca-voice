@@ -86,8 +86,8 @@ new class extends Component {
         <flux:modal name="pending-invitations" wire:model="showPendingInvitationsModal" focusable scroll="body" :dismissible="false" class="max-w-lg">
             <div data-test="pending-invitations-modal" class="space-y-6">
                 <div>
-                    <flux:heading size="lg">{{ __('Pending team invitations') }}</flux:heading>
-                    <flux:subheading>{{ __('Accept or decline the teams you have been invited to join.') }}</flux:subheading>
+                    <flux:heading size="lg">{{ __('Pending organization invitations') }}</flux:heading>
+                    <flux:subheading>{{ __('Accept or decline the organizations you have been invited to join.') }}</flux:subheading>
                 </div>
 
                 <div class="grid gap-4">
@@ -96,7 +96,7 @@ new class extends Component {
                             <div class="space-y-1">
                                 <p class="font-medium">{{ $invitation['team_name'] }}</p>
                                 <flux:text class="text-sm text-slate-600 dark:text-slate-500">
-                                    {{ __(':inviter invited you to join this team.', ['inviter' => $invitation['inviter_name']]) }}
+                                    {{ __(':inviter invited you to join this organization.', ['inviter' => $invitation['inviter_name']]) }}
                                 </flux:text>
                             </div>
 

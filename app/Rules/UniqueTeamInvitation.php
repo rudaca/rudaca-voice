@@ -29,7 +29,7 @@ class UniqueTeamInvitation implements ValidationRule
             ->exists();
 
         if ($isMember) {
-            $fail(__('This user is already a member of the team.'));
+            $fail(__('This user is already a member of the organization.'));
 
             return;
         }

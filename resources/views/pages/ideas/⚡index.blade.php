@@ -253,9 +253,11 @@ new class extends Component {
                 </flux:text>
             </div>
 
-            <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" data-test="new-idea-button">
-                {{ __('New idea') }}
-            </flux:button>
+            @if ($this->canParticipate)
+                <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" data-test="new-idea-button">
+                    {{ __('New idea') }}
+                </flux:button>
+            @endif
         </div>
 
         {{-- Controls: sort (left) + filters (right). Sticks below the app header while the list scrolls. --}}
@@ -406,8 +408,12 @@ new class extends Component {
                 <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="ideas-empty">
                     <flux:icon.light-bulb class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
                     <flux:heading class="mt-3">{{ __('No ideas here yet') }}</flux:heading>
-                    <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">{{ __('Try clearing the filters, or be the first to submit one.') }}</flux:text>
-                    <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" size="sm" class="mt-4">{{ __('New idea') }}</flux:button>
+                    <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">
+                        {{ $this->canParticipate ? __('Try clearing the filters, or be the first to submit one.') : __('Try clearing the filters.') }}
+                    </flux:text>
+                    @if ($this->canParticipate)
+                        <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" size="sm" class="mt-4">{{ __('New idea') }}</flux:button>
+                    @endif
                 </div>
             @endforelse
         </div>

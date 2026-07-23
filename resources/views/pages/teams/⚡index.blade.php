@@ -12,13 +12,15 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Teams')] class extends Component {
+new #[Title('Organizations')] class extends Component {
     public string $name = '';
 
     public bool $allowAnonymousIdeas = false;
 
     public function createTeam(CreateTeam $createTeam): void
     {
+        Gate::authorize('create', Team::class);
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255', new TeamName],
         ]);
@@ -29,7 +31,7 @@ new #[Title('Teams')] class extends Component {
 
         $this->reset('name', 'allowAnonymousIdeas');
 
-        Flux::toast(variant: 'success', text: __('Team created.'));
+        Flux::toast(variant: 'success', text: __('Organization created.'));
 
         $this->redirectRoute('teams.edit', ['team' => $team->slug], navigate: true);
     }
@@ -55,7 +57,7 @@ new #[Title('Teams')] class extends Component {
 
         $this->dispatch('modal-close', name: "leave-team-{$teamId}");
 
-        Flux::toast(variant: 'success', text: __('You left the team ":name"', ['name' => $team->name]));
+        Flux::toast(variant: 'success', text: __('You left the organization ":name"', ['name' => $team->name]));
 
         $this->redirectRoute('teams.index', navigate: true);
     }
@@ -73,23 +75,25 @@ new #[Title('Teams')] class extends Component {
 @push('breadcrumbs')
     <x-breadcrumbs :items="[
         ['label' => __('Settings'), 'href' => route('profile.edit')],
-        ['label' => __('Teams'), 'href' => null],
+        ['label' => __('Organizations'), 'href' => null],
     ]" />
 @endpush
 
 <section class="w-full">
     @include('partials.settings-heading')
 
-    <flux:heading class="sr-only">{{ __('Teams') }}</flux:heading>
+    <flux:heading class="sr-only">{{ __('Organizations') }}</flux:heading>
 
-    <x-pages::settings.layout :heading="__('Teams')" :subheading="__('Manage your teams and team memberships')">
-        <div class="flex items-center justify-end">
-            <flux:modal.trigger name="create-team">
-                <flux:button variant="primary" icon="plus" data-test="teams-new-team-button">
-                    {{ __('New team') }}
-                </flux:button>
-            </flux:modal.trigger>
-        </div>
+    <x-pages::settings.layout :heading="__('Organizations')" :subheading="__('Manage your organizations and organization memberships')">
+        @can('create', Team::class)
+            <div class="flex items-center justify-end">
+                <flux:modal.trigger name="create-team">
+                    <flux:button variant="primary" icon="plus" data-test="teams-new-team-button">
+                        {{ __('New organization') }}
+                    </flux:button>
+                </flux:modal.trigger>
+            </div>
+        @endcan
 
         <div class="mt-6 space-y-3">
             @forelse ($this->teams as $team)
@@ -109,7 +113,7 @@ new #[Title('Teams')] class extends Component {
                     <div class="flex items-center gap-1">
                         @if (! $team->isPersonal && $team->role !== 'owner')
                             <flux:modal.trigger :name="'leave-team-'.$team->id">
-                                <flux:tooltip :content="__('Leave team')">
+                                <flux:tooltip :content="__('Leave organization')">
                                     <flux:button
                                         variant="ghost"
                                         size="sm"
@@ -120,7 +124,7 @@ new #[Title('Teams')] class extends Component {
                             </flux:modal.trigger>
                         @endif
 
-                        <flux:tooltip :content="$team->role === 'member' ? __('View team') : __('Edit team')">
+                        <flux:tooltip :content="$team->role === 'member' ? __('View organization') : __('Edit organization')">
                             <flux:button
                                 variant="ghost"
                                 size="sm"
@@ -137,7 +141,7 @@ new #[Title('Teams')] class extends Component {
                     <flux:modal :name="'leave-team-'.$team->id" focusable :dismissible="false" class="max-w-lg">
                         <form wire:submit="leaveTeam({{ $team->id }})" class="space-y-6">
                             <div>
-                                <flux:heading size="lg">{{ __('Leave team') }}</flux:heading>
+                                <flux:heading size="lg">{{ __('Leave organization') }}</flux:heading>
                                 <flux:subheading>
                                     {{ __('Are you sure you want to leave :name?', ['name' => $team->name]) }}
                                 </flux:subheading>
@@ -149,7 +153,7 @@ new #[Title('Teams')] class extends Component {
                                 </flux:modal.close>
 
                                 <flux:button variant="danger" type="submit" data-test="leave-team-confirm">
-                                    {{ __('Leave team') }}
+                                    {{ __('Leave organization') }}
                                 </flux:button>
                             </div>
                         </form>
@@ -157,36 +161,38 @@ new #[Title('Teams')] class extends Component {
                 @endif
             @empty
                 <flux:text class="py-8 text-center text-slate-600 dark:text-slate-500">
-                    {{ __('You don\'t belong to any teams yet.') }}
+                    {{ __('You don\'t belong to any organizations yet.') }}
                 </flux:text>
             @endforelse
         </div>
     </x-pages::settings.layout>
 
-    <flux:modal name="create-team" :show="$errors->isNotEmpty()" focusable :dismissible="false" class="max-w-lg">
-        <form wire:submit="createTeam" class="space-y-6">
-            <div>
-                <flux:heading size="lg">{{ __('Create a new team') }}</flux:heading>
-                <flux:subheading>{{ __('Give your team a name to get started.') }}</flux:subheading>
-            </div>
+    @can('create', Team::class)
+        <flux:modal name="create-team" :show="$errors->isNotEmpty()" focusable :dismissible="false" class="max-w-lg">
+            <form wire:submit="createTeam" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Create a new organization') }}</flux:heading>
+                    <flux:subheading>{{ __('Give your organization a name to get started.') }}</flux:subheading>
+                </div>
 
-            <flux:input wire:model="name" :label="__('Team name')" type="text" required autofocus data-test="create-team-name" />
+                <flux:input wire:model="name" :label="__('Organization name')" type="text" required autofocus data-test="create-team-name" />
 
-            <flux:checkbox
-                wire:model="allowAnonymousIdeas"
-                :label="__('Allow anonymous posting of ideas')"
-                data-test="create-team-allow-anonymous-ideas"
-            />
+                <flux:checkbox
+                    wire:model="allowAnonymousIdeas"
+                    :label="__('Allow anonymous posting of ideas')"
+                    data-test="create-team-allow-anonymous-ideas"
+                />
 
-            <div class="flex justify-end space-x-2 rtl:space-x-reverse">
-                <flux:modal.close>
-                    <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
-                </flux:modal.close>
+                <div class="flex justify-end space-x-2 rtl:space-x-reverse">
+                    <flux:modal.close>
+                        <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
 
-                <flux:button variant="primary" type="submit" data-test="create-team-submit">
-                    {{ __('Create team') }}
-                </flux:button>
-            </div>
-        </form>
-    </flux:modal>
+                    <flux:button variant="primary" type="submit" data-test="create-team-submit">
+                        {{ __('Create organization') }}
+                    </flux:button>
+                </div>
+            </form>
+        </flux:modal>
+    @endcan
 </section>

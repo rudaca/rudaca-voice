@@ -15,7 +15,7 @@ test('the organization settings page renders all five tabs and defaults to Board
     $this->actingAs($admin)
         ->get(route('ideas.settings', ['current_team' => $team->slug]))
         ->assertOk()
-        ->assertSee('Team Settngs')
+        ->assertSee('Organization Settings')
         ->assertSee('Boards')
         ->assertSee('Groups')
         ->assertSee('Categories')

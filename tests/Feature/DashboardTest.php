@@ -66,7 +66,7 @@ test('the dashboard heading is tailored to the current user\'s team role', funct
 })->with([
     'viewer' => [TeamRole::Viewer, 'Your Ideas Hub'],
     'employee' => [TeamRole::Employee, 'Your Ideas Hub'],
-    'manager' => [TeamRole::Manager, 'Team Ideas Overview'],
+    'manager' => [TeamRole::Manager, 'Organization Ideas Overview'],
     'admin' => [TeamRole::Admin, 'Organization Overview'],
     'owner' => [TeamRole::Owner, 'Organization Overview'],
 ]);

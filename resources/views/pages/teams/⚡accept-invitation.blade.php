@@ -9,7 +9,7 @@ use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Teams')] class extends Component {
+new #[Title('Organizations')] class extends Component {
     public TeamInvitation $invitation;
 
     public function mount(TeamInvitation $invitation): void

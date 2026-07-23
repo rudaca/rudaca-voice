@@ -204,7 +204,7 @@ new #[Title('Organization Settings')] class extends Component {
             'categoryBoardId' => __('board'),
             'quickCategoryName' => __('name'),
             'quickCategoryBoardId' => __('board'),
-            'orgTeamName' => __('team name'),
+            'orgTeamName' => __('organization name'),
         ];
     }
 
@@ -556,7 +556,7 @@ new #[Title('Organization Settings')] class extends Component {
             @case('categories'){{ __('Categories classify ideas within a board.') }}@break
             @case('members'){{ __('People with access to this organization.') }}@break
             {{-- @case('integrations'){{ __('Connect external tools to your idea workflow.') }}@break --}}
-            @case('settings'){{ __('Manage your team\'s name and idea submission preferences.') }}@break
+            @case('settings'){{ __('Manage your organization\'s name and idea submission preferences.') }}@break
             @default{{ __('Boards are where employees submit ideas. Assign each board to a group.') }}
         @endswitch
     </flux:text>
@@ -798,7 +798,7 @@ new #[Title('Organization Settings')] class extends Component {
             <form wire:submit="saveTeamSettings" class="space-y-6">
                 <flux:input
                     wire:model="orgTeamName"
-                    :label="__('Team name')"
+                    :label="__('Organization name')"
                     required
                     data-test="org-team-name-input"
                 />

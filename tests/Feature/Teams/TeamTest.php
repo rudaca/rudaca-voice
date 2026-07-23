@@ -47,6 +47,56 @@ test('teams can be created', function () {
     ]);
 });
 
+test('viewers and employees cannot create a team', function (TeamRole $role) {
+    ['user' => $user] = teamWithMember($role);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Should Not Exist')
+        ->call('createTeam')
+        ->assertForbidden();
+
+    $this->assertDatabaseMissing('teams', [
+        'name' => 'Should Not Exist',
+    ]);
+})->with([
+    'viewer' => TeamRole::Viewer,
+    'employee' => TeamRole::Employee,
+]);
+
+test('owners, admins and managers can create a team', function (TeamRole $role) {
+    ['user' => $user] = teamWithMember($role);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->set('name', 'New Team by '.$role->value)
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('teams', [
+        'name' => 'New Team by '.$role->value,
+    ]);
+})->with([
+    'owner' => TeamRole::Owner,
+    'admin' => TeamRole::Admin,
+    'manager' => TeamRole::Manager,
+]);
+
+test('the new team button and modal are hidden for viewers and employees', function (TeamRole $role) {
+    ['user' => $user] = teamWithMember($role);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->assertDontSeeHtml('data-test="teams-new-team-button"')
+        ->assertDontSeeHtml('data-test="create-team-submit"');
+})->with([
+    'viewer' => TeamRole::Viewer,
+    'employee' => TeamRole::Employee,
+]);
+
 test('teams created via the create team modal disallow anonymous ideas by default', function () {
     $user = User::factory()->create();
 

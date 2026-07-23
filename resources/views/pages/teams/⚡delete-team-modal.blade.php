@@ -36,7 +36,7 @@ new class extends Component {
         ]);
 
         if ($validated['deleteName'] !== $this->team->name) {
-            $this->addError('deleteName', __('The team name does not match.'));
+            $this->addError('deleteName', __('The organization name does not match.'));
 
             return;
         }
@@ -61,7 +61,7 @@ new class extends Component {
             $user->switchTeam($fallbackTeam);
         }
 
-        Flux::toast(variant: 'success', text: __('Team deleted.'));
+        Flux::toast(variant: 'success', text: __('Organization deleted.'));
 
         $this->redirectRoute('teams.index', navigate: true);
     }
@@ -81,7 +81,7 @@ new class extends Component {
         <div>
             <flux:heading size="lg">{{ __('Are you sure?') }}</flux:heading>
             <flux:subheading>
-                {{ __('This action cannot be undone. This will permanently delete the team ":name".', ['name' => $team->name]) }}
+                {{ __('This action cannot be undone. This will permanently delete the organization ":name".', ['name' => $team->name]) }}
             </flux:subheading>
         </div>
 
@@ -94,7 +94,7 @@ new class extends Component {
                 <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
             </flux:modal.close>
             <flux:button variant="danger" type="submit" data-test="delete-team-confirm">
-                {{ __('Delete team') }}
+                {{ __('Delete organization') }}
             </flux:button>
         </div>
     </form>

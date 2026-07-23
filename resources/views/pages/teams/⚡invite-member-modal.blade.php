@@ -61,8 +61,8 @@ new class extends Component {
 <flux:modal name="invite-member" :show="$errors->isNotEmpty()" focusable :dismissible="false" class="max-w-lg">
     <form wire:submit="createInvitation" class="space-y-6">
         <div>
-            <flux:heading size="lg">{{ __('Invite a team member') }}</flux:heading>
-            <flux:subheading>{{ __('Send an invitation to join this team.') }}</flux:subheading>
+            <flux:heading size="lg">{{ __('Invite an organization member') }}</flux:heading>
+            <flux:subheading>{{ __('Send an invitation to join this organization.') }}</flux:subheading>
         </div>
 
         <div class="space-y-4">
