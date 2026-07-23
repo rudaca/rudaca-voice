@@ -71,3 +71,46 @@ document.addEventListener('livewire:init', () => {
         });
     });
 });
+
+// Counts a dashboard stat card's number up from 0 to its target value (see
+// resources/views/pages/dashboard.blade.php, called via x-init="initStatCounter($el, target)").
+function animateStatValue(el, target) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        el.textContent = target;
+        return;
+    }
+
+    let duration = 900;
+    let start = null;
+
+    function step(timestamp) {
+        if (start === null) {
+            start = timestamp;
+        }
+
+        let progress = Math.min((timestamp - start) / duration, 1);
+        let eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = Math.round(eased * target);
+
+        if (progress < 1) {
+            requestAnimationFrame(step);
+        } else {
+            el.textContent = target;
+        }
+    }
+
+    requestAnimationFrame(step);
+}
+
+// Each stat card carries a wire:key that includes the active tab (see the
+// dashboard's For You / By Status toggle), so switching tabs mounts fresh
+// elements and re-triggers x-init — replaying the count-up on every switch.
+// On the very first load we hold off until the page has fully finished
+// loading, so the animation doesn't compete with other page-load work.
+window.initStatCounter = function (el, target) {
+    if (document.readyState === 'complete') {
+        animateStatValue(el, target);
+    } else {
+        window.addEventListener('load', () => animateStatValue(el, target), {once: true});
+    }
+};

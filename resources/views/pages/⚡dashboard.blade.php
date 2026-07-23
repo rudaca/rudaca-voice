@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Models\IdeaStatusHistory;
 use App\Models\IdeaVote;
 use App\Models\Team;
 use Illuminate\Database\Eloquent\Collection;
@@ -10,6 +11,11 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Dashboard')] class extends Component {
+    /**
+     * Which stat card set is showing for roles that can toggle between them.
+     */
+    public string $statsTab = 'for_you';
+
     /**
      * @var array<string, array{label: string, color: string, class?: string}>
      */
@@ -45,6 +51,16 @@ new #[Title('Dashboard')] class extends Component {
     public function canParticipate(): bool
     {
         return $this->role?->isAtLeast(TeamRole::Employee) ?? false;
+    }
+
+    /**
+     * Whether the current user can switch between the "For You" and "By Status"
+     * stat card sets. Viewers only ever see the status breakdown.
+     */
+    #[Computed]
+    public function canToggleStatsTab(): bool
+    {
+        return $this->role !== TeamRole::Viewer;
     }
 
     /**
@@ -88,11 +104,30 @@ new #[Title('Dashboard')] class extends Component {
     /**
      * Compact summary stat cards for the current user + team.
      *
-     * @return array<int, array{label: string, value: int, caption: string, dot: string}>
+     * @return array<int, array{label: string, value: int, caption: string, dot: string, caption_bold?: bool}>
      */
     #[Computed]
     public function stats(): array
     {
+        if (! $this->canToggleStatsTab || $this->statsTab === 'by_status') {
+            return $this->byStatusStats();
+        }
+
+        return $this->forYouStats();
+    }
+
+    /**
+     * Participation-focused stat cards: what the current user has submitted
+     * and voted on, plus team-wide progress.
+     *
+     * @return array<int, array{label: string, value: int, caption: string, dot: string, caption_bold?: bool}>
+     */
+    private function forYouStats(): array
+    {
+        if ($this->role === TeamRole::Manager) {
+            return $this->managerStats();
+        }
+
         $team = $this->team;
         $userId = Auth::id();
 
@@ -127,6 +162,99 @@ new #[Title('Dashboard')] class extends Component {
     }
 
     /**
+     * Team-oriented "For You" cards for Managers: the review queue awaiting
+     * their decision, plus how the team's ideas are progressing overall.
+     *
+     * @return array<int, array{label: string, value: int, caption: string, dot: string, caption_bold?: bool}>
+     */
+    private function managerStats(): array
+    {
+        $team = $this->team;
+
+        return [
+            [
+                'label' => __('Awaiting review'),
+                'value' => $team->ideas()->whereIn('status', ['new', 'under_review'])->count(),
+                'caption' => __('need a decision'),
+                'dot' => 'bg-amber-500',
+            ],
+            [
+                'label' => __('In progress'),
+                'value' => $team->ideas()->where('status', 'in_progress')->count(),
+                'caption' => __('being delivered'),
+                'dot' => 'bg-violet-500',
+            ],
+            [
+                'label' => __('Implemented'),
+                'value' => IdeaStatusHistory::whereHas('idea', fn ($query) => $query->where('team_id', $team->id))
+                    ->where('new_status', 'released')
+                    ->where('created_at', '>=', now()->startOfQuarter())
+                    ->count(),
+                'caption' => __('this quarter'),
+                'dot' => 'bg-emerald-500',
+            ],
+            [
+                'label' => __('Total ideas'),
+                'value' => $team->ideas()->count(),
+                'caption' => __('across all boards'),
+                'dot' => 'bg-slate-500',
+            ],
+        ];
+    }
+
+    /**
+     * Status-grouped stat cards: a team-wide total plus a breakdown across
+     * the pipeline, active-work, and closed-out statuses. The only view
+     * Viewers see; also available to other roles via the "By Status" tab.
+     *
+     * @return array<int, array{label: string, value: int, caption: string, dot: string, caption_bold?: bool}>
+     */
+    private function byStatusStats(): array
+    {
+        $counts = $this->team->ideas()
+            ->visibleTo($this->role, Auth::id())
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $groupTotal = fn (array $statuses) => collect($statuses)->sum(fn ($status) => $counts->get($status, 0));
+
+        $groupBreakdown = fn (array $statuses) => collect($statuses)
+            ->map(fn ($status) => $this->statusMeta($status)['label'].' '.$counts->get($status, 0))
+            ->implode(' · ');
+
+        return [
+            [
+                'label' => __('Total ideas'),
+                'value' => $counts->sum(),
+                'caption' => __('Total for :team', ['team' => $this->team->name]),
+                'dot' => 'bg-slate-500',
+            ],
+            [
+                'label' => __('In the pipeline'),
+                'value' => $groupTotal(['new', 'under_review', 'planned']),
+                'caption' => $groupBreakdown(['new', 'under_review', 'planned']),
+                'caption_bold' => true,
+                'dot' => 'bg-indigo-500',
+            ],
+            [
+                'label' => __('Active work'),
+                'value' => $groupTotal(['in_progress']),
+                'caption' => $groupBreakdown(['in_progress']),
+                'caption_bold' => true,
+                'dot' => 'bg-emerald-500',
+            ],
+            [
+                'label' => __('Closed out'),
+                'value' => $groupTotal(['released', 'not_doing', 'duplicate']),
+                'caption' => $groupBreakdown(['released', 'not_doing', 'duplicate']),
+                'caption_bold' => true,
+                'dot' => 'bg-rose-500',
+            ],
+        ];
+    }
+
+    /**
      * Trending ideas for the current team, ranked by votes + comments weight.
      *
      * @return Collection<int, \App\Models\Idea>
@@ -142,6 +270,26 @@ new #[Title('Dashboard')] class extends Component {
             ->orderByRaw('(votes_count + comments_count * 3) desc')
             ->orderByDesc('id')
             ->limit(5)
+            ->get();
+    }
+
+    /**
+     * The highest-voted ideas awaiting a review decision. Shown to Managers
+     * in place of "Trending ideas", since it's their queue to work through.
+     *
+     * @return Collection<int, \App\Models\Idea>
+     */
+    #[Computed]
+    public function queueTop(): Collection
+    {
+        return $this->team->ideas()
+            ->whereIn('status', ['new', 'under_review'])
+            ->with('board:id,name')
+            ->withCount(['votes', 'comments'])
+            ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
+            ->orderByDesc('votes_count')
+            ->orderByDesc('id')
+            ->limit(4)
             ->get();
     }
 
@@ -175,37 +323,50 @@ new #[Title('Dashboard')] class extends Component {
         <livewire:pages::teams.pending-invitations-modal />
 
         {{-- Header --}}
-        <div>
-            <flux:heading class="text-xl">{{ $this->heading }}</flux:heading>
-            <flux:text class="text-sm text-slate-900 dark:text-slate-500">{{ __('Welcome back') }} <strong>{{  Auth::user()->name }}!</strong></flux:text>
+        <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <flux:heading class="text-xl">{{ $this->heading }}</flux:heading>
+                <flux:text class="text-sm text-slate-900 dark:text-slate-500">{{ __('Welcome back') }} <strong>{{  Auth::user()->name }}!</strong></flux:text>
+            </div>
 
+            @if ($this->canToggleStatsTab)
+                <flux:radio.group wire:model.live="statsTab" variant="segmented" size="sm">
+                    <flux:radio value="for_you">{{ __('For You') }}</flux:radio>
+                    <flux:radio value="by_status">{{ __('By Status') }}</flux:radio>
+                </flux:radio.group>
+            @endif
         </div>
 
         {{-- Stat cards --}}
         <div class="mt-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             @foreach ($this->stats as $stat)
-                <div class="rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-700 dark:bg-zinc-900" wire:key="stat-{{ $loop->index }}">
+                <div class="rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-700 dark:bg-zinc-900" wire:key="stat-{{ $statsTab }}-{{ $loop->index }}">
                     <div class="flex items-center gap-2">
                         <span class="size-2.5 rounded-full {{ $stat['dot'] }}"></span>
                         <span class="text-xs font-semibold text-slate-600 dark:text-slate-500">{{ $stat['label'] }}</span>
                     </div>
-                    <div class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 tabular-nums dark:text-slate-200">{{ $stat['value'] }}</div>
-                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-600">{{ $stat['caption'] }}</div>
+                    <div
+                        class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 tabular-nums dark:text-slate-200"
+                        x-data
+                        x-init="initStatCounter($el, {{ (int) $stat['value'] }})"
+                    >0</div>
+                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-600 {{ ($stat['caption_bold'] ?? false) ? 'font-bold' : '' }}">{{ $stat['caption'] }}</div>
                 </div>
             @endforeach
         </div>
 
         {{-- Trending (left) + Boards (right) --}}
         <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.6fr_1fr]">
-            {{-- Trending ideas --}}
+            {{-- Trending ideas / Top of the queue --}}
+            @php($isQueueView = $this->role === TeamRole::Manager)
             <div>
                 <div class="mb-3 flex items-center justify-between">
-                    <flux:heading size="lg">{{ __('Trending ideas') }}</flux:heading>
-                    <flux:link :href="route('ideas.index', ['sort' => 'top'])" wire:navigate variant="subtle" class="text-sm">{{ __('View all →') }}</flux:link>
+                    <flux:heading size="lg">{{ $isQueueView ? __('Top of the queue') : __('Trending ideas') }}</flux:heading>
+                    <flux:link :href="$isQueueView ? route('ideas.review') : route('ideas.index', ['sort' => 'top'])" wire:navigate variant="subtle" class="text-sm">{{ __('View all →') }}</flux:link>
                 </div>
 
                 <div class="space-y-3">
-                    @forelse ($this->trending as $idea)
+                    @forelse (($isQueueView ? $this->queueTop : $this->trending) as $idea)
                         @php($meta = $this->statusMeta($idea->status))
                         <div
                             class="flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:border-indigo-200 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60"
@@ -251,7 +412,9 @@ new #[Title('Dashboard')] class extends Component {
                     @empty
                         <div class="rounded-xl border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
                             <flux:icon.light-bulb class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
-                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No ideas yet — be the first to submit one.') }}</flux:text>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ $isQueueView ? __('Queue is clear — nothing needs a decision right now.') : __('No ideas yet — be the first to submit one.') }}
+                            </flux:text>
                         </div>
                     @endforelse
                 </div>
