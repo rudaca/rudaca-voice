@@ -72,8 +72,8 @@ test('the active board is highlighted in the sidebar boards tree', function () {
     $response = $this->actingAs($user)->get(route('ideas.index', ['board' => $stack['board']->id]));
     $content = $response->getContent();
 
-    $activeClasses = 'bg-zinc-800/5 font-semibold text-zinc-900 dark:bg-white/[7%] dark:text-white';
-    $inactiveClasses = 'text-zinc-600 hover:bg-zinc-800/5 hover:text-zinc-900 dark:text-zinc-300 dark:hover:bg-white/[7%] dark:hover:text-white';
+    $activeClasses = 'bg-zinc-800/5 font-semibold text-slate-900 dark:bg-white/[7%] dark:text-white';
+    $inactiveClasses = 'text-slate-700 hover:bg-zinc-800/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[7%] dark:hover:text-white';
 
     // The boards tree is rendered twice (expanded desktop sidebar + collapsed-sidebar dropdown copy).
     expect(substr_count($content, $activeClasses))->toBe(2)

@@ -95,7 +95,7 @@ new class extends Component {
                         <div data-test="pending-invitation-row" class="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
                             <div class="space-y-1">
                                 <p class="font-medium">{{ $invitation['team_name'] }}</p>
-                                <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
+                                <flux:text class="text-sm text-slate-600 dark:text-slate-500">
                                     {{ __(':inviter invited you to join this team.', ['inviter' => $invitation['inviter_name']]) }}
                                 </flux:text>
                             </div>

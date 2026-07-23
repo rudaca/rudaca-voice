@@ -22,6 +22,13 @@ use Illuminate\Support\Str;
 class IdeaPortalSeeder extends Seeder
 {
     /**
+     * The natural progression of idea statuses, in order.
+     *
+     * @var array<int, string>
+     */
+    private const STATUS_FLOW = ['new', 'under_review', 'planned', 'in_progress', 'released'];
+
+    /**
      * Seed a realistic employee ideas / business-improvement portal for a sample team.
      */
     public function run(): void
@@ -120,6 +127,12 @@ class IdeaPortalSeeder extends Seeder
         /** @var Collection<int, Idea> $ideas */
         $ideas = new Collection;
 
+        // Tracks how many ideas have used each base slug, so only genuine
+        // title repeats get a "-1", "-2", ... suffix (mirrors the uniqueSlug
+        // logic on the idea creation page) instead of every idea getting an
+        // arbitrary running-count suffix.
+        $slugSuffixByBase = [];
+
         foreach ($templates as $template) {
             $board = $boards[$template['board']];
             $originalIndex = null;
@@ -127,6 +140,11 @@ class IdeaPortalSeeder extends Seeder
             for ($repeat = 0; $repeat < 5; $repeat++) {
                 $isFirst = $repeat === 0;
                 $markDuplicate = ! $isFirst && $originalIndex !== null && fake()->boolean(25);
+
+                $baseSlug = Str::slug($template['title']) ?: 'idea';
+                $suffix = $slugSuffixByBase[$baseSlug] ?? 0;
+                $slug = $suffix === 0 ? $baseSlug : "{$baseSlug}-{$suffix}";
+                $slugSuffixByBase[$baseSlug] = $suffix + 1;
 
                 $idea = Idea::factory()
                     ->when(fake()->boolean(8), fn ($factory) => $factory->anonymous())
@@ -138,7 +156,7 @@ class IdeaPortalSeeder extends Seeder
                         'category_id' => $categories[$template['board']][$template['category']]->id,
                         'submitted_by_user_id' => $contributors->random()->id,
                         'title' => $template['title'],
-                        'slug' => Str::slug($template['title']).'-'.($ideas->count() + 1),
+                        'slug' => $slug,
                         'description' => $template['description'],
                         'status' => $markDuplicate ? 'duplicate' : ($isFirst ? $template['status'] : fake()->randomElement($statusPool)),
                         'priority' => $isFirst ? $template['priority'] : fake()->randomElement(['low', 'medium', 'high']),
@@ -198,16 +216,33 @@ class IdeaPortalSeeder extends Seeder
             $ideaIndex++;
         }
 
-        // --- Status history: any idea that has moved past "new" gets a history entry ---
-        $ideas->reject(fn (Idea $idea) => $idea->status === 'new')
-            ->each(function (Idea $idea) use ($reviewers) {
-                IdeaStatusHistory::factory()->create([
+        // --- Status history: every idea gets its full, ordered status-change
+        // trail starting with its "New" submission (e.g. New -> Under Review
+        // -> Planned -> In Progress), backdated so the most recent change is
+        // closest to now.
+        $ideas->each(function (Idea $idea) use ($reviewers) {
+            $chain = $this->statusFlowChain($idea->status);
+            $timestamp = now()->subDays(fake()->numberBetween(7, 21));
+            $previousStatus = $chain[0];
+
+            foreach ($chain as $index => $status) {
+                $entry = IdeaStatusHistory::factory()->create([
                     'idea_id' => $idea->id,
-                    'changed_by_user_id' => $reviewers->random()->id,
-                    'old_status' => 'new',
-                    'new_status' => $idea->status,
+                    'changed_by_user_id' => $index === 0 ? $idea->submitted_by_user_id : $reviewers->random()->id,
+                    'old_status' => $index === 0 ? $status : $previousStatus,
+                    'new_status' => $status,
                 ]);
-            });
+
+                $entry->forceFill(['created_at' => $timestamp])->save();
+
+                $previousStatus = $status;
+                $timestamp = $timestamp->addDays(fake()->numberBetween(2, 5));
+
+                if ($timestamp->isFuture()) {
+                    $timestamp = now();
+                }
+            }
+        });
 
         // --- Optional sample GitHub links (schema only, no sync logic) ---
         $ideas->whereIn('status', ['planned', 'in_progress'])
@@ -253,6 +288,29 @@ class IdeaPortalSeeder extends Seeder
         $user->switchTeam($team);
 
         return $user;
+    }
+
+    /**
+     * Build the ordered chain of statuses an idea passed through to reach its
+     * final status, starting from "new" (e.g. "planned" becomes
+     * new -> under_review -> planned). Terminal decisions ("not_doing",
+     * "duplicate") are reached after a single review step.
+     *
+     * @return array<int, string>
+     */
+    private function statusFlowChain(string $finalStatus): array
+    {
+        if ($finalStatus === 'duplicate') {
+            return ['new', 'duplicate'];
+        }
+
+        if ($finalStatus === 'not_doing') {
+            return ['new', 'under_review', 'not_doing'];
+        }
+
+        $index = array_search($finalStatus, self::STATUS_FLOW, true);
+
+        return $index === false ? ['new', $finalStatus] : array_slice(self::STATUS_FLOW, 0, $index + 1);
     }
 
     /**

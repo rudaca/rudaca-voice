@@ -17,7 +17,7 @@
 $classes = Flux::classes()
     ->add('relative z-10 flex whitespace-nowrap flex-1 justify-center items-center gap-2')
     ->add('rounded-md')
-    ->add('text-sm font-medium text-zinc-600 hover:text-zinc-800 dark:hover:text-white dark:text-white/70 data-checked:text-zinc-800 dark:data-checked:text-white')
+    ->add('text-sm font-medium text-slate-700 hover:text-slate-900 dark:hover:text-white dark:text-white/70 data-checked:text-slate-900 dark:data-checked:text-white')
     ->add('transition-colors duration-150 ease-out')
     ->add('[&[disabled]]:opacity-50 dark:[&[disabled]]:opacity-75 [&[disabled]]:cursor-default [&[disabled]]:pointer-events-none')
     ->add(match ($size) {
@@ -28,7 +28,7 @@ $classes = Flux::classes()
 
 $iconVariant ??= 'mini';
 
-$iconClasses = Flux::classes('text-zinc-500 dark:text-zinc-400 [ui-radio[data-checked]_&]:text-zinc-800 dark:[ui-radio[data-checked]_&]:text-white')
+$iconClasses = Flux::classes('text-slate-600 dark:text-slate-500 [ui-radio[data-checked]_&]:text-slate-900 dark:[ui-radio[data-checked]_&]:text-white')
     // When using the outline icon variant, we need to size it down to match the default icon sizes...
     ->add($iconVariant === 'outline' ? 'size-5' : '')
     ;

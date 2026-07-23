@@ -2,6 +2,7 @@
 
 use App\Models\Idea;
 use App\Models\IdeaBoard;
+use App\Models\IdeaStatusHistory;
 use App\Models\Team;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
@@ -182,6 +183,13 @@ new #[Title('Submit idea')] class extends Component {
             'is_private' => $this->is_private,
         ]);
 
+        IdeaStatusHistory::create([
+            'idea_id' => $idea->id,
+            'changed_by_user_id' => Auth::id(),
+            'old_status' => 'new',
+            'new_status' => 'new',
+        ]);
+
         Flux::toast(variant: 'success', text: __('Idea submitted.'));
 
         $this->redirectRoute('ideas.show', ['idea' => $idea->slug], navigate: true);
@@ -235,7 +243,7 @@ new #[Title('Submit idea')] class extends Component {
 
     <div class="mt-5">
         <flux:heading size="xl">{{ __('Submit an idea') }}</flux:heading>
-        <flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">
+        <flux:text class="mt-1 text-slate-600 dark:text-slate-500">
             {{ __('Good ideas are specific: describe the problem, who it affects, and the improvement you\'d like to see. Anything from process fixes to automation is welcome.') }}
         </flux:text>
     </div>
@@ -300,7 +308,7 @@ new #[Title('Submit idea')] class extends Component {
             <flux:separator variant="subtle" />
 
             <div class="space-y-3">
-                <flux:text class="text-sm font-medium text-zinc-700 dark:text-zinc-300">{{ __('Visibility') }}</flux:text>
+                <flux:text class="text-sm font-medium text-slate-800 dark:text-slate-400">{{ __('Visibility') }}</flux:text>
 
                 @if ($this->allowsAnonymousIdeas)
                     <flux:checkbox

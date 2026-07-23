@@ -236,12 +236,12 @@ new class extends Component {
                 <flux:heading size="xl" class="flex items-center gap-2">
                     @if ($this->activeFilterLabel)
                         <flux:tooltip :content="$this->board !== '' ? __('Board') : __('Board group')">
-                            <flux:icon.chalkboard class="size-6 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                            <flux:icon.chalkboard class="size-6 shrink-0 text-slate-500 dark:text-slate-600" />
                         </flux:tooltip>
                     @endif
                     {{ $this->activeFilterLabel ?? __('All Ideas') }}
                 </flux:heading>
-                <flux:text class="text-zinc-500 dark:text-zinc-400">
+                <flux:text class="text-slate-600 dark:text-slate-500">
                     @if ($this->activeFilterLabel)
                         {{ trans_choice(':count idea|:count ideas', $this->ideas->total(), ['count' => $this->ideas->total()]) }}
                     @else
@@ -291,8 +291,8 @@ new class extends Component {
                         wire:click="sortBy('{{ $value }}')"
                         @class([
                             'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                            'text-zinc-900 dark:text-white' => $sort === $value,
-                            'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200' => $sort !== $value,
+                            'text-slate-900 dark:text-white' => $sort === $value,
+                            'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $sort !== $value,
                         ])
                         data-test="sort-{{ $value }}"
                     >
@@ -349,13 +349,13 @@ new class extends Component {
                                 'cursor-not-allowed opacity-60' => ! $this->canParticipate,
                                 'cursor-pointer' => $this->canParticipate,
                                 'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
-                                'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $idea->voted,
+                                'border-zinc-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-slate-500 dark:hover:border-indigo-500/40' => ! $idea->voted,
                             ])
                             data-test="vote-button"
                         >
                             <flux:icon.chevron-up class="size-4" />
                             <span class="text-sm font-extrabold">{{ $idea->votes_count }}</span>
-                            <span class="text-[10px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
+                            <span class="text-[10px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-500' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
                         </button>
                     </flux:tooltip>
 
@@ -376,13 +376,13 @@ new class extends Component {
 
                         <flux:heading size="lg" class="mt-2 truncate">{{ $idea->title }}</flux:heading>
 
-                        <flux:text class="mt-1 line-clamp-2 text-sm text-zinc-500 dark:text-zinc-400">
+                        <flux:text class="mt-1 line-clamp-2 text-sm text-slate-600 dark:text-slate-500">
                             {{ \Illuminate\Support\Str::limit(strip_tags($idea->description), 130) }}
                         </flux:text>
 
                         @php($author = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
 
-                        <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                             <div class="flex items-center gap-1.5">
                                 <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
                                 <span>{{ $author }}</span>
@@ -404,9 +404,9 @@ new class extends Component {
                 </div>
             @empty
                 <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="ideas-empty">
-                    <flux:icon.light-bulb class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+                    <flux:icon.light-bulb class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
                     <flux:heading class="mt-3">{{ __('No ideas here yet') }}</flux:heading>
-                    <flux:text class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Try clearing the filters, or be the first to submit one.') }}</flux:text>
+                    <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">{{ __('Try clearing the filters, or be the first to submit one.') }}</flux:text>
                     <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" size="sm" class="mt-4">{{ __('New idea') }}</flux:button>
                 </div>
             @endforelse

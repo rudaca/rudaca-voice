@@ -26,7 +26,9 @@ class IdeaStatusHistoryFactory extends Factory
             'new_status' => fake()->randomElement([
                 'under_review', 'planned', 'in_progress', 'released', 'not_doing',
             ]),
-            'note' => fn (array $attributes) => fake()->randomElement($this->notesFor($attributes['new_status'])),
+            'note' => fn (array $attributes) => $attributes['new_status'] === 'new'
+                ? null
+                : fake()->randomElement($this->notesFor($attributes['new_status'])),
         ];
     }
 

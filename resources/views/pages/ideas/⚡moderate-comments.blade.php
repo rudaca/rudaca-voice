@@ -95,7 +95,7 @@ new #[Title('Moderate comments')] class extends Component {
 <section class="mx-auto container px-6 pb-7 lg:px-8">
     <div class="flex flex-col gap-1">
         <flux:heading size="xl">{{ __('Moderate comments') }}</flux:heading>
-        <flux:text class="text-zinc-500 dark:text-zinc-400">
+        <flux:text class="text-slate-600 dark:text-slate-500">
             {{ __('Hide comments that violate guidelines. Hidden comments disappear from the idea thread but can be restored at any time.') }}
         </flux:text>
     </div>
@@ -121,7 +121,7 @@ new #[Title('Moderate comments')] class extends Component {
                 @forelse ($this->comments as $comment)
                     <flux:table.row :key="'comment-'.$comment->id" data-test="moderate-comment-row">
                         <flux:table.cell class="max-w-sm">
-                            <flux:text class="line-clamp-2 text-sm text-zinc-700 dark:text-zinc-300">{{ $comment->body }}</flux:text>
+                            <flux:text class="line-clamp-2 text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</flux:text>
                         </flux:table.cell>
 
                         <flux:table.cell>
@@ -130,7 +130,7 @@ new #[Title('Moderate comments')] class extends Component {
                             </a>
                         </flux:table.cell>
 
-                        <flux:table.cell class="text-zinc-600 dark:text-zinc-300">
+                        <flux:table.cell class="text-slate-700 dark:text-slate-400">
                             {{ $comment->user?->name ?? __('Unknown') }}
                         </flux:table.cell>
 
@@ -138,7 +138,7 @@ new #[Title('Moderate comments')] class extends Component {
                             @if ($comment->isHidden())
                                 <flux:badge color="red" size="sm">{{ __('Hidden') }}</flux:badge>
                                 @if ($comment->hiddenBy)
-                                    <div class="mt-1 text-xs text-zinc-400">{{ __('by :name', ['name' => $comment->hiddenBy->name]) }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">{{ __('by :name', ['name' => $comment->hiddenBy->name]) }}</div>
                                 @endif
                             @else
                                 <flux:badge color="green" size="sm" variant="outline">{{ __('Visible') }}</flux:badge>
@@ -172,7 +172,7 @@ new #[Title('Moderate comments')] class extends Component {
                     <flux:table.row>
                         <flux:table.cell colspan="5">
                             <div class="py-14 text-center" data-test="moderate-comments-empty">
-                                <flux:icon.chat-bubble-left-right class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+                                <flux:icon.chat-bubble-left-right class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
                                 <flux:heading class="mt-3">{{ __('No comments to show') }}</flux:heading>
                             </div>
                         </flux:table.cell>

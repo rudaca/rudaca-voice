@@ -498,17 +498,17 @@ new #[Title('Idea')] class extends Component {
                                     <div class="truncate">
                                         {{ $vote->user->name }}
                                         @if ($vote->user_id === Auth::id())
-                                            <span class="text-zinc-400">({{ __('You') }})</span>
+                                            <span class="text-slate-500">({{ __('You') }})</span>
                                         @endif
                                     </div>
                                     <flux:tooltip content="{{ __('Date Voted') }}">
-                                        <div style="font-size:9px" class="truncate  text-zinc-400">{{ $vote->created_at->format('M j, Y g:i A') }}</div>
+                                        <div style="font-size:9px" class="truncate  text-slate-500">{{ $vote->created_at->format('M j, Y g:i A') }}</div>
                                     </flux:tooltip>
                                 </div>
                             </div>
                         </flux:menu.item>
                     @empty
-                        <flux:menu.item class="cursor-default text-zinc-400">
+                        <flux:menu.item class="cursor-default text-slate-500">
                             {{ __('No votes yet') }}
                         </flux:menu.item>
                     @endforelse
@@ -541,13 +541,13 @@ new #[Title('Idea')] class extends Component {
                             'cursor-not-allowed opacity-60' => ! $this->canParticipate,
                             'cursor-pointer' => $this->canParticipate,
                             'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $this->hasVoted,
-                            'border-zinc-200 text-zinc-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-indigo-500/40' => ! $this->hasVoted,
+                            'border-zinc-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-slate-500 dark:hover:border-indigo-500/40' => ! $this->hasVoted,
                         ])
                         data-test="vote-button"
                     >
                         <flux:icon.chevron-up class="size-5" />
                         <span class="text-lg font-extrabold">{{ $this->voteCount }}</span>
-                        <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-zinc-400' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
+                        <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-500' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
                     </button>
                 </flux:tooltip>
 
@@ -558,7 +558,7 @@ new #[Title('Idea')] class extends Component {
                             <flux:badge color="zinc" size="sm" variant="outline">{{ $idea->category->name }}</flux:badge>
                         @endif
                         @if ($idea->board)
-                            <span class="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            <span class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-500">
                                 <flux:icon.rectangle-group class="size-3.5" />
                                 @if ($idea->boardGroup){{ $idea->boardGroup->name }} · @endif{{ $idea->board->name }}
                             </span>
@@ -567,18 +567,18 @@ new #[Title('Idea')] class extends Component {
 
                     <flux:heading size="xl" class="mt-3">{{ $idea->title }}</flux:heading>
 
-                    <div class="mt-3 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <div class="mt-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
                         <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
                         <span>
                             {{ __('Submitted by') }}
-                            <span class="font-medium text-zinc-700 dark:text-zinc-300">{{ $author }}</span>
+                            <span class="font-medium text-slate-800 dark:text-slate-400">{{ $author }}</span>
                             · {{ $idea->created_at->format('M j, Y g:i A') }}
                         </span>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">{{ $idea->description }}</div>
+            <div class="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
 
             <flux:separator class="my-8" />
 
@@ -622,7 +622,7 @@ new #[Title('Idea')] class extends Component {
                     </div>
                 </form>
             @else
-                <flux:text class="mt-4 text-sm text-zinc-500 dark:text-zinc-400" data-test="viewer-read-only-notice">
+                <flux:text class="mt-4 text-sm text-slate-600 dark:text-slate-500" data-test="viewer-read-only-notice">
                     {{ __('Viewers have read-only access and cannot comment.') }}
                 </flux:text>
             @endif
@@ -640,7 +640,7 @@ new #[Title('Idea')] class extends Component {
                         <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" color="auto" color:seed="{{ $comment->user_id ?? $comment->user?->name ?? __('Unknown') }}" />
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{{ $comment->user?->name ?? __('Unknown') }}</span>
+                                <span class="text-sm font-medium text-slate-900 dark:text-slate-200">{{ $comment->user?->name ?? __('Unknown') }}</span>
                                 @if (in_array($comment->user_id, $this->staffUserIds, true))
                                     <flux:badge color="teal" size="sm">{{ __('Staff') }}</flux:badge>
                                 @endif
@@ -648,10 +648,10 @@ new #[Title('Idea')] class extends Component {
                                     <flux:badge color="amber" size="sm">{{ __('Internal') }}</flux:badge>
                                 @endif
                                 <flux:tooltip content="{{ $comment->created_at->format('M j, Y g:i A') }}">
-                                    <span class="text-xs text-zinc-400">{{ $comment->created_at->diffForHumans() }}</span>
+                                    <span class="text-xs text-slate-500">{{ $comment->created_at->diffForHumans() }}</span>
                                 </flux:tooltip>
                             </div>
-                            <div class="mt-1 whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-300">{{ $comment->body }}</div>
+                            <div class="mt-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</div>
                         </div>
                         @if ($this->canDelete)
                             <flux:button
@@ -667,7 +667,7 @@ new #[Title('Idea')] class extends Component {
                     </div>
                 @empty
                     <div class="rounded-xl border border-dashed border-zinc-300 py-8 text-center dark:border-zinc-700">
-                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('No comments yet — start the discussion above.') }}</flux:text>
+                        <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('No comments yet — start the discussion above.') }}</flux:text>
                     </div>
                 @endforelse
             </div>
@@ -739,7 +739,7 @@ new #[Title('Idea')] class extends Component {
                         <div class="space-y-5">
                             <div>
                                 <flux:heading size="lg">{{ __('Delete this idea?') }}</flux:heading>
-                                <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                                <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
                                     {{ __('This will remove ":title" and its comments from the idea list. This cannot be undone from the UI.', ['title' => $idea->title]) }}
                                 </flux:text>
                             </div>
@@ -755,7 +755,7 @@ new #[Title('Idea')] class extends Component {
                 <flux:modal name="mark-duplicate" class="max-w-lg" :dismissible="false" data-test="mark-duplicate-modal">
                     <form wire:submit="markDuplicate" class="space-y-5">
                         <flux:heading size="lg">{{ __('Mark as duplicate') }}</flux:heading>
-                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
+                        <flux:text class="text-sm text-slate-600 dark:text-slate-500">
                             {{ __('Link this idea to the original it duplicates. Its status will change to Duplicate.') }}
                         </flux:text>
                         <flux:select wire:model="duplicateOfId" :label="__('Original idea')" :placeholder="__('Choose the original idea')" required data-test="duplicate-original">
@@ -776,23 +776,31 @@ new #[Title('Idea')] class extends Component {
             <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
                 <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
 
-                <div class="mt-4 space-y-4">
+                <div class="mt-4">
                     @forelse ($this->statusHistory as $entry)
                         @php($entryMeta = $this->statusMeta($entry->new_status))
-                        <div class="flex flex-col gap-1 border-l-2 border-zinc-100 pl-3 dark:border-zinc-700" wire:key="history-{{ $entry->id }}">
-                            <flux:badge :color="$entryMeta['color']" size="sm" class="self-start {{ $entryMeta['class'] ?? '' }}">{{ $entryMeta['label'] }}</flux:badge>
-                            @if ($entry->note)
-                                <p class="text-sm text-zinc-600 dark:text-zinc-300">{{ $entry->note }}</p>
-                            @endif
-                            <span class="text-xs text-zinc-400">
-                                {{ $entry->changedBy?->name ?? __('Unknown') }}
-                                @if ($entry->created_at)
-                                    · {{ $entry->created_at->diffForHumans() }}
+                        <div class="flex gap-3" wire:key="history-{{ $entry->id }}">
+                            <div class="flex flex-col items-center">
+                                <span class="mt-1.5 size-2.5 shrink-0 rounded-full {{ $loop->first ? 'bg-indigo-500' : 'bg-zinc-300 dark:bg-zinc-600' }}"></span>
+                                @unless ($loop->last)
+                                    <span class="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
+                                @endunless
+                            </div>
+                            <div class="min-w-0 flex-1 {{ $loop->last ? '' : 'pb-4' }}">
+                                <flux:badge :color="$entryMeta['color']" size="sm" class="{{ $entryMeta['class'] ?? '' }}">{{ $entryMeta['label'] }}</flux:badge>
+                                @if ($entry->note)
+                                    <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{{ $entry->note }}</p>
                                 @endif
-                            </span>
+                                <p class="mt-1 text-xs text-slate-500">
+                                    {{ $entry->changedBy?->name ?? __('Unknown') }}
+                                    @if ($entry->created_at)
+                                        · {{ $entry->created_at->diffForHumans() }}
+                                    @endif
+                                </p>
+                            </div>
                         </div>
                     @empty
-                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('No activity yet.') }}</flux:text>
+                        <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('No activity yet.') }}</flux:text>
                     @endforelse
                 </div>
             </div>

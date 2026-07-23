@@ -39,6 +39,53 @@ new #[Title('Dashboard')] class extends Component {
     }
 
     /**
+     * Whether the current user may vote and comment (employee and above; viewers are read-only).
+     */
+    #[Computed]
+    public function canParticipate(): bool
+    {
+        return $this->role?->isAtLeast(TeamRole::Employee) ?? false;
+    }
+
+    /**
+     * The page heading, tailored to the current user's team role.
+     */
+    #[Computed]
+    public function heading(): string
+    {
+        return match (true) {
+            $this->role?->isAtLeast(TeamRole::Admin) => __('Organization Overview'),
+            $this->role === TeamRole::Manager => __('Team Ideas Overview'),
+            default => __('Your Ideas Hub'),
+        };
+    }
+
+    /**
+     * Toggle the current user's vote on an idea belonging to their current team.
+     */
+    public function toggleVote(int $ideaId): void
+    {
+        abort_unless($this->canParticipate, 403);
+
+        $idea = $this->team->ideas()
+            ->visibleTo($this->role, Auth::id())
+            ->findOrFail($ideaId);
+
+        $existingVote = IdeaVote::where('idea_id', $idea->id)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if ($existingVote) {
+            $existingVote->delete();
+        } else {
+            IdeaVote::firstOrCreate([
+                'idea_id' => $idea->id,
+                'user_id' => Auth::id(),
+            ]);
+        }
+    }
+
+    /**
      * Compact summary stat cards for the current user + team.
      *
      * @return array<int, array{label: string, value: int, caption: string, dot: string}>
@@ -91,6 +138,7 @@ new #[Title('Dashboard')] class extends Component {
             ->visibleTo($this->role, Auth::id())
             ->with('board:id,name')
             ->withCount(['votes', 'comments'])
+            ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->orderByRaw('(votes_count + comments_count * 3) desc')
             ->orderByDesc('id')
             ->limit(5)
@@ -128,7 +176,8 @@ new #[Title('Dashboard')] class extends Component {
 
         {{-- Header --}}
         <div>
-            <flux:text class="text-sm text-zinc-800 dark:text-zinc-400">{{ __('Welcome back') }} <strong>{{  Auth::user()->name }}!</strong></flux:text>
+            <flux:heading class="text-xl">{{ $this->heading }}</flux:heading>
+            <flux:text class="text-sm text-slate-900 dark:text-slate-500">{{ __('Welcome back') }} <strong>{{  Auth::user()->name }}!</strong></flux:text>
 
         </div>
 
@@ -138,10 +187,10 @@ new #[Title('Dashboard')] class extends Component {
                 <div class="rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-700 dark:bg-zinc-900" wire:key="stat-{{ $loop->index }}">
                     <div class="flex items-center gap-2">
                         <span class="size-2.5 rounded-full {{ $stat['dot'] }}"></span>
-                        <span class="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{{ $stat['label'] }}</span>
+                        <span class="text-xs font-semibold text-slate-600 dark:text-slate-500">{{ $stat['label'] }}</span>
                     </div>
-                    <div class="mt-2 text-3xl font-extrabold tracking-tight text-zinc-900 tabular-nums dark:text-zinc-100">{{ $stat['value'] }}</div>
-                    <div class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{{ $stat['caption'] }}</div>
+                    <div class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 tabular-nums dark:text-slate-200">{{ $stat['value'] }}</div>
+                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-600">{{ $stat['caption'] }}</div>
                 </div>
             @endforeach
         </div>
@@ -158,20 +207,38 @@ new #[Title('Dashboard')] class extends Component {
                 <div class="space-y-3">
                     @forelse ($this->trending as $idea)
                         @php($meta = $this->statusMeta($idea->status))
-                        <a
-                            href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
-                            wire:navigate
+                        <div
                             class="flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:border-indigo-200 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60"
                             wire:key="trending-{{ $idea->id }}"
                         >
-                            <div class="flex w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-zinc-200 py-1.5 dark:border-zinc-700">
-                                <flux:icon.chevron-up class="size-4 text-zinc-400" />
-                                <span class="text-sm font-extrabold text-zinc-800 dark:text-zinc-100">{{ $idea->votes_count }}</span>
-                            </div>
+                            <flux:tooltip :content="$this->canParticipate ? ($idea->voted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
+                                <button
+                                    type="button"
+                                    wire:click="toggleVote({{ $idea->id }})"
+                                    wire:loading.attr="disabled"
+                                    @disabled(! $this->canParticipate)
+                                    aria-pressed="{{ $idea->voted ? 'true' : 'false' }}"
+                                    @class([
+                                        'flex w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border py-1.5 transition',
+                                        'cursor-not-allowed opacity-60' => ! $this->canParticipate,
+                                        'cursor-pointer' => $this->canParticipate,
+                                        'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
+                                        'border-zinc-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:hover:border-indigo-500/40' => ! $idea->voted,
+                                    ])
+                                    data-test="vote-button"
+                                >
+                                    <flux:icon.chevron-up class="size-4" />
+                                    <span class="text-sm font-extrabold">{{ $idea->votes_count }}</span>
+                                </button>
+                            </flux:tooltip>
 
-                            <div class="min-w-0 flex-1">
-                                <div class="truncate font-semibold text-zinc-900 dark:text-zinc-100">{{ $idea->title }}</div>
-                                <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                            <a
+                                href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
+                                wire:navigate
+                                class="min-w-0 flex-1"
+                            >
+                                <div class="truncate font-semibold text-slate-900 dark:text-slate-200">{{ $idea->title }}</div>
+                                <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                                     <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">{{ $meta['label'] }}</flux:badge>
                                     @if ($idea->board)
                                         <span>{{ $idea->board->name }}</span>
@@ -179,12 +246,12 @@ new #[Title('Dashboard')] class extends Component {
                                     <span aria-hidden="true">·</span>
                                     <span>{{ trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]) }}</span>
                                 </div>
-                            </div>
-                        </a>
+                            </a>
+                        </div>
                     @empty
                         <div class="rounded-xl border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
-                            <flux:icon.light-bulb class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
-                            <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ __('No ideas yet — be the first to submit one.') }}</flux:text>
+                            <flux:icon.light-bulb class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No ideas yet — be the first to submit one.') }}</flux:text>
                         </div>
                     @endforelse
                 </div>
@@ -204,15 +271,15 @@ new #[Title('Dashboard')] class extends Component {
                         >
                             <x-board-avatar :name="$board->name" :index="$loop->index" />
                             <div class="min-w-0 flex-1">
-                                <div class="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{{ $board->name }}</div>
-                                <div class="text-xs text-zinc-400 dark:text-zinc-500">{{ trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]) }}</div>
+                                <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-200">{{ $board->name }}</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-600">{{ trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]) }}</div>
                             </div>
-                            <flux:icon.chevron-right class="size-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
+                            <flux:icon.chevron-right class="size-4 shrink-0 text-slate-400 dark:text-slate-700" />
                         </a>
                     @empty
                         <div class="px-4 py-10 text-center">
-                            <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
-                            <flux:text class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ __('No boards yet.') }}</flux:text>
+                            <flux:icon.chalkboard class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No boards yet.') }}</flux:text>
                         </div>
                     @endforelse
                 </div>

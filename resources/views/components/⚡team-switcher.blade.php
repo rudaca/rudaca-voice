@@ -113,7 +113,7 @@ new class extends Component {
         @if ($compact)
             <button
                 type="button"
-                class="flex min-w-0 items-center gap-1 truncate text-xs text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                class="flex min-w-0 items-center gap-1 truncate text-xs text-slate-700 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 data-test="team-switcher-trigger"
             >
                 <span class="truncate text-lg font-semibold">{{ $this->currentTeam()['name'] ?? __('Select team') }}</span>
@@ -179,7 +179,7 @@ new class extends Component {
                                 </div>
                                 <div class="flex shrink-0 items-center gap-1.5">
                                     <flux:tooltip content="{{ __('View only') }}">
-                                        <flux:icon name="eye" variant="outline" class="size-4 text-zinc-400" />
+                                        <flux:icon name="eye" variant="outline" class="size-4 text-slate-500" />
                                     </flux:tooltip>
                                     @if ($team->isCurrent)
                                         <flux:icon name="check" class="size-4" />

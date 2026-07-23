@@ -102,7 +102,7 @@ new #[Title('Teams')] class extends Component {
                                     <flux:badge color="zinc">{{ __('Personal') }}</flux:badge>
                                 @endif
                             </div>
-                            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ $team->roleLabel }}</flux:text>
+                            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ $team->roleLabel }}</flux:text>
                         </div>
                     </div>
 
@@ -156,7 +156,7 @@ new #[Title('Teams')] class extends Component {
                     </flux:modal>
                 @endif
             @empty
-                <flux:text class="py-8 text-center text-zinc-500 dark:text-zinc-400">
+                <flux:text class="py-8 text-center text-slate-600 dark:text-slate-500">
                     {{ __('You don\'t belong to any teams yet.') }}
                 </flux:text>
             @endforelse

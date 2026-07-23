@@ -9,7 +9,7 @@
             <span class="flex aspect-square size-8 shrink-0 items-center justify-center rounded-md bg-accent-content text-accent-foreground">
                 <x-app-logo-icon class="size-5 fill-current text-white dark:text-black" />
             </span>
-            <span class="min-w-0 truncate text-sm font-semibold text-zinc-800 in-data-flux-sidebar-collapsed-desktop:hidden dark:text-zinc-100">{{ $name }}</span>
+            <span class="min-w-0 truncate text-sm font-semibold text-slate-900 in-data-flux-sidebar-collapsed-desktop:hidden dark:text-slate-200">{{ $name }}</span>
         </a>
 
         <div class="mt-0.5 ps-10 in-data-flux-sidebar-collapsed-desktop:hidden">

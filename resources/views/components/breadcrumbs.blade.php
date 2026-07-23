@@ -25,7 +25,7 @@
         $last = $trail[count($trail) - 1];
     }
 
-    $activeClass = 'text-xs font-semibold text-zinc-800 dark:text-white';
+    $activeClass = 'text-xs font-semibold text-slate-900 dark:text-white';
     $inactiveClass = 'text-xs';
 @endphp
 
@@ -37,7 +37,7 @@
             <flux:dropdown position="bottom" align="start">
                 <button
                     type="button"
-                    class="flex items-center rounded px-1 text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
+                    class="flex items-center rounded px-1 text-slate-500 transition hover:text-slate-800 dark:hover:text-slate-300"
                     data-test="breadcrumbs-ellipsis"
                 >
                     <flux:icon name="ellipsis-horizontal" variant="mini" class="size-3.5" />
@@ -56,8 +56,8 @@
                 </flux:menu>
             </flux:dropdown>
 
-            <flux:icon icon="chevron-right" variant="mini" class="mx-0.5 text-zinc-300 rtl:hidden dark:text-white/80" />
-            <flux:icon icon="chevron-left" variant="mini" class="mx-0.5 hidden text-zinc-300 rtl:inline dark:text-white/80" />
+            <flux:icon icon="chevron-right" variant="mini" class="mx-0.5 text-slate-400 rtl:hidden dark:text-white/80" />
+            <flux:icon icon="chevron-left" variant="mini" class="mx-0.5 hidden text-slate-400 rtl:inline dark:text-white/80" />
         </div>
 
         <flux:breadcrumbs.item :href="$last['href'] ?? null" class="{{ ($last['href'] ?? null) === null ? $activeClass : $inactiveClass }}">

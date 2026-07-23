@@ -185,13 +185,13 @@ new class extends Component {
             data-test="global-search-results"
         >
             @if (! $this->hasResults)
-                <div class="px-4 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                <div class="px-4 py-6 text-center text-sm text-slate-600 dark:text-slate-500">
                     {{ __('No results for ":query".', ['query' => $query]) }}
                 </div>
             @else
                 @if ($this->ideas->isNotEmpty())
                     <div class="border-b border-zinc-100 py-2 dark:border-zinc-800">
-                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">{{ __('Ideas') }}</div>
+                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">{{ __('Ideas') }}</div>
                         @foreach ($this->ideas as $idea)
                             @php($meta = $this->statusMeta($idea->status))
                             @php($author = $this->ideaAuthor($idea))
@@ -199,13 +199,13 @@ new class extends Component {
                                 href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
                                 wire:navigate
                                 x-on:click="open = false"
-                                class="flex items-start gap-2 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+                                class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 hover:bg-zinc-50 dark:text-slate-300 dark:hover:bg-zinc-800/60"
                                 data-test="global-search-idea"
                             >
-                                <flux:icon.light-bulb class="mt-0.5 size-4 shrink-0 text-zinc-400" />
+                                <flux:icon.light-bulb class="mt-0.5 size-4 shrink-0 text-slate-500" />
                                 <div class="min-w-0 flex-1">
                                     <span class="block truncate text-sm font-semibold">{{ $idea->title }}</span>
-                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                                         <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
                                         <span>{{ $author }}</span>
                                         <span aria-hidden="true">·</span>
@@ -226,19 +226,19 @@ new class extends Component {
 
                 @if ($this->boards->isNotEmpty())
                     <div class="border-b border-zinc-100 py-2 dark:border-zinc-800">
-                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">{{ __('Boards') }}</div>
+                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">{{ __('Boards') }}</div>
                         @foreach ($this->boards as $board)
                             <a
                                 href="{{ route('ideas.index', ['board' => $board->id]) }}"
                                 wire:navigate
                                 x-on:click="open = false"
-                                class="flex items-start gap-2 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+                                class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 hover:bg-zinc-50 dark:text-slate-300 dark:hover:bg-zinc-800/60"
                                 data-test="global-search-board"
                             >
                                 <x-board-avatar :name="$board->name" size="size-5 text-[10px]" />
                                 <div class="min-w-0 flex-1">
                                     <span class="block truncate text-sm font-semibold">{{ $board->name }}</span>
-                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                                         @if ($board->boardGroup)
                                             <span>{{ $board->boardGroup->name }}</span>
                                             <span aria-hidden="true">·</span>
@@ -254,14 +254,14 @@ new class extends Component {
 
                 @if ($this->people->isNotEmpty())
                     <div class="py-2">
-                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">{{ __('People') }}</div>
+                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">{{ __('People') }}</div>
                         @foreach ($this->people as $person)
                             @php($stats = $this->personStats($person))
-                            <div class="flex items-start gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200" data-test="global-search-person">
+                            <div class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 dark:text-slate-300" data-test="global-search-person">
                                 <flux:avatar :name="$person->name" size="xs" color="auto" color:seed="{{ $person->id }}" />
                                 <div class="min-w-0 flex-1">
                                     <span class="block truncate text-sm font-semibold">{{ $person->name }}</span>
-                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                                         <flux:icon.chalkboard class="size-3.5" />
                                         <span>{{ $stats['boards'] }} {{ Str::plural('board', $stats['boards']) }}</span>
                                         <span aria-hidden="true">·</span>

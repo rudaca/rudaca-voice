@@ -12,7 +12,7 @@ use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new #[Title('Organization settings')] class extends Component {
+new #[Title('Organization Settings')] class extends Component {
     /** @var array<string, string> */
     public const VISIBILITY_OPTIONS = [
         'internal' => 'Internal',
@@ -79,7 +79,7 @@ new #[Title('Organization settings')] class extends Component {
 
     public string $quickCategoryBoardId = '';
 
-    // --- Team settings form (Settings tab) ---
+    // --- Organization settings form (Settings tab) ---
     public string $orgTeamName = '';
 
     public bool $orgAllowAnonymousIdeas = true;
@@ -208,7 +208,7 @@ new #[Title('Organization settings')] class extends Component {
         ];
     }
 
-    // ----- Team settings -----
+    // ----- Organization settings -----
 
     public function saveTeamSettings(): void
     {
@@ -224,7 +224,7 @@ new #[Title('Organization settings')] class extends Component {
             'allow_anonymous_ideas' => $this->orgAllowAnonymousIdeas,
         ]);
 
-        Flux::toast(variant: 'success', text: __('Team settings saved.'));
+        Flux::toast(variant: 'success', text: __('Organization settings saved.'));
 
         $this->redirectRoute('ideas.settings', ['current_team' => $team->fresh()->slug, 'tab' => 'settings'], navigate: true);
     }
@@ -491,14 +491,14 @@ new #[Title('Organization settings')] class extends Component {
 
 @push('breadcrumbs')
     <x-breadcrumbs :items="[
-        ['label' => __('Organization settings'), 'href' => null],
+        ['label' => __('Organization Settings'), 'href' => null],
     ]" />
 @endpush
 
 <section class="mx-auto w-full  px-6 pb-7 lg:px-8">
     <div class="flex flex-col gap-1">
-        <flux:heading size="xl">{{ __('Organization settings') }}</flux:heading>
-        <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('Manage boards, categories, and members for :team.', ['team' => $this->team->name]) }}</flux:text>
+        <flux:heading size="xl">{{ __('Organization Settings') }}</flux:heading>
+        <flux:text class="text-slate-600 dark:text-slate-500">{{ __('Manage boards, groups, categories, members and settings for :team.', ['team' => $this->team->name]) }}</flux:text>
     </div>
 
     {{-- Tabs --}}
@@ -540,7 +540,7 @@ new #[Title('Organization settings')] class extends Component {
                     @class([
                         'px-1 py-3 text-sm font-medium transition-colors',
                         'text-indigo-600 dark:text-indigo-400' => $tab === $key,
-                        'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200' => $tab !== $key,
+                        'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $tab !== $key,
                     ])
                     data-test="tab-{{ $key }}"
                 >
@@ -550,7 +550,7 @@ new #[Title('Organization settings')] class extends Component {
         </nav>
     </x-sticky-toolbar>
 
-    <flux:text class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+    <flux:text class="mt-4 text-sm text-slate-600 dark:text-slate-500">
         @switch($tab)
             @case('groups'){{ __('Groups organize related boards together.') }}@break
             @case('categories'){{ __('Categories classify ideas within a board.') }}@break
@@ -567,7 +567,7 @@ new #[Title('Organization settings')] class extends Component {
             <div class="flex items-center justify-between gap-2">
                 <select
                     wire:model.live="boardGroupFilter"
-                    class="rounded-lg border border-gray-200 bg-white py-1.5 ps-3 pe-8 text-sm text-zinc-700 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                    class="rounded-lg border border-gray-200 bg-white py-1.5 ps-3 pe-8 text-sm text-slate-800 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-slate-400"
                     data-test="board-group-filter"
                 >
                     <option value="">{{ __('All Groups') }}</option>
@@ -585,13 +585,13 @@ new #[Title('Organization settings')] class extends Component {
                             <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($board->name, 0, 1)) }}</span>
                             <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $board->name }}</span>
+                                <span class="font-bold text-slate-900 dark:text-slate-200">{{ $board->name }}</span>
                                 <flux:badge color="zinc" size="sm" variant="outline">{{ self::VISIBILITY_OPTIONS[$board->visibility] ?? ucfirst($board->visibility) }}</flux:badge>
                                 @unless ($board->is_active)
                                     <flux:badge color="zinc" size="sm">{{ __('Inactive') }}</flux:badge>
                                 @endunless
                             </div>
-                            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
+                            <flux:text class="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
                                 @php
                                     $boardSubheadingSegments = array_filter([
                                         trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]),
@@ -600,7 +600,8 @@ new #[Title('Organization settings')] class extends Component {
                                     ]);
                                 @endphp
                                 @foreach ($boardSubheadingSegments as $segment)
-                                    @if ($loop->first)<span class="font-semibold">{{ $segment }}</span>@else{{ $segment }}@endif@unless ($loop->last)<span class="text-indigo-700 dark:text-indigo-200"> &middot; </span>@endunless
+                                    @if ($loop->first)<span class="font-semibold">{{ $segment }}</span>@else<span>{{ $segment }}</span>@endif
+                                    @unless ($loop->last)<flux:separator vertical class="bg-indigo-700! dark:bg-indigo-200!" />@endunless
                                 @endforeach
                             </flux:text>
                             </div>
@@ -622,8 +623,8 @@ new #[Title('Organization settings')] class extends Component {
                     </div>
                 @empty
                     <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
-                        <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
-                        <flux:text class="mt-2 text-zinc-500 dark:text-zinc-400">{{ __('No boards yet.') }}</flux:text>
+                        <flux:icon.chalkboard class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                        <flux:text class="mt-2 text-slate-600 dark:text-slate-500">{{ __('No boards yet.') }}</flux:text>
                     </div>
                 @endforelse
             </div>
@@ -643,12 +644,12 @@ new #[Title('Organization settings')] class extends Component {
                             <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($group->name, 0, 1)) }}</span>
                             <div class="min-w-0">
                                 <div class="flex items-center gap-2">
-                                    <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $group->name }}</span>
+                                    <span class="font-bold text-slate-900 dark:text-slate-200">{{ $group->name }}</span>
                                     @unless ($group->is_active)
                                         <flux:badge color="zinc" size="sm">{{ __('Inactive') }}</flux:badge>
                                     @endunless
                                 </div>
-                                <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
+                                <flux:text class="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
                                     @php
                                         $groupSubheadingSegments = array_filter([
                                             trans_choice(':count board|:count boards', $group->boards_count, ['count' => $group->boards_count]),
@@ -657,7 +658,8 @@ new #[Title('Organization settings')] class extends Component {
                                         ]);
                                     @endphp
                                     @foreach ($groupSubheadingSegments as $segment)
-                                        @if ($loop->first)<span class="font-semibold">{{ $segment }}</span>@else{{ $segment }}@endif@unless ($loop->last)<span class="text-indigo-700 dark:text-indigo-200"> &middot; </span>@endunless
+                                        @if ($loop->first)<span class="font-semibold">{{ $segment }}</span>@else<span>{{ $segment }}</span>@endif
+                                        @unless ($loop->last)<flux:separator vertical class="bg-indigo-700! dark:bg-indigo-200!" />@endunless
                                     @endforeach
                                 </flux:text>
                             </div>
@@ -679,8 +681,8 @@ new #[Title('Organization settings')] class extends Component {
                     </div>
                 @empty
                     <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
-                        <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
-                        <flux:text class="mt-2 text-zinc-500 dark:text-zinc-400">{{ __('No board groups yet.') }}</flux:text>
+                        <flux:icon.chalkboard class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                        <flux:text class="mt-2 text-slate-600 dark:text-slate-500">{{ __('No board groups yet.') }}</flux:text>
                     </div>
                 @endforelse
             </div>
@@ -706,11 +708,11 @@ new #[Title('Organization settings')] class extends Component {
                         ])
                     >
                         <span class="size-2 rounded-full {{ $__categoryDotColors[$category->id % count($__categoryDotColors)] }}"></span>
-                        <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $category->name }}</span>
+                        <span class="font-bold text-slate-900 dark:text-slate-200">{{ $category->name }}</span>
                         <flux:badge color="zinc" size="sm" variant="outline">{{ $category->ideas_count }}</flux:badge>
                     </button>
                 @empty
-                    <flux:text class="text-zinc-500 dark:text-zinc-400">{{ __('No categories yet.') }}</flux:text>
+                    <flux:text class="text-slate-600 dark:text-slate-500">{{ __('No categories yet.') }}</flux:text>
                 @endforelse
             </div>
 
@@ -731,7 +733,7 @@ new #[Title('Organization settings')] class extends Component {
         <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="w-full text-sm">
                 <thead class="bg-zinc-50 dark:bg-zinc-800/50">
-                    <tr class="text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+                    <tr class="text-xs font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-500">
                         <th class="px-4 py-2.5 text-start">{{ __('Member') }}</th>
                         <th class="px-4 py-2.5 text-start">{{ __('Email') }}</th>
                         <th class="px-4 py-2.5 text-start">{{ __('Role') }}</th>
@@ -743,10 +745,10 @@ new #[Title('Organization settings')] class extends Component {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
                                     <flux:avatar :name="$member->name" size="xs" color="auto" color:seed="{{ $member->id }}" />
-                                    <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $member->name }}</span>
+                                    <span class="font-bold text-slate-900 dark:text-slate-200">{{ $member->name }}</span>
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-zinc-500 dark:text-zinc-400">{{ $member->email }}</td>
+                            <td class="px-4 py-3 text-slate-600 dark:text-slate-500">{{ $member->email }}</td>
                             <td class="px-4 py-3">
                                 <flux:badge size="sm" :color="self::ROLE_BADGE_COLORS[$member->pivot->role->value] ?? 'zinc'">
                                     {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Admin / Owner') : $member->pivot->role->label() }}
@@ -765,24 +767,24 @@ new #[Title('Organization settings')] class extends Component {
         <div class="mt-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                    <flux:icon.code-bracket-square class="size-8 text-zinc-800 dark:text-zinc-200" />
+                    <flux:icon.code-bracket-square class="size-8 text-slate-900 dark:text-slate-300" />
                     <div>
                         <flux:heading>{{ __('GitHub') }}</flux:heading>
-                        <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Turn approved ideas into tracked issues.') }}</flux:text>
+                        <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Turn approved ideas into tracked issues.') }}</flux:text>
                     </div>
                 </div>
                 <flux:badge color="green" size="sm">{{ __('Connected') }}</flux:badge>
             </div>
 
             <div class="mt-5 space-y-1">
-                <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Default repository') }}</flux:text>
+                <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Default repository') }}</flux:text>
                 <flux:input value="rudaca/rudaca-voice" disabled data-test="integration-repo" />
             </div>
 
             <div class="mt-5 flex items-center justify-between gap-4">
                 <div>
-                    <flux:text class="font-medium text-zinc-900 dark:text-zinc-100">{{ __('Auto-create issues on approval') }}</flux:text>
-                    <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Draft an issue whenever an idea is approved for development.') }}</flux:text>
+                    <flux:text class="font-medium text-slate-900 dark:text-slate-200">{{ __('Auto-create issues on approval') }}</flux:text>
+                    <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Draft an issue whenever an idea is approved for development.') }}</flux:text>
                 </div>
                 <flux:switch :checked="false" disabled data-test="integration-auto-create" />
             </div>

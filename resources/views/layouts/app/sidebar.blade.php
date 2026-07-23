@@ -72,7 +72,7 @@
                 <flux:separator variant="subtle" class="sidebar-divider" />
 
                 <flux:sidebar.nav>
-                    <div class="in-data-flux-sidebar-collapsed-desktop:hidden px-4 pt-1 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+                    <div class="in-data-flux-sidebar-collapsed-desktop:hidden px-4 pt-1 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">
                         {{ __('Administration') }}
                     </div>
 
@@ -100,7 +100,7 @@
                                 {{ __('Moderate Comments') }}
                             </flux:sidebar.item>
 
-                            <flux:sidebar.item icon="cog" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
+                            <flux:sidebar.item icon="adjustments-horizontal" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
                                 {{ __('Organization Settings') }}
                             </flux:sidebar.item>
                         @endif
@@ -112,7 +112,7 @@
                 <flux:separator variant="subtle" class="sidebar-divider" />
 
                 <div class="in-data-flux-sidebar-collapsed-desktop:hidden mt-2 px-3">
-                    <div class="flex items-center gap-1.5 px-1 py-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+                    <div class="flex items-center gap-1.5 px-1 py-2 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">
                         <flux:icon.chalkboard class="size-3.5" />
                         {{ __('Boards') }}
                     </div>
@@ -125,7 +125,7 @@
                         <flux:dropdown position="right" align="start" data-test="sidebar-boards-dropdown">
                             <button
                                 type="button"
-                                class="flex size-10 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-800/5 hover:text-zinc-800 dark:text-white/80 dark:hover:bg-white/[7%] dark:hover:text-white"
+                                class="flex size-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-zinc-800/5 hover:text-slate-900 dark:text-white/80 dark:hover:bg-white/[7%] dark:hover:text-white"
                                 aria-label="{{ __('Boards') }}"
                                 data-test="sidebar-boards-trigger"
                             >

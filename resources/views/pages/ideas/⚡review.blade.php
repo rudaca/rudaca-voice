@@ -168,7 +168,7 @@ new #[Title('Review queue')] class extends Component {
     {{-- Header --}}
     <div class="flex flex-col gap-1">
         <flux:heading size="xl">{{ __('Review queue') }}</flux:heading>
-        <flux:text class="text-zinc-500 dark:text-zinc-400">
+        <flux:text class="text-slate-600 dark:text-slate-500">
             {{ __('New and under-review ideas waiting on a decision. Triage the highest-voted first.') }}
         </flux:text>
     </div>
@@ -176,18 +176,18 @@ new #[Title('Review queue')] class extends Component {
     {{-- Stats --}}
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-awaiting">
-            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Awaiting review') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-zinc-900 dark:text-white">{{ $this->stats['awaiting'] }}</div>
+            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Awaiting review') }}</flux:text>
+            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['awaiting'] }}</div>
         </div>
 
         <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-new-this-week">
-            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('New this week') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-zinc-900 dark:text-white">{{ $this->stats['newThisWeek'] }}</div>
+            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('New this week') }}</flux:text>
+            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['newThisWeek'] }}</div>
         </div>
 
         <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-total-votes">
-            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Total votes in queue') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-zinc-900 dark:text-white">{{ $this->stats['totalVotes'] }}</div>
+            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Total votes in queue') }}</flux:text>
+            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['totalVotes'] }}</div>
         </div>
     </div>
 
@@ -216,8 +216,8 @@ new #[Title('Review queue')] class extends Component {
                     <flux:table.row :key="'queue-'.$idea->id" data-test="queue-row">
                         <flux:table.cell>
                             <div class="flex w-14 flex-col items-center gap-0.5 rounded-lg border border-zinc-200 py-1.5 dark:border-zinc-700">
-                                <span class="text-base font-extrabold text-zinc-800 dark:text-zinc-100">{{ $idea->votes_count }}</span>
-                                <flux:icon.chevron-up class="size-3 text-zinc-400" />
+                                <span class="text-base font-extrabold text-slate-900 dark:text-slate-200">{{ $idea->votes_count }}</span>
+                                <flux:icon.chevron-up class="size-3 text-slate-500" />
                             </div>
                         </flux:table.cell>
 
@@ -225,13 +225,13 @@ new #[Title('Review queue')] class extends Component {
                             <a href="{{ route('ideas.show', ['idea' => $idea->slug]) }}" wire:navigate class="hover:underline">
                                 <flux:heading size="sm">{{ $idea->title }}</flux:heading>
                             </a>
-                            <div class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                            <div class="mt-0.5 text-xs text-slate-600 dark:text-slate-500">
                                 {{ $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')) }}
                                 &middot; {{ trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]) }}
                             </div>
                         </flux:table.cell>
 
-                        <flux:table.cell class="text-zinc-600 dark:text-zinc-300">
+                        <flux:table.cell class="text-slate-700 dark:text-slate-400">
                             {{ $idea->board?->name }}
                         </flux:table.cell>
 
@@ -269,7 +269,7 @@ new #[Title('Review queue')] class extends Component {
                             <div class="py-14 text-center" data-test="review-empty">
                                 <flux:icon.check-circle class="mx-auto size-8 text-emerald-400 dark:text-emerald-500" />
                                 <flux:heading class="mt-3">{{ __('Queue is clear') }}</flux:heading>
-                                <flux:text class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('Nothing needs attention right now. Nice work. 🎉') }}</flux:text>
+                                <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">{{ __('Nothing needs attention right now. Nice work. 🎉') }}</flux:text>
                             </div>
                         </flux:table.cell>
                     </flux:table.row>
