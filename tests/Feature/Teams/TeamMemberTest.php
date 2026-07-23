@@ -52,7 +52,8 @@ test('team member can be removed by owner', function () {
     Livewire::test('pages::teams.remove-member-modal', ['team' => $team])
         ->set('memberId', $member->id)
         ->call('removeMember')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-close', name: 'remove-member');
 
     expect($member->fresh()->belongsToTeam($team))->toBeFalse();
 });

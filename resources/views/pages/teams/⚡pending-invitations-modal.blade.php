@@ -83,7 +83,7 @@ new class extends Component {
 
 <div>
     @if ($this->pendingInvitations->isNotEmpty())
-        <flux:modal name="pending-invitations" wire:model="showPendingInvitationsModal" focusable class="max-w-lg">
+        <flux:modal name="pending-invitations" wire:model="showPendingInvitationsModal" focusable scroll="body" :dismissible="false" class="max-w-lg">
             <div data-test="pending-invitations-modal" class="space-y-6">
                 <div>
                     <flux:heading size="lg">{{ __('Pending team invitations') }}</flux:heading>

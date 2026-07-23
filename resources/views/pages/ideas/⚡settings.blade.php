@@ -15,10 +15,8 @@ use Livewire\Component;
 new #[Title('Organization settings')] class extends Component {
     /** @var array<string, string> */
     public const VISIBILITY_OPTIONS = [
-        'public' => 'Public',
         'internal' => 'Internal',
-        'restricted' => 'Restricted',
-        'private' => 'Private',
+        'external' => 'External',
     ];
 
     /** @var array<string, string> */
@@ -33,6 +31,9 @@ new #[Title('Organization settings')] class extends Component {
 
     #[Url(as: 'tab')]
     public string $tab = 'boards';
+
+    // --- Boards list filter ---
+    public string $boardGroupFilter = '';
 
     // --- Board group form ---
     public ?int $groupId = null;
@@ -58,7 +59,7 @@ new #[Title('Organization settings')] class extends Component {
 
     public string $boardVisibility = 'internal';
 
-    public bool $boardIsActive = true;
+    public string $boardIsActive = '1';
 
     // --- Category form ---
     public ?int $categoryId = null;
@@ -117,6 +118,23 @@ new #[Title('Organization settings')] class extends Component {
         return $this->team->boards()
             ->with('boardGroup:id,name')
             ->withCount('ideas')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Boards shown on the Boards tab, narrowed to the selected group filter.
+     *
+     * @return Collection<int, \App\Models\IdeaBoard>
+     */
+    #[Computed]
+    public function filteredBoards(): Collection
+    {
+        return $this->team->boards()
+            ->with('boardGroup:id,name')
+            ->withCount('ideas')
+            ->when($this->boardGroupFilter !== '', fn ($query) => $query->where('board_group_id', $this->boardGroupFilter))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -217,7 +235,7 @@ new #[Title('Organization settings')] class extends Component {
     {
         $this->reset('groupId', 'groupName', 'groupSlug', 'groupDescription', 'groupIsActive');
         $this->resetValidation();
-        $this->dispatch('open-modal', name: 'board-group');
+        $this->dispatch('modal-show', name: 'board-group');
     }
 
     public function editBoardGroup(int $id): void
@@ -231,7 +249,7 @@ new #[Title('Organization settings')] class extends Component {
         $this->groupIsActive = $group->is_active;
 
         $this->resetValidation();
-        $this->dispatch('open-modal', name: 'board-group');
+        $this->dispatch('modal-show', name: 'board-group');
     }
 
     public function saveBoardGroup(): void
@@ -263,7 +281,7 @@ new #[Title('Organization settings')] class extends Component {
         }
 
         unset($this->boardGroups);
-        $this->dispatch('close-modal', name: 'board-group');
+        $this->dispatch('modal-close', name: 'board-group');
         Flux::toast(variant: 'success', text: __('Board group saved.'));
     }
 
@@ -280,7 +298,7 @@ new #[Title('Organization settings')] class extends Component {
     {
         $this->reset('boardId', 'boardName', 'boardSlug', 'boardDescription', 'boardGroupId', 'boardVisibility', 'boardIsActive');
         $this->resetValidation();
-        $this->dispatch('open-modal', name: 'board');
+        $this->dispatch('modal-show', name: 'board');
     }
 
     public function editBoard(int $id): void
@@ -293,16 +311,45 @@ new #[Title('Organization settings')] class extends Component {
         $this->boardDescription = $board->description ?? '';
         $this->boardGroupId = $board->board_group_id ? (string) $board->board_group_id : null;
         $this->boardVisibility = $board->visibility;
-        $this->boardIsActive = $board->is_active;
+        $this->boardIsActive = $board->is_active ? '1' : '0';
 
         $this->resetValidation();
-        $this->dispatch('open-modal', name: 'board');
+        $this->dispatch('modal-show', name: 'board');
+    }
+
+    /**
+     * Keep the read-only slug preview in sync as the admin types the board name.
+     */
+    public function updatedBoardName(): void
+    {
+        $this->boardSlug = $this->nextAvailableBoardSlug($this->boardName, $this->boardId);
+    }
+
+    /**
+     * Slugify $name and append a numeric suffix until it is unique among the team's boards.
+     */
+    private function nextAvailableBoardSlug(string $name, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($name) ?: 'board';
+        $slug = $base;
+        $suffix = 1;
+
+        while ($this->team->boards()->where('slug', $slug)->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))->exists()) {
+            $suffix++;
+            $slug = "{$base}-{$suffix}";
+        }
+
+        return $slug;
     }
 
     public function saveBoard(): void
     {
         $teamId = $this->team->id;
-        $this->boardSlug = Str::slug($this->boardSlug !== '' ? $this->boardSlug : $this->boardName);
+        // The slug field is read-only in the UI, but recompute it here too rather than
+        // trusting whatever the client sent — it's the only way to guarantee uniqueness
+        // even if a request tampers with the value or arrives out of order with the
+        // live "updatedBoardName" recompute.
+        $this->boardSlug = $this->nextAvailableBoardSlug($this->boardName, $this->boardId);
         $this->boardGroupId = $this->boardGroupId !== '' ? $this->boardGroupId : null;
 
         $validated = $this->validate([
@@ -311,7 +358,7 @@ new #[Title('Organization settings')] class extends Component {
             'boardDescription' => ['nullable', 'string', 'max:1000'],
             'boardGroupId' => ['nullable', Rule::exists('idea_board_groups', 'id')->where('team_id', $teamId)],
             'boardVisibility' => ['required', Rule::in(array_keys(self::VISIBILITY_OPTIONS))],
-            'boardIsActive' => ['boolean'],
+            'boardIsActive' => ['required', Rule::in(['1', '0'])],
         ]);
 
         $attributes = [
@@ -320,7 +367,7 @@ new #[Title('Organization settings')] class extends Component {
             'description' => $validated['boardDescription'] !== '' ? $validated['boardDescription'] : null,
             'board_group_id' => $validated['boardGroupId'] ?: null,
             'visibility' => $validated['boardVisibility'],
-            'is_active' => $this->boardIsActive,
+            'is_active' => $this->boardIsActive === '1',
         ];
 
         if ($this->boardId) {
@@ -332,8 +379,8 @@ new #[Title('Organization settings')] class extends Component {
             ]);
         }
 
-        unset($this->boards);
-        $this->dispatch('close-modal', name: 'board');
+        unset($this->boards, $this->filteredBoards);
+        $this->dispatch('modal-close', name: 'board');
         Flux::toast(variant: 'success', text: __('Board saved.'));
     }
 
@@ -341,7 +388,7 @@ new #[Title('Organization settings')] class extends Component {
     {
         $board = $this->team->boards()->findOrFail($id);
         $board->update(['is_active' => ! $board->is_active]);
-        unset($this->boards);
+        unset($this->boards, $this->filteredBoards);
     }
 
     // ----- Categories -----
@@ -350,7 +397,7 @@ new #[Title('Organization settings')] class extends Component {
     {
         $this->reset('categoryId', 'categoryName', 'categorySlug', 'categoryDescription', 'categoryBoardId', 'categoryIsActive');
         $this->resetValidation();
-        $this->dispatch('open-modal', name: 'category');
+        $this->dispatch('modal-show', name: 'category');
     }
 
     public function editCategory(int $id): void
@@ -365,7 +412,7 @@ new #[Title('Organization settings')] class extends Component {
         $this->categoryIsActive = $category->is_active;
 
         $this->resetValidation();
-        $this->dispatch('open-modal', name: 'category');
+        $this->dispatch('modal-show', name: 'category');
     }
 
     public function saveCategory(): void
@@ -398,7 +445,7 @@ new #[Title('Organization settings')] class extends Component {
         }
 
         unset($this->categories);
-        $this->dispatch('close-modal', name: 'category');
+        $this->dispatch('modal-close', name: 'category');
         Flux::toast(variant: 'success', text: __('Category saved.'));
     }
 
@@ -479,6 +526,7 @@ new #[Title('Organization settings')] class extends Component {
 
             @foreach ([
                 'boards' => __('Boards'),
+                'groups' => __('Groups'),
                 'categories' => __('Categories'),
                 'members' => __('Members'),
                 // 'integrations' => __('Integrations'), // hidden — replaced by the Settings tab
@@ -504,6 +552,7 @@ new #[Title('Organization settings')] class extends Component {
 
     <flux:text class="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
         @switch($tab)
+            @case('groups'){{ __('Groups organize related boards together.') }}@break
             @case('categories'){{ __('Categories classify ideas within a board.') }}@break
             @case('members'){{ __('People with access to this organization.') }}@break
             {{-- @case('integrations'){{ __('Connect external tools to your idea workflow.') }}@break --}}
@@ -515,14 +564,22 @@ new #[Title('Organization settings')] class extends Component {
     {{-- Boards --}}
     @if ($tab === 'boards')
         <div class="mt-5">
-            <div class="flex items-center justify-end gap-2">
-                <flux:modal.trigger name="manage-groups">
-                    <flux:button variant="ghost" size="sm" icon="folder" data-test="manage-groups">{{ __('Manage groups') }}</flux:button>
-                </flux:modal.trigger>
+            <div class="flex items-center justify-between gap-2">
+                <select
+                    wire:model.live="boardGroupFilter"
+                    class="rounded-lg border border-gray-200 bg-white py-1.5 ps-3 pe-8 text-sm text-zinc-700 focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                    data-test="board-group-filter"
+                >
+                    <option value="">{{ __('All Groups') }}</option>
+                    @foreach ($this->boardGroups as $group)
+                        <option value="{{ $group->id }}">{{ $group->name }}</option>
+                    @endforeach
+                </select>
+
                 <flux:button wire:click="newBoard" variant="primary" icon="plus" size="sm" data-test="new-board">{{ __('New board') }}</flux:button>
             </div>
             <div class="mt-4 space-y-2">
-                @forelse ($this->boards as $board)
+                @forelse ($this->filteredBoards as $board)
                     <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" wire:key="board-{{ $board->id }}" data-test="board-row">
                         <div class="flex min-w-0 items-center gap-3">
                             <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($board->name, 0, 1)) }}</span>
@@ -535,16 +592,29 @@ new #[Title('Organization settings')] class extends Component {
                                 @endunless
                             </div>
                             <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
-                                {{ implode(' · ', array_filter([
-                                    $board->boardGroup?->name ?? __('No group'),
-                                    trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]),
-                                    $board->description,
-                                ])) }}
+                                @php
+                                    $boardSubheadingSegments = array_filter([
+                                        trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]),
+                                        $board->boardGroup?->name ?? __('No group'),
+                                        $board->description,
+                                    ]);
+                                @endphp
+                                @foreach ($boardSubheadingSegments as $segment)
+                                    @if ($loop->first)<span class="font-semibold">{{ $segment }}</span>@else{{ $segment }}@endif@unless ($loop->last)<span class="text-indigo-700 dark:text-indigo-200"> &middot; </span>@endunless
+                                @endforeach
                             </flux:text>
                             </div>
                         </div>
                         <div class="flex shrink-0 items-center gap-1">
-                            <flux:button wire:click="toggleBoard({{ $board->id }})" variant="ghost" size="sm">
+                            <flux:button
+                                wire:click="toggleBoard({{ $board->id }})"
+                                variant="outline"
+                                size="sm"
+                                data-test="toggle-board"
+                                :class="$board->is_active
+                                    ? 'text-rose-700! border-rose-700! dark:text-rose-400! dark:border-rose-800!'
+                                    : 'text-teal-700! border-teal-700! dark:text-teal-400! dark:border-teal-800!'"
+                            >
                                 {{ $board->is_active ? __('Deactivate') : __('Activate') }}
                             </flux:button>
                             <flux:button wire:click="editBoard({{ $board->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-board" />
@@ -554,6 +624,63 @@ new #[Title('Organization settings')] class extends Component {
                     <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
                         <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
                         <flux:text class="mt-2 text-zinc-500 dark:text-zinc-400">{{ __('No boards yet.') }}</flux:text>
+                    </div>
+                @endforelse
+            </div>
+        </div>
+    @endif
+
+    {{-- Groups --}}
+    @if ($tab === 'groups')
+        <div class="mt-5">
+            <div class="flex items-center justify-end gap-2">
+                <flux:button wire:click="newBoardGroup" variant="primary" icon="plus" size="sm" data-test="new-group">{{ __('New group') }}</flux:button>
+            </div>
+            <div class="mt-4 space-y-2">
+                @forelse ($this->boardGroups as $group)
+                    <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" wire:key="group-{{ $group->id }}" data-test="group-row">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($group->name, 0, 1)) }}</span>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $group->name }}</span>
+                                    @unless ($group->is_active)
+                                        <flux:badge color="zinc" size="sm">{{ __('Inactive') }}</flux:badge>
+                                    @endunless
+                                </div>
+                                <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
+                                    @php
+                                        $groupSubheadingSegments = array_filter([
+                                            trans_choice(':count board|:count boards', $group->boards_count, ['count' => $group->boards_count]),
+                                            $group->slug,
+                                            $group->description,
+                                        ]);
+                                    @endphp
+                                    @foreach ($groupSubheadingSegments as $segment)
+                                        @if ($loop->first)<span class="font-semibold">{{ $segment }}</span>@else{{ $segment }}@endif@unless ($loop->last)<span class="text-indigo-700 dark:text-indigo-200"> &middot; </span>@endunless
+                                    @endforeach
+                                </flux:text>
+                            </div>
+                        </div>
+                        <div class="flex shrink-0 items-center gap-1">
+                            <flux:button
+                                wire:click="toggleBoardGroup({{ $group->id }})"
+                                variant="outline"
+                                size="sm"
+                                data-test="toggle-group"
+                                :class="$group->is_active
+                                    ? 'text-rose-700! border-rose-700! dark:text-rose-400! dark:border-rose-800!'
+                                    : 'text-teal-700! border-teal-700! dark:text-teal-400! dark:border-teal-800!'"
+                            >
+                                {{ $group->is_active ? __('Deactivate') : __('Activate') }}
+                            </flux:button>
+                            <flux:button wire:click="editBoardGroup({{ $group->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-group" />
+                        </div>
+                    </div>
+                @empty
+                    <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
+                        <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
+                        <flux:text class="mt-2 text-zinc-500 dark:text-zinc-400">{{ __('No board groups yet.') }}</flux:text>
                     </div>
                 @endforelse
             </div>
@@ -688,48 +815,8 @@ new #[Title('Organization settings')] class extends Component {
         </div>
     @endif
 
-    {{-- Manage board groups modal --}}
-    <flux:modal name="manage-groups" class="max-w-xl" data-test="manage-groups-modal">
-        <div class="flex items-center justify-between">
-            <flux:heading size="lg">{{ __('Board groups') }}</flux:heading>
-            <flux:button wire:click="newBoardGroup" variant="primary" icon="plus" size="sm" data-test="new-group">{{ __('New group') }}</flux:button>
-        </div>
-
-        <div class="mt-4 space-y-2">
-            @forelse ($this->boardGroups as $group)
-                <div class="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900" wire:key="group-{{ $group->id }}" data-test="group-row">
-                    <div class="flex min-w-0 items-center gap-3">
-                        <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-sm font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">{{ strtoupper(mb_substr($group->name, 0, 1)) }}</span>
-                        <div class="min-w-0">
-                            <div class="flex items-center gap-2">
-                                <span class="font-medium text-zinc-900 dark:text-zinc-100">{{ $group->name }}</span>
-                                @unless ($group->is_active)
-                                    <flux:badge color="zinc" size="sm">{{ __('Inactive') }}</flux:badge>
-                                @endunless
-                            </div>
-                            <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">
-                                {{ implode(' · ', array_filter([$group->slug, trans_choice(':count board|:count boards', $group->boards_count, ['count' => $group->boards_count]), $group->description])) }}
-                            </flux:text>
-                        </div>
-                    </div>
-                    <div class="flex shrink-0 items-center gap-1">
-                        <flux:button wire:click="toggleBoardGroup({{ $group->id }})" variant="ghost" size="sm">
-                            {{ $group->is_active ? __('Deactivate') : __('Activate') }}
-                        </flux:button>
-                        <flux:button wire:click="editBoardGroup({{ $group->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-group" />
-                    </div>
-                </div>
-            @empty
-                <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
-                    <flux:icon.chalkboard class="mx-auto size-8 text-zinc-300 dark:text-zinc-600" />
-                    <flux:text class="mt-2 text-zinc-500 dark:text-zinc-400">{{ __('No board groups yet.') }}</flux:text>
-                </div>
-            @endforelse
-        </div>
-    </flux:modal>
-
     {{-- Board group modal --}}
-    <flux:modal name="board-group" class="max-w-lg" data-test="group-modal">
+    <flux:modal name="board-group" class="w-full max-w-xl" :dismissible="false" data-test="group-modal">
         <form wire:submit="saveBoardGroup" class="space-y-5">
             <flux:heading size="lg">{{ $groupId ? __('Edit board group') : __('New board group') }}</flux:heading>
             <flux:input wire:model="groupName" :label="__('Name')" required />
@@ -744,26 +831,28 @@ new #[Title('Organization settings')] class extends Component {
     </flux:modal>
 
     {{-- Board modal --}}
-    <flux:modal name="board" class="max-w-lg" data-test="board-modal">
+    <flux:modal name="board" class="w-full max-w-xl" scroll="body" :dismissible="false" data-test="board-modal">
         <form wire:submit="saveBoard" class="space-y-5">
             <flux:heading size="lg">{{ $boardId ? __('Edit board') : __('New board') }}</flux:heading>
-            <flux:input wire:model="boardName" :label="__('Name')" required data-test="board-name-input" />
+            <flux:input wire:model.live="boardName" :label="__('Name')" required data-test="board-name-input" />
             <flux:select wire:model="boardGroupId" :label="__('Board group')" :placeholder="__('No group')" data-test="board-group-select">
                 @foreach ($this->assignableBoardGroups as $group)
                     <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
                 @endforeach
             </flux:select>
-
-            @if ($boardId)
-                <flux:input wire:model="boardSlug" :label="__('Slug')" :description="__('Leave blank to generate from the name.')" />
-                <flux:textarea wire:model="boardDescription" :label="__('Description')" rows="2" />
-                <flux:select wire:model="boardVisibility" :label="__('Visibility')">
+            <flux:input wire:model="boardSlug" :label="__('Slug')" :description="__('Automatically generated from the name.')" readonly data-test="board-slug-input" />
+            <flux:textarea wire:model="boardDescription" :label="__('Description')" rows="2" :placeholder="__('Optional')" data-test="board-description-input" />
+            <div class="grid grid-cols-2 gap-4">
+                <flux:radio.group wire:model="boardVisibility" :label="__('Visibility')" data-test="board-visibility-radio">
                     @foreach (self::VISIBILITY_OPTIONS as $value => $label)
-                        <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                        <flux:radio value="{{ $value }}" label="{{ $label }}" />
                     @endforeach
-                </flux:select>
-                <flux:checkbox wire:model="boardIsActive" :label="__('Active')" />
-            @endif
+                </flux:radio.group>
+                <flux:radio.group wire:model="boardIsActive" :label="__('Active')" data-test="board-active-radio">
+                    <flux:radio value="1" label="{{ __('Yes') }}" />
+                    <flux:radio value="0" label="{{ __('No') }}" />
+                </flux:radio.group>
+            </div>
             <div class="flex justify-end gap-2">
                 <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
                 <flux:button variant="primary" type="submit" data-test="save-board">{{ __('Save') }}</flux:button>
@@ -772,7 +861,7 @@ new #[Title('Organization settings')] class extends Component {
     </flux:modal>
 
     {{-- Category modal --}}
-    <flux:modal name="category" class="max-w-lg" data-test="category-modal">
+    <flux:modal name="category" class="max-w-lg" :dismissible="false" data-test="category-modal">
         <form wire:submit="saveCategory" class="space-y-5">
             <flux:heading size="lg">{{ $categoryId ? __('Edit category') : __('New category') }}</flux:heading>
             <flux:input wire:model="categoryName" :label="__('Name')" required />

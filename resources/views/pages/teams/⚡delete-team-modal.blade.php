@@ -76,7 +76,7 @@ new class extends Component {
     }
 }; ?>
 
-<flux:modal name="delete-team" :show="$errors->isNotEmpty()" focusable class="max-w-lg">
+<flux:modal name="delete-team" :show="$errors->isNotEmpty()" focusable :dismissible="false" class="max-w-lg">
     <form wire:submit="deleteTeam" class="space-y-6">
         <div>
             <flux:heading size="lg">{{ __('Are you sure?') }}</flux:heading>

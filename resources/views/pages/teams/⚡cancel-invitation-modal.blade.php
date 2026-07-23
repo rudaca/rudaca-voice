@@ -39,7 +39,7 @@ new class extends Component {
 
         $invitation->delete();
 
-        $this->dispatch('close-modal', name: $this->modalName);
+        $this->dispatch('modal-close', name: $this->modalName);
 
         Flux::toast(variant: 'success', text: __('Invitation cancelled.'));
 
@@ -47,7 +47,7 @@ new class extends Component {
     }
 }; ?>
 
-<flux:modal :name="$modalName" focusable class="max-w-lg">
+<flux:modal :name="$modalName" focusable :dismissible="false" class="max-w-lg">
     <form wire:submit="cancelInvitation" class="space-y-6">
         <div>
             <flux:heading size="lg">{{ __('Cancel invitation') }}</flux:heading>

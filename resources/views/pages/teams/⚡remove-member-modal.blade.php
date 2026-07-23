@@ -46,7 +46,7 @@ new class extends Component {
             $user->switchTeam($user->personalTeam());
         }
 
-        $this->dispatch('close-modal', name: $this->modalName);
+        $this->dispatch('modal-close', name: $this->modalName);
 
         Flux::toast(variant: 'success', text: __('Member removed.'));
 
@@ -54,7 +54,7 @@ new class extends Component {
     }
 }; ?>
 
-<flux:modal :name="$modalName" focusable class="max-w-lg">
+<flux:modal :name="$modalName" focusable :dismissible="false" class="max-w-lg">
     <form wire:submit="removeMember" class="space-y-6">
         <div>
             <flux:heading size="lg">{{ __('Remove team member') }}</flux:heading>

@@ -8,7 +8,7 @@ use App\Models\Team;
 use App\Models\User;
 use Livewire\Livewire;
 
-test('the organization settings page renders all four tabs and defaults to Boards', function () {
+test('the organization settings page renders all five tabs and defaults to Boards', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
     boardStack($team);
 
@@ -17,10 +17,24 @@ test('the organization settings page renders all four tabs and defaults to Board
         ->assertOk()
         ->assertSee('Organization settings')
         ->assertSee('Boards')
+        ->assertSee('Groups')
         ->assertSee('Categories')
         ->assertSee('Members')
         ->assertSee('Settings')
         ->assertDontSee('Integrations');
+});
+
+test('the Groups tab lists board groups with their own New group button, and the old Manage groups modal is gone', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $stack = boardStack($team, $admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'groups')
+        ->assertSee($stack['group']->name)
+        ->assertSeeHtml('data-test="new-group"')
+        ->assertDontSee('Manage groups')
+        ->assertDontSeeHtml('data-test="manage-groups"');
 });
 
 test('the Members tab lists team members with their role', function () {
@@ -69,7 +83,23 @@ test('the Settings tab requires a team name', function () {
     expect($team->fresh()->name)->toBe($team->name);
 });
 
-test('the new board modal only asks for a name and group, auto-filling team and slug', function () {
+test('opening the new board modal dispatches the event Flux actually listens for', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'boards')
+        ->call('newBoard')
+        // Flux's <flux:modal> only reacts to a "modal-show" browser event (see
+        // vendor/livewire/flux/src/Concerns/InteractsWithComponents.php). Dispatching
+        // anything else (e.g. the wire-elements/modal-style "open-modal") is a silent
+        // no-op: no error, no modal, which is exactly what was reported as "the button
+        // doesn't work".
+        ->assertDispatched('modal-show', name: 'board')
+        ->assertNotDispatched('open-modal');
+});
+
+test('the new board modal shows a read-only auto-generated slug alongside name and group', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
     $group = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id]);
 
@@ -77,11 +107,13 @@ test('the new board modal only asks for a name and group, auto-filling team and 
         ->test('pages::ideas.settings')
         ->set('tab', 'boards')
         ->call('newBoard')
-        ->assertDontSeeHtml('wire:model="boardSlug"')
-        ->assertDontSeeHtml('wire:model="boardDescription"')
-        ->assertDontSeeHtml('wire:model="boardVisibility"')
-        ->assertDontSeeHtml('wire:model="boardIsActive"')
+        ->assertSeeHtml('wire:model="boardSlug"')
+        ->assertSeeHtml('readonly')
+        ->assertSeeHtml('wire:model="boardDescription"')
+        ->assertSet('boardVisibility', 'internal')
+        ->assertSet('boardIsActive', '1')
         ->set('boardName', 'Customer Support')
+        ->assertSet('boardSlug', 'customer-support')
         ->set('boardGroupId', (string) $group->id)
         ->call('saveBoard')
         ->assertHasNoErrors();
@@ -92,10 +124,45 @@ test('the new board modal only asks for a name and group, auto-filling team and 
         ->and($board->slug)->toBe('customer-support')
         ->and($board->board_group_id)->toBe($group->id)
         ->and($board->visibility)->toBe('internal')
-        ->and($board->is_active)->toBeTrue();
+        ->and($board->is_active)->toBeTrue()
+        ->and($board->created_by_user_id)->toBe($admin->id)
+        ->and($board->description)->toBeNull();
 });
 
-test('editing an existing board still exposes slug, description, visibility and active fields', function () {
+test('the auto-generated slug is suffixed to stay unique when two boards share a name', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    IdeaBoard::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'name' => 'Support', 'slug' => 'support']);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'boards')
+        ->call('newBoard')
+        ->set('boardName', 'Support')
+        ->assertSet('boardSlug', 'support-2')
+        ->call('saveBoard')
+        ->assertHasNoErrors();
+
+    expect(IdeaBoard::where('team_id', $team->id)->where('name', 'Support')->where('slug', 'support-2')->exists())->toBeTrue();
+});
+
+test('the read-only slug cannot be tampered with — the server always recomputes it from the name', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'boards')
+        ->call('newBoard')
+        ->set('boardName', 'Support')
+        ->set('boardSlug', 'not-what-the-server-would-generate')
+        ->call('saveBoard')
+        ->assertHasNoErrors();
+
+    $board = IdeaBoard::where('name', 'Support')->firstOrFail();
+
+    expect($board->slug)->toBe('support');
+});
+
+test('editing an existing board exposes slug, description, visibility and active fields', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
     $stack = boardStack($team, $admin);
 
@@ -105,8 +172,37 @@ test('editing an existing board still exposes slug, description, visibility and 
         ->call('editBoard', $stack['board']->id)
         ->assertSeeHtml('wire:model="boardSlug"')
         ->assertSeeHtml('wire:model="boardDescription"')
-        ->assertSeeHtml('wire:model="boardVisibility"')
-        ->assertSeeHtml('wire:model="boardIsActive"');
+        ->assertSet('boardVisibility', $stack['board']->visibility)
+        ->assertSet('boardIsActive', $stack['board']->is_active ? '1' : '0');
+});
+
+test('the boards list can be filtered by board group, defaulting to All Groups', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $stack = boardStack($team, $admin);
+
+    $otherGroup = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id]);
+    $otherBoard = IdeaBoard::factory()->create([
+        'team_id' => $team->id,
+        'board_group_id' => $otherGroup->id,
+        'created_by_user_id' => $admin->id,
+        'name' => 'Filtered Board',
+    ]);
+
+    // Assert against the board list rows (wire:key="board-{id}") rather than the board
+    // name text, since board names also appear as <option> values inside the always-rendered
+    // "New category" modal's board select, which would make assertSee/assertDontSee unreliable.
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'boards')
+        ->assertSet('boardGroupFilter', '')
+        ->assertSeeHtml("wire:key=\"board-{$stack['board']->id}\"")
+        ->assertSeeHtml("wire:key=\"board-{$otherBoard->id}\"")
+        ->set('boardGroupFilter', (string) $otherGroup->id)
+        ->assertDontSeeHtml("wire:key=\"board-{$stack['board']->id}\"")
+        ->assertSeeHtml("wire:key=\"board-{$otherBoard->id}\"")
+        ->set('boardGroupFilter', '')
+        ->assertSeeHtml("wire:key=\"board-{$stack['board']->id}\"")
+        ->assertSeeHtml("wire:key=\"board-{$otherBoard->id}\"");
 });
 
 test('quick-adding a category on the Categories tab creates it against the chosen board', function () {

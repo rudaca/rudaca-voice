@@ -21,7 +21,8 @@ test('team invitations can be created', function () {
         ->set('inviteEmail', 'invited@example.com')
         ->set('inviteRole', TeamRole::Member->value)
         ->call('createInvitation')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-close', name: 'invite-member');
 
     $this->assertDatabaseHas('team_invitations', [
         'team_id' => $team->id,
@@ -80,7 +81,8 @@ test('team invitations can be cancelled by owner', function () {
     Livewire::test('pages::teams.cancel-invitation-modal', ['team' => $team])
         ->set('invitationCode', $invitation->code)
         ->call('cancelInvitation')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-close', name: 'cancel-invitation');
 
     $this->assertDatabaseMissing('team_invitations', [
         'id' => $invitation->id,

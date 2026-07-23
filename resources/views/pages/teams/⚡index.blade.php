@@ -25,7 +25,7 @@ new #[Title('Teams')] class extends Component {
 
         $team = $createTeam->handle(Auth::user(), $validated['name'], allowAnonymousIdeas: $this->allowAnonymousIdeas);
 
-        $this->dispatch('close-modal', name: 'create-team');
+        $this->dispatch('modal-close', name: 'create-team');
 
         $this->reset('name', 'allowAnonymousIdeas');
 
@@ -53,7 +53,7 @@ new #[Title('Teams')] class extends Component {
             $user->switchTeam($fallbackTeam);
         }
 
-        $this->dispatch('close-modal', name: "leave-team-{$teamId}");
+        $this->dispatch('modal-close', name: "leave-team-{$teamId}");
 
         Flux::toast(variant: 'success', text: __('You left the team ":name"', ['name' => $team->name]));
 
@@ -85,7 +85,7 @@ new #[Title('Teams')] class extends Component {
     <x-pages::settings.layout :heading="__('Teams')" :subheading="__('Manage your teams and team memberships')">
         <div class="flex items-center justify-end">
             <flux:modal.trigger name="create-team">
-                <flux:button variant="primary" icon="plus" x-data="" x-on:click.prevent="$dispatch('open-modal', 'create-team')" data-test="teams-new-team-button">
+                <flux:button variant="primary" icon="plus" data-test="teams-new-team-button">
                     {{ __('New team') }}
                 </flux:button>
             </flux:modal.trigger>
@@ -114,8 +114,6 @@ new #[Title('Teams')] class extends Component {
                                         variant="ghost"
                                         size="sm"
                                         icon="arrow-right-start-on-rectangle"
-                                        x-data=""
-                                        x-on:click.prevent="$dispatch('open-modal', 'leave-team-{{ $team->id }}')"
                                         data-test="team-leave-button"
                                     />
                                 </flux:tooltip>
@@ -136,7 +134,7 @@ new #[Title('Teams')] class extends Component {
                 </div>
 
                 @if (! $team->isPersonal && $team->role !== 'owner')
-                    <flux:modal :name="'leave-team-'.$team->id" focusable class="max-w-lg">
+                    <flux:modal :name="'leave-team-'.$team->id" focusable :dismissible="false" class="max-w-lg">
                         <form wire:submit="leaveTeam({{ $team->id }})" class="space-y-6">
                             <div>
                                 <flux:heading size="lg">{{ __('Leave team') }}</flux:heading>
@@ -165,7 +163,7 @@ new #[Title('Teams')] class extends Component {
         </div>
     </x-pages::settings.layout>
 
-    <flux:modal name="create-team" :show="$errors->isNotEmpty()" focusable class="max-w-lg">
+    <flux:modal name="create-team" :show="$errors->isNotEmpty()" focusable :dismissible="false" class="max-w-lg">
         <form wire:submit="createTeam" class="space-y-6">
             <div>
                 <flux:heading size="lg">{{ __('Create a new team') }}</flux:heading>

@@ -19,7 +19,7 @@ new class extends Component {
 
         $team = $createTeam->handle(Auth::user(), $validated['teamName'], allowAnonymousIdeas: $this->allowAnonymousIdeas);
 
-        $this->dispatch('close-modal', name: 'create-team-switcher');
+        $this->dispatch('modal-close', name: 'create-team-switcher');
 
         $this->reset('teamName', 'allowAnonymousIdeas');
 
@@ -29,7 +29,7 @@ new class extends Component {
     }
 }; ?>
 
-<flux:modal name="create-team-switcher" :show="$errors->isNotEmpty()" focusable class="max-w-lg">
+<flux:modal name="create-team-switcher" :show="$errors->isNotEmpty()" focusable :dismissible="false" class="max-w-lg">
     <form wire:submit="createTeam" class="space-y-6">
         <div>
             <flux:heading size="lg">{{ __('Create a new team') }}</flux:heading>

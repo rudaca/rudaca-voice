@@ -199,7 +199,7 @@ new #[Title('Idea')] class extends Component {
 
         $this->reset('duplicateOfId', 'duplicateNote');
         $this->resetValidation();
-        $this->dispatch('open-modal', name: 'mark-duplicate');
+        $this->dispatch('modal-show', name: 'mark-duplicate');
     }
 
     /**
@@ -239,7 +239,7 @@ new #[Title('Idea')] class extends Component {
         $this->status = 'duplicate';
         unset($this->duplicateOriginal);
         $this->reset('duplicateOfId', 'duplicateNote');
-        $this->dispatch('close-modal', name: 'mark-duplicate');
+        $this->dispatch('modal-close', name: 'mark-duplicate');
 
         Flux::toast(variant: 'success', text: __('Marked as duplicate.'));
     }
@@ -735,7 +735,7 @@ new #[Title('Idea')] class extends Component {
 
                 @if ($this->canDelete)
                     {{-- Delete idea modal --}}
-                    <flux:modal name="delete-idea" class="max-w-lg" data-test="delete-idea-modal">
+                    <flux:modal name="delete-idea" class="max-w-lg" :dismissible="false" data-test="delete-idea-modal">
                         <div class="space-y-5">
                             <div>
                                 <flux:heading size="lg">{{ __('Delete this idea?') }}</flux:heading>
@@ -752,7 +752,7 @@ new #[Title('Idea')] class extends Component {
                 @endif
 
                 {{-- Mark as duplicate modal --}}
-                <flux:modal name="mark-duplicate" class="max-w-lg" data-test="mark-duplicate-modal">
+                <flux:modal name="mark-duplicate" class="max-w-lg" :dismissible="false" data-test="mark-duplicate-modal">
                     <form wire:submit="markDuplicate" class="space-y-5">
                         <flux:heading size="lg">{{ __('Mark as duplicate') }}</flux:heading>
                         <flux:text class="text-sm text-zinc-500 dark:text-zinc-400">

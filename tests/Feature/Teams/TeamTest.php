@@ -35,7 +35,11 @@ test('teams can be created', function () {
     Livewire::test('pages::teams.index')
         ->set('name', 'Test Team')
         ->call('createTeam')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        // Flux's <flux:modal> only reacts to "modal-show"/"modal-close" browser
+        // events; dispatching anything else closes nothing (no error, no visible
+        // effect), which is how the create-team modal was previously found stuck open.
+        ->assertDispatched('modal-close', name: 'create-team');
 
     $this->assertDatabaseHas('teams', [
         'name' => 'Test Team',
@@ -278,7 +282,8 @@ test('members can leave non personal teams', function () {
 
     Livewire::test('pages::teams.index')
         ->call('leaveTeam', $team->id)
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-close', name: "leave-team-{$team->id}");
 
     expect($member->fresh()->belongsToTeam($team))->toBeFalse();
 });
