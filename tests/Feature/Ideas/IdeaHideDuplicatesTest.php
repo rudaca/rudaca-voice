@@ -3,7 +3,7 @@
 use App\Enums\TeamRole;
 use Livewire\Livewire;
 
-test('duplicates are hidden by default', function () {
+test('duplicates are shown by default', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
 
     $duplicate = makeIdea($team, ['status' => 'duplicate']);
@@ -14,10 +14,10 @@ test('duplicates are hidden by default', function () {
     $ids = $component->instance()->ideas->pluck('id')->all();
 
     expect($ids)->toContain($active->id)
-        ->and($ids)->not->toContain($duplicate->id);
+        ->and($ids)->toContain($duplicate->id);
 });
 
-test('unchecking hide duplicates includes duplicate ideas in the results', function () {
+test('checking hide duplicates excludes duplicate ideas from the results', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
 
     $duplicate = makeIdea($team, ['status' => 'duplicate']);
@@ -25,12 +25,12 @@ test('unchecking hide duplicates includes duplicate ideas in the results', funct
 
     $component = Livewire::actingAs($user)
         ->test('pages::ideas.index')
-        ->set('hideDuplicates', false);
+        ->set('hideDuplicates', true);
 
     $ids = $component->instance()->ideas->pluck('id')->all();
 
-    expect($ids)->toContain($duplicate->id)
-        ->toContain($active->id);
+    expect($ids)->not->toContain($duplicate->id)
+        ->and($ids)->toContain($active->id);
 });
 
 test('selecting the Duplicate status automatically unchecks hide duplicates', function () {
@@ -40,6 +40,7 @@ test('selecting the Duplicate status automatically unchecks hide duplicates', fu
 
     $component = Livewire::actingAs($user)
         ->test('pages::ideas.index')
+        ->set('hideDuplicates', true)
         ->assertSet('hideDuplicates', true)
         ->set('status', 'duplicate')
         ->assertSet('hideDuplicates', false);
@@ -59,7 +60,7 @@ test('hide duplicates resets pagination like other filters', function () {
 
     expect($component->instance()->ideas->currentPage())->toBe(2);
 
-    $component->set('hideDuplicates', false);
+    $component->set('hideDuplicates', true);
 
     expect($component->instance()->ideas->currentPage())->toBe(1);
 });

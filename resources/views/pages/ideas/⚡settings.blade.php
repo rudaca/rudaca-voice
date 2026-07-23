@@ -1,10 +1,13 @@
 <?php
 
+use App\Enums\TeamRole;
 use App\Models\Team;
+use App\Models\User;
 use App\Rules\TeamName;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -31,6 +34,13 @@ new #[Title('Organization Settings')] class extends Component {
 
     #[Url(as: 'tab')]
     public string $tab = 'boards';
+
+    /**
+     * When arriving via the header's "New" menu, opens the matching creation
+     * modal on load: "board", "group", "category", or "member".
+     */
+    #[Url(as: 'new')]
+    public ?string $new = null;
 
     // --- Boards list filter ---
     public string $boardGroupFilter = '';
@@ -90,10 +100,32 @@ new #[Title('Organization Settings')] class extends Component {
 
     public bool $orgAllowAnonymousIdeas = true;
 
+    // --- New member form (Members tab) ---
+    public string $memberSearch = '';
+
+    public ?int $memberUserId = null;
+
+    public string $memberUserName = '';
+
+    public string $memberRole = 'employee';
+
+    // --- Revoke member access (Members tab) ---
+    public ?int $removeMemberId = null;
+
+    public string $removeMemberName = '';
+
     public function mount(): void
     {
         $this->orgTeamName = $this->team->name;
         $this->orgAllowAnonymousIdeas = $this->team->allowsAnonymousIdeas();
+
+        match ($this->new) {
+            'board' => $this->newBoard(),
+            'group' => $this->newBoardGroup(),
+            'category' => $this->newCategory(),
+            'member' => $this->newMember(),
+            default => null,
+        };
     }
 
     #[Computed]
@@ -169,6 +201,52 @@ new #[Title('Organization Settings')] class extends Component {
         return $this->team->members()->orderBy('name')->get();
     }
 
+    #[Computed]
+    public function canAddMember(): bool
+    {
+        return Gate::allows('addMember', $this->team);
+    }
+
+    #[Computed]
+    public function canRemoveMember(): bool
+    {
+        return Gate::allows('removeMember', $this->team);
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    #[Computed]
+    public function availableRoles(): array
+    {
+        return TeamRole::assignable();
+    }
+
+    /**
+     * Users not already on this team, matching the current search term —
+     * shown as pickable results in the "New member" modal.
+     *
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function searchableUsers(): Collection
+    {
+        $search = trim($this->memberSearch);
+
+        if ($search === '') {
+            return new Collection;
+        }
+
+        return User::query()
+            ->whereNotIn('id', $this->team->members()->select('users.id'))
+            ->where(fn ($query) => $query
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->limit(10)
+            ->get();
+    }
+
     /**
      * Board groups selectable when assigning a board: active groups, plus the
      * board's currently-assigned group when editing (even if it is inactive).
@@ -211,6 +289,7 @@ new #[Title('Organization Settings')] class extends Component {
             'quickCategoryName' => __('name'),
             'quickCategoryBoardId' => __('board'),
             'orgTeamName' => __('organization name'),
+            'memberUserId' => __('user'),
         ];
     }
 
@@ -506,6 +585,87 @@ new #[Title('Organization Settings')] class extends Component {
         unset($this->categories);
         Flux::toast(variant: 'success', text: __('Category saved.'));
     }
+
+    // ----- Members -----
+
+    public function newMember(): void
+    {
+        Gate::authorize('addMember', $this->team);
+
+        $this->reset('memberSearch', 'memberUserId', 'memberUserName', 'memberRole');
+        $this->resetValidation();
+        $this->dispatch('modal-show', name: 'member');
+    }
+
+    public function selectMember(int $userId): void
+    {
+        $user = User::findOrFail($userId);
+
+        $this->memberUserId = $user->id;
+        $this->memberUserName = $user->name;
+        $this->memberSearch = '';
+    }
+
+    public function clearSelectedMember(): void
+    {
+        $this->reset('memberUserId', 'memberUserName');
+    }
+
+    public function saveMember(): void
+    {
+        Gate::authorize('addMember', $this->team);
+
+        $validated = $this->validate([
+            'memberUserId' => ['required', 'integer', Rule::exists('users', 'id')],
+            'memberRole' => ['required', 'string', Rule::enum(TeamRole::class)],
+        ]);
+
+        if ($this->team->members()->where('users.id', $validated['memberUserId'])->exists()) {
+            $this->addError('memberUserId', __('This user is already a member of the organization.'));
+
+            return;
+        }
+
+        $this->team->members()->attach($validated['memberUserId'], [
+            'role' => TeamRole::from($validated['memberRole']),
+        ]);
+
+        unset($this->members);
+        $this->dispatch('modal-close', name: 'member');
+        Flux::toast(variant: 'success', text: __('Member added.'));
+    }
+
+    public function confirmRemoveMember(int $userId): void
+    {
+        Gate::authorize('removeMember', $this->team);
+
+        $member = $this->team->members()->findOrFail($userId);
+
+        $this->removeMemberId = $member->id;
+        $this->removeMemberName = $member->name;
+        $this->dispatch('modal-show', name: 'revoke-member-access');
+    }
+
+    /**
+     * Revoke a member's access to the organization. Their ideas and comments
+     * are left untouched — only the team membership is removed.
+     */
+    public function removeMember(): void
+    {
+        Gate::authorize('removeMember', $this->team);
+
+        $this->team->memberships()->where('user_id', $this->removeMemberId)->delete();
+
+        $user = User::find($this->removeMemberId);
+
+        if ($user && $user->isCurrentTeam($this->team)) {
+            $user->switchTeam($user->personalTeam());
+        }
+
+        unset($this->members);
+        $this->dispatch('modal-close', name: 'revoke-member-access');
+        Flux::toast(variant: 'success', text: __('Access revoked.'));
+    }
 }; ?>
 
 @push('breadcrumbs')
@@ -749,13 +909,22 @@ new #[Title('Organization Settings')] class extends Component {
 
     {{-- Members --}}
     @if ($tab === 'members')
-        <div class="mt-5 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+        <div class="mt-5 space-y-4">
+        @if ($this->canAddMember)
+            <div class="flex items-center justify-end gap-2">
+                <flux:button wire:click="newMember" variant="primary" icon="plus" size="sm" data-test="new-member">{{ __('New member') }}</flux:button>
+            </div>
+        @endif
+        <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="w-full text-sm">
                 <thead class="bg-zinc-50 dark:bg-zinc-800/50">
                     <tr class="text-xs font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-500">
                         <th class="px-4 py-2.5 text-start">{{ __('Member') }}</th>
                         <th class="px-4 py-2.5 text-start">{{ __('Email') }}</th>
                         <th class="px-4 py-2.5 text-start">{{ __('Role') }}</th>
+                        @if ($this->canRemoveMember)
+                            <th class="px-4 py-2.5 text-end">{{ __('Actions') }}</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
@@ -773,10 +942,27 @@ new #[Title('Organization Settings')] class extends Component {
                                     {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Admin / Owner') : $member->pivot->role->label() }}
                                 </flux:badge>
                             </td>
+                            @if ($this->canRemoveMember)
+                                <td class="px-4 py-3 text-end">
+                                    @if ($member->pivot->role !== \App\Enums\TeamRole::Owner)
+                                        <flux:tooltip content="{{ __('Revoke Access') }}">
+                                            <flux:button
+                                                wire:click="confirmRemoveMember({{ $member->id }})"
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="x-mark"
+                                                class="text-red-600! hover:text-red-700!"
+                                                data-test="revoke-member-access"
+                                            />
+                                        </flux:tooltip>
+                                    @endif
+                                </td>
+                            @endif
                         </tr>
                     @endforeach
                 </tbody>
             </table>
+        </div>
         </div>
     @endif
 
@@ -900,4 +1086,91 @@ new #[Title('Organization Settings')] class extends Component {
             </div>
         </form>
     </flux:modal>
+
+    {{-- New member modal --}}
+    @if ($this->canAddMember)
+        <flux:modal name="member" class="w-full max-w-2xl" :dismissible="false" data-test="member-modal">
+            <form wire:submit="saveMember" class="space-y-5">
+                <flux:heading size="lg">{{ __('New member') }}</flux:heading>
+
+                @if ($memberUserId)
+                    <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
+                        <div class="flex items-center gap-3">
+                            <flux:avatar :name="$memberUserName" size="xs" color="auto" color:seed="{{ $memberUserId }}" />
+                            <span class="font-medium text-slate-900 dark:text-slate-200">{{ $memberUserName }}</span>
+                        </div>
+                        <flux:button wire:click="clearSelectedMember" variant="ghost" size="sm" data-test="change-member">{{ __('Change') }}</flux:button>
+                    </div>
+                @else
+                    <div class="space-y-2">
+                        <flux:input
+                            wire:model.live.debounce.300ms="memberSearch"
+                            :label="__('Search users')"
+                            :placeholder="__('Search by name or email...')"
+                            data-test="member-search-input"
+                        />
+                        <flux:error name="memberUserId" />
+
+                        @if (trim($memberSearch) !== '')
+                            <div class="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
+                                @forelse ($this->searchableUsers as $user)
+                                    <button
+                                        type="button"
+                                        wire:click="selectMember({{ $user->id }})"
+                                        wire:key="searchable-user-{{ $user->id }}"
+                                        class="flex w-full items-center gap-3 rounded-md p-2 text-start hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                        data-test="searchable-user-option"
+                                    >
+                                        <flux:avatar :name="$user->name" size="xs" color="auto" color:seed="{{ $user->id }}" />
+                                        <div class="min-w-0">
+                                            <div class="truncate font-medium text-slate-900 dark:text-slate-200">{{ $user->name }}</div>
+                                            <div class="truncate text-sm text-slate-600 dark:text-slate-500">{{ $user->email }}</div>
+                                        </div>
+                                    </button>
+                                @empty
+                                    <div class="p-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No matching users found.') }}</div>
+                                @endforelse
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
+                <flux:select wire:model="memberRole" :label="__('Role')" data-test="member-role-select">
+                    @foreach ($this->availableRoles as $role)
+                        <flux:select.option value="{{ $role['value'] }}">{{ $role['label'] }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                    <flux:button variant="primary" type="submit" data-test="save-member">{{ __('Add member') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+    @endif
+
+    {{-- Revoke member access modal --}}
+    @if ($this->canRemoveMember)
+        <flux:modal name="revoke-member-access" :dismissible="false" class="max-w-lg" data-test="revoke-member-modal">
+            <form wire:submit="removeMember" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Revoke access') }}</flux:heading>
+                    <flux:subheading>
+                        {{ __('Are you sure you want to revoke :name\'s access to this organization?', ['name' => $removeMemberName]) }}
+                    </flux:subheading>
+                </div>
+
+                <flux:callout variant="warning" icon="exclamation-triangle" data-test="revoke-member-warning">
+                    <flux:callout.text>
+                        {{ __('The ideas and comments made by this user will remain.') }}
+                    </flux:callout.text>
+                </flux:callout>
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                    <flux:button variant="danger" type="submit" data-test="revoke-member-confirm">{{ __('Revoke access') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+    @endif
 </section>

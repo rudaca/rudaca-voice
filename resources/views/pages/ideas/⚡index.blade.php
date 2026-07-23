@@ -4,6 +4,7 @@ use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaVote;
 use App\Models\Team;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -45,8 +46,20 @@ new class extends Component {
     #[Url(as: 'category')]
     public string $category = '';
 
+    #[Url(as: 'author')]
+    public string $author = '';
+
+    #[Url(as: 'q')]
+    public string $search = '';
+
+    #[Url(as: 'from')]
+    public string $dateFrom = '';
+
+    #[Url(as: 'to')]
+    public string $dateTo = '';
+
     #[Url(as: 'hide_duplicates')]
-    public bool $hideDuplicates = true;
+    public bool $hideDuplicates = false;
 
     /**
      * Reset pagination whenever a filter changes.
@@ -59,9 +72,17 @@ new class extends Component {
             $this->hideDuplicates = false;
         }
 
-        if (in_array($property, ['status', 'group', 'board', 'category', 'hideDuplicates'], true)) {
+        if (in_array($property, ['status', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo', 'hideDuplicates'], true)) {
             $this->resetPage();
         }
+    }
+
+    /**
+     * Escape LIKE wildcard characters so raw user input can't widen the match.
+     */
+    protected function likeTerm(): string
+    {
+        return '%'.addcslashes(trim($this->search), '%_').'%';
     }
 
     /**
@@ -156,6 +177,61 @@ new class extends Component {
     }
 
     /**
+     * Users who have submitted at least one idea for the current team, used for the author filter dropdown.
+     *
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function authors(): Collection
+    {
+        return User::query()
+            ->whereIn('id', Idea::query()
+                ->where('team_id', $this->team->id)
+                ->whereNotNull('submitted_by_user_id')
+                ->distinct()
+                ->pluck('submitted_by_user_id'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Whether any of the filters tucked away in the collapsible second row are active.
+     * Drives the "filters in use" indicator dot on the row's collapse toggle.
+     */
+    #[Computed]
+    public function hasSecondRowFilters(): bool
+    {
+        return $this->category !== ''
+            || $this->author !== ''
+            || $this->hideDuplicates
+            || $this->dateFrom !== ''
+            || $this->dateTo !== '';
+    }
+
+    /**
+     * Whether any filter control (across both rows) differs from its default, used to
+     * show/hide the "Clear" button.
+     */
+    #[Computed]
+    public function hasActiveFilters(): bool
+    {
+        return $this->status !== ''
+            || $this->group !== ''
+            || $this->board !== ''
+            || $this->search !== ''
+            || $this->hasSecondRowFilters;
+    }
+
+    /**
+     * Reset every filter control back to its default.
+     */
+    public function clearFilters(): void
+    {
+        $this->reset(['status', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo', 'hideDuplicates']);
+        $this->resetPage();
+    }
+
+    /**
      * The name of the board or board group currently filtering the list, if any.
      * Used to swap the "All Ideas" heading/title for something less misleading
      * when the view is scoped to a single board or group.
@@ -199,6 +275,10 @@ new class extends Component {
             ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
             ->when($this->board !== '', fn ($query) => $query->where('board_id', $this->board))
             ->when($this->category !== '', fn ($query) => $query->where('category_id', $this->category))
+            ->when($this->author !== '', fn ($query) => $query->where('submitted_by_user_id', $this->author))
+            ->when(trim($this->search) !== '', fn ($query) => $query->where('title', 'like', $this->likeTerm()))
+            ->when($this->dateFrom !== '', fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo !== '', fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->when($this->hideDuplicates, fn ($query) => $query->where('status', '!=', 'duplicate'));
 
         match ($this->sort) {
@@ -260,72 +340,181 @@ new class extends Component {
             @endif
         </div>
 
-        {{-- Controls: sort (left) + filters (right). Sticks below the app header while the list scrolls. --}}
-        <x-sticky-toolbar class="mt-6 flex flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div
-                class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
-                role="group"
-                aria-label="{{ __('Sort ideas') }}"
-                data-sort="{{ $sort }}"
-                x-data="{
-                    sort: null,
-                    indicator: { left: 0, width: 0 },
-                    updateIndicator() {
-                        let el = this.$refs['sort-' + this.sort];
-                        if (el) {
-                            this.indicator = { left: el.offsetLeft, width: el.offsetWidth };
-                        }
-                    },
-                }"
-                x-init="sort = $el.dataset.sort; updateIndicator()"
-                x-effect="sort; updateIndicator()"
-            >
+        {{--
+            Controls: sort + search (row 1 left), board/status filters + collapse toggle (row 1 right).
+            Categories, authors, duplicates and the date range live in a collapsible second row that's
+            tucked away by default. Both rows stick below the app header while the list scrolls.
+        --}}
+        <x-sticky-toolbar class="mt-6 py-3">
+            <div class="flex flex-col gap-3" x-data="{ expanded: @js($this->hasSecondRowFilters) }">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div
+                            class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+                            role="group"
+                            aria-label="{{ __('Sort ideas') }}"
+                            data-sort="{{ $sort }}"
+                            x-data="{
+                                sort: null,
+                                indicator: { left: 0, width: 0 },
+                                updateIndicator() {
+                                    let el = this.$refs['sort-' + this.sort];
+                                    if (el) {
+                                        this.indicator = { left: el.offsetLeft, width: el.offsetWidth };
+                                    }
+                                },
+                            }"
+                            x-init="sort = $el.dataset.sort; updateIndicator()"
+                            x-effect="sort; updateIndicator()"
+                        >
+                            <div
+                                class="absolute inset-y-0.5 rounded-md bg-white shadow-sm transition-all duration-200 ease-out dark:bg-zinc-700"
+                                :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
+                            ></div>
+
+                            @foreach (['top' => __('Top voted'), 'newest' => __('Newest'), 'trending' => __('Trending')] as $value => $label)
+                                <button
+                                    type="button"
+                                    x-ref="sort-{{ $value }}"
+                                    x-on:click="sort = '{{ $value }}'"
+                                    wire:click="sortBy('{{ $value }}')"
+                                    @class([
+                                        'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                                        'text-slate-900 dark:text-white' => $sort === $value,
+                                        'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $sort !== $value,
+                                    ])
+                                    data-test="sort-{{ $value }}"
+                                >
+                                    {{ $label }}
+                                </button>
+                            @endforeach
+                        </div>
+
+                        <flux:input
+                            wire:model.live.debounce.300ms="search"
+                            icon="magnifying-glass"
+                            size="sm"
+                            clearable
+                            placeholder="{{ __('Search ideas') }}"
+                            data-test="filter-search"
+                            @class([
+                                'w-full sm:w-64 md:w-80 lg:w-96',
+                                'border-gray-800! font-semibold! dark:border-gray-400!' => trim($search) !== '',
+                            ])
+                        />
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <flux:select wire:model.live="board" size="sm" data-test="filter-board" @class([
+                            'w-auto min-w-40',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => $board !== '',
+                        ])>
+                            <flux:select.option value="">{{ __('All boards') }}</flux:select.option>
+                            @foreach ($this->boards as $board)
+                                <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <flux:select wire:model.live="status" size="sm" data-test="filter-status" @class([
+                            'w-auto min-w-40',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== '',
+                        ])>
+                            <flux:select.option value="">{{ __('All statuses') }}</flux:select.option>
+                            @foreach (self::STATUS_META as $value => $meta)
+                                <flux:select.option value="{{ $value }}">{{ $meta['label'] }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <flux:tooltip :content="__('More filters')">
+                            <button
+                                type="button"
+                                x-on:click="expanded = !expanded"
+                                :aria-expanded="expanded.toString()"
+                                aria-controls="ideas-more-filters"
+                                aria-label="{{ __('More filters') }}"
+                                class="relative inline-flex items-center justify-center rounded-lg border border-zinc-200 p-2 text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-slate-400 dark:hover:border-indigo-500/40"
+                                data-test="toggle-more-filters"
+                            >
+                                <flux:icon.chevron-down class="size-4 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''" />
+                                @if ($this->hasSecondRowFilters)
+                                    <span
+                                        class="absolute -top-1 -right-1 block size-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-zinc-800"
+                                        data-test="filters-active-dot"
+                                    ></span>
+                                @endif
+                            </button>
+                        </flux:tooltip>
+                    </div>
+                </div>
+
                 <div
-                    class="absolute inset-y-0.5 rounded-md bg-white shadow-sm transition-all duration-200 ease-out dark:bg-zinc-700"
-                    :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
-                ></div>
+                    id="ideas-more-filters"
+                    class="grid transition-[grid-template-rows] duration-200 ease-out"
+                    :class="expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+                >
+                    <div class="overflow-hidden">
+                        <div class="flex flex-wrap items-center gap-2 pt-3">
+                            <flux:select wire:model.live="category" size="sm" data-test="filter-category" @class([
+                                'w-auto min-w-40',
+                                'border-gray-800! font-semibold! dark:border-gray-400!' => $category !== '',
+                            ])>
+                                <flux:select.option value="">{{ __('All categories') }}</flux:select.option>
+                                @foreach ($this->categories as $category)
+                                    <flux:select.option value="{{ $category->id }}">{{ $category->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
 
-                @foreach (['top' => __('Top voted'), 'newest' => __('Newest'), 'trending' => __('Trending')] as $value => $label)
-                    <button
-                        type="button"
-                        x-ref="sort-{{ $value }}"
-                        x-on:click="sort = '{{ $value }}'"
-                        wire:click="sortBy('{{ $value }}')"
-                        @class([
-                            'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                            'text-slate-900 dark:text-white' => $sort === $value,
-                            'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $sort !== $value,
-                        ])
-                        data-test="sort-{{ $value }}"
-                    >
-                        {{ $label }}
-                    </button>
-                @endforeach
-            </div>
+                            <flux:select wire:model.live="author" size="sm" data-test="filter-author" @class([
+                                'w-auto min-w-40',
+                                'border-gray-800! font-semibold! dark:border-gray-400!' => $author !== '',
+                            ])>
+                                <flux:select.option value="">{{ __('All authors') }}</flux:select.option>
+                                @foreach ($this->authors as $authorOption)
+                                    <flux:select.option value="{{ $authorOption->id }}">{{ $authorOption->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                              <div class="flex items-center py-1 px-3 bg-gray-100 rounded-lg">
+                            <div class="flex items-center gap-1.5">
+                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('Created From') }}</flux:text>
+                                <flux:input type="date" wire:model.live="dateFrom" size="sm" data-test="filter-date-from" @class([
+                                    'w-auto',
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $dateFrom !== '',
+                                ]) />
+                            </div>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <flux:checkbox wire:model.live="hideDuplicates" :label="__('Do not show duplicates')" data-test="filter-hide-duplicates" />
+                            <div class="flex items-center gap-1.5">
+                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('To') }}</flux:text>
+                                <flux:input type="date" wire:model.live="dateTo" size="sm" data-test="filter-date-to" @class([
+                                    'w-auto',
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $dateTo !== '',
+                                ]) />
+                            </div>
+                        </div>
 
-                <flux:select wire:model.live="status" size="sm" class="w-auto min-w-40" data-test="filter-status">
-                    <flux:select.option value="">{{ __('All statuses') }}</flux:select.option>
-                    @foreach (self::STATUS_META as $value => $meta)
-                        <flux:select.option value="{{ $value }}">{{ $meta['label'] }}</flux:select.option>
-                    @endforeach
-                </flux:select>
+                            <div class="ms-auto flex shrink-0 items-center gap-3">
+                                <div @class([
+                                    'flex items-center gap-2 rounded-md border px-2 py-1 transition-colors',
+                                    'border-transparent' => ! $hideDuplicates,
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $hideDuplicates,
+                                ])>
+                                    <flux:checkbox wire:model.live="hideDuplicates" :label="__('Do not show duplicates')" data-test="filter-hide-duplicates" />
+                                </div>
 
-                <flux:select wire:model.live="board" size="sm" class="w-auto min-w-40" data-test="filter-board">
-                    <flux:select.option value="">{{ __('All boards') }}</flux:select.option>
-                    @foreach ($this->boards as $board)
-                        <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-
-                <flux:select wire:model.live="category" size="sm" class="w-auto min-w-40" data-test="filter-category">
-                    <flux:select.option value="">{{ __('All categories') }}</flux:select.option>
-                    @foreach ($this->categories as $category)
-                        <flux:select.option value="{{ $category->id }}">{{ $category->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
+                                @if ($this->hasActiveFilters)
+                                    <flux:button
+                                        wire:click="clearFilters"
+                                        variant="ghost"
+                                        size="sm"
+                                        icon="x-mark"
+                                        data-test="clear-filters"
+                                    >
+                                        {{ __('Clear') }}
+                                    </flux:button>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </x-sticky-toolbar>
 
@@ -382,12 +571,12 @@ new class extends Component {
                             {{ \Illuminate\Support\Str::limit(strip_tags($idea->description), 130) }}
                         </flux:text>
 
-                        @php($author = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
+                        @php($authorName = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
 
                         <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                             <div class="flex items-center gap-1.5">
-                                <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
-                                <span>{{ $author }}</span>
+                                <flux:avatar size="xs" :name="$authorName" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $authorName }}" />
+                                <span>{{ $authorName }}</span>
                             </div>
 
                             @if ($idea->board)

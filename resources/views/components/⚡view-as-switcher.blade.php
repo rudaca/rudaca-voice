@@ -86,8 +86,8 @@ new class extends Component {
                     <flux:icon name="eye" variant="outline" class="size-4" />
                     <flux:icon
                         name="chevron-down"
-                        variant="micro"
-                        class="size-3 transition-transform duration-200 ease-out group-data-open:rotate-180"
+                        variant="outline"
+                        class="size-3.5 transition-transform duration-200 ease-out group-data-open:rotate-180"
                     />
                 </flux:button>
             </flux:tooltip>

@@ -12,6 +12,7 @@
             $__canSubmitIdea = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Employee) ?? false;
             $__canReview = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Manager) ?? false;
             $__canManageBoards = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Admin) ?? false;
+            $__isOwner = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Owner) ?? false;
 
             $__reviewQueueCount = $__canReview
                 ? $__currentTeam->ideas()->whereIn('status', ['new', 'under_review'])->count()
@@ -167,7 +168,46 @@
 
             <flux:spacer />
 
-            @if ($__canSubmitIdea)
+            @if ($__canManageBoards)
+                <flux:dropdown position="bottom" align="end">
+                    <flux:button variant="primary" icon="plus" icon:trailing="chevron-down" size="sm" data-test="header-new-button">
+                        <span class="hidden sm:inline">{{ __('New') }}</span>
+                    </flux:button>
+
+                    <flux:menu>
+                        @if ($__isOwner)
+                            <flux:modal.trigger name="create-team-switcher">
+                                <flux:menu.item icon="building-office" class="cursor-pointer" data-test="new-menu-organization">
+                                    {{ __('Organization') }}
+                                </flux:menu.item>
+                            </flux:modal.trigger>
+
+                            <flux:menu.separator />
+                        @endif
+
+                        <flux:menu.item icon="chalkboard" :href="route('ideas.settings', ['tab' => 'boards', 'new' => 'board'])" wire:navigate data-test="new-menu-board">
+                            {{ __('Board') }}
+                        </flux:menu.item>
+                        <flux:menu.item icon="squares-2x2" :href="route('ideas.settings', ['tab' => 'groups', 'new' => 'group'])" wire:navigate data-test="new-menu-group">
+                            {{ __('Group') }}
+                        </flux:menu.item>
+                        <flux:menu.item icon="tag" :href="route('ideas.settings', ['tab' => 'categories', 'new' => 'category'])" wire:navigate data-test="new-menu-category">
+                            {{ __('Category') }}
+                        </flux:menu.item>
+                        <flux:menu.item icon="light-bulb" :href="route('ideas.create')" wire:navigate data-test="new-menu-idea">
+                            {{ __('Submit Idea') }}
+                        </flux:menu.item>
+
+                        @if ($__isOwner)
+                            <flux:menu.separator />
+
+                            <flux:menu.item icon="user-plus" :href="route('ideas.settings', ['tab' => 'members', 'new' => 'member'])" wire:navigate data-test="new-menu-member">
+                                {{ __('Member') }}
+                            </flux:menu.item>
+                        @endif
+                    </flux:menu>
+                </flux:dropdown>
+            @elseif ($__canSubmitIdea)
                 <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" size="sm" data-test="header-new-idea-button">
                     <span class="hidden sm:inline">{{ __('New Idea') }}</span>
                 </flux:button>

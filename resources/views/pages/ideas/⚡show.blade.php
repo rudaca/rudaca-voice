@@ -476,45 +476,47 @@ new #[Title('Idea')] class extends Component {
             {{ __('Back') }}
         </flux:link>
 
-        <flux:dropdown position="bottom" align="end">
-            <flux:button
-                variant="outline"
-                size="sm"
-                icon="hand-thumb-up"
-                icon:trailing="chevron-down"
-                class="border-slate-500! text-slate-500! hover:bg-slate-50! dark:border-slate-400! dark:text-slate-400! dark:hover:bg-slate-500/10!"
-                data-test="who-voted-trigger"
-            >
-                {{ __('Who voted') }}
-            </flux:button>
+        @if ($this->canParticipate)
+            <flux:dropdown position="bottom" align="end">
+                <flux:button
+                    variant="outline"
+                    size="sm"
+                    icon="hand-thumb-up"
+                    icon:trailing="chevron-down"
+                    class="border-slate-500! text-slate-500! hover:bg-slate-50! dark:border-slate-400! dark:text-slate-400! dark:hover:bg-slate-500/10!"
+                    data-test="who-voted-trigger"
+                >
+                    {{ __('Who voted') }}
+                </flux:button>
 
-            <flux:menu class="min-w-80">
-                <div class="max-h-98 overflow-y-auto">
-                    @forelse ($this->voters as $vote)
-                        <flux:menu.item class="cursor-default" wire:key="voter-{{ $vote->id }}">
-                            <div class="flex items-center gap-2">
-                                <flux:avatar size="xs" :name="$vote->user->name" color="auto" color:seed="{{ $vote->user_id }}" />
-                                <div class="min-w-0">
-                                    <div class="truncate">
-                                        {{ $vote->user->name }}
-                                        @if ($vote->user_id === Auth::id())
-                                            <span class="text-slate-500">({{ __('You') }})</span>
-                                        @endif
+                <flux:menu class="min-w-80">
+                    <div class="max-h-98 overflow-y-auto">
+                        @forelse ($this->voters as $vote)
+                            <flux:menu.item class="cursor-default" wire:key="voter-{{ $vote->id }}">
+                                <div class="flex items-center gap-2">
+                                    <flux:avatar size="xs" :name="$vote->user->name" color="auto" color:seed="{{ $vote->user_id }}" />
+                                    <div class="min-w-0">
+                                        <div class="truncate">
+                                            {{ $vote->user->name }}
+                                            @if ($vote->user_id === Auth::id())
+                                                <span class="text-slate-500">({{ __('You') }})</span>
+                                            @endif
+                                        </div>
+                                        <flux:tooltip content="{{ __('Date Voted') }}">
+                                            <div style="font-size:9px" class="truncate  text-slate-500">{{ $vote->created_at->format('M j, Y g:i A') }}</div>
+                                        </flux:tooltip>
                                     </div>
-                                    <flux:tooltip content="{{ __('Date Voted') }}">
-                                        <div style="font-size:9px" class="truncate  text-slate-500">{{ $vote->created_at->format('M j, Y g:i A') }}</div>
-                                    </flux:tooltip>
                                 </div>
-                            </div>
-                        </flux:menu.item>
-                    @empty
-                        <flux:menu.item class="cursor-default text-slate-500">
-                            {{ __('No votes yet') }}
-                        </flux:menu.item>
-                    @endforelse
-                </div>
-            </flux:menu>
-        </flux:dropdown>
+                            </flux:menu.item>
+                        @empty
+                            <flux:menu.item class="cursor-default text-slate-500">
+                                {{ __('No votes yet') }}
+                            </flux:menu.item>
+                        @endforelse
+                    </div>
+                </flux:menu>
+            </flux:dropdown>
+        @endif
     </div>
 
     <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">

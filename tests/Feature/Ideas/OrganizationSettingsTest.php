@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Models\Idea;
 use App\Models\IdeaBoard;
 use App\Models\IdeaBoardGroup;
 use App\Models\IdeaCategory;
+use App\Models\IdeaComment;
 use App\Models\Team;
 use App\Models\User;
 use Livewire\Livewire;
@@ -22,6 +24,42 @@ test('the organization settings page renders all five tabs and defaults to Board
         ->assertSee('Members')
         ->assertSee('Settings')
         ->assertDontSee('Integrations');
+});
+
+test('arriving via the header New menu opens the matching creation modal', function (string $new, string $modalName) {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    boardStack($team);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings', ['new' => $new])
+        ->assertDispatched('modal-show', name: $modalName);
+})->with([
+    'board' => ['board', 'board'],
+    'group' => ['group', 'board-group'],
+    'category' => ['category', 'category'],
+    'member' => ['member', 'member'],
+]);
+
+test('an admin arriving via the header New menu opens the matching board, group or category modal', function (string $new, string $modalName) {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    boardStack($team);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings', ['new' => $new])
+        ->assertDispatched('modal-show', name: $modalName);
+})->with([
+    'board' => ['board', 'board'],
+    'group' => ['group', 'board-group'],
+    'category' => ['category', 'category'],
+]);
+
+test('an admin arriving via the header New menu with new=member is still forbidden from adding a member', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    boardStack($team);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings', ['new' => 'member'])
+        ->assertForbidden();
 });
 
 test('the Groups tab lists board groups with their own New group button, and the old Manage groups modal is gone', function () {
@@ -49,6 +87,169 @@ test('the Members tab lists team members with their role', function () {
         ->assertSee($manager->name)
         ->assertSee($manager->email)
         ->assertSee('Manager');
+});
+
+test('the owner sees a New member button on the Members tab but an admin does not', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $admin = User::factory()->create();
+    $team->members()->attach($admin, ['role' => TeamRole::Admin->value]);
+    $admin->switchTeam($team);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->assertSeeHtml('data-test="new-member"');
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->assertDontSeeHtml('data-test="new-member"');
+});
+
+test('the owner can search for an existing user and add them to the organization with a role', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $newUser = User::factory()->create(['name' => 'Priya Patel', 'email' => 'priya.patel@example.com']);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->call('newMember')
+        ->assertDispatched('modal-show', name: 'member')
+        ->set('memberSearch', 'priya')
+        ->assertSee($newUser->name)
+        ->assertSee($newUser->email)
+        ->call('selectMember', $newUser->id)
+        ->assertSet('memberUserId', $newUser->id)
+        ->set('memberRole', TeamRole::Manager->value)
+        ->call('saveMember')
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-close', name: 'member');
+
+    expect($newUser->fresh()->belongsToTeam($team))->toBeTrue()
+        ->and($team->members()->where('users.id', $newUser->id)->first()->pivot->role)->toBe(TeamRole::Manager);
+});
+
+test('searching for members to add excludes users already on the team', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $existingMember = User::factory()->create(['name' => 'Existing Person']);
+    $team->members()->attach($existingMember, ['role' => TeamRole::Employee->value]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->call('newMember')
+        ->set('memberSearch', 'Existing')
+        ->assertDontSeeHtml('data-test="searchable-user-option"');
+});
+
+test('adding a member requires selecting a user first', function () {
+    ['user' => $owner] = teamWithMember(TeamRole::Owner);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->call('newMember')
+        ->call('saveMember')
+        ->assertHasErrors(['memberUserId']);
+});
+
+test('a non-owner cannot add a member to the organization', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $newUser = User::factory()->create();
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->call('newMember')
+        ->assertForbidden();
+
+    expect($newUser->fresh()->belongsToTeam($team))->toBeFalse();
+});
+
+test('the owner sees a red Revoke Access icon for non-owner members but not for themselves', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+
+    $component = Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->assertSeeHtml('data-test="revoke-member-access"')
+        ->assertSeeHtml('Revoke Access')
+        ->assertSeeHtml('text-red-600!');
+
+    // Two members exist (owner + manager) but only the manager's row should
+    // carry the revoke action — the owner can never revoke their own access.
+    expect(substr_count($component->html(), 'data-test="revoke-member-access"'))->toBe(1);
+});
+
+test('the revoke access modal warns that the member\'s ideas and comments will remain', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->call('confirmRemoveMember', $manager->id)
+        ->assertSeeHtml('data-test="revoke-member-warning"')
+        ->assertSee('The ideas and comments made by this user will remain.');
+});
+
+test('the owner can revoke a member\'s access, and their ideas and comments remain', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $stack = boardStack($team, $owner);
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+
+    $idea = Idea::factory()->create(['board_id' => $stack['board']->id, 'submitted_by_user_id' => $manager->id]);
+    $comment = IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $manager->id]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->call('confirmRemoveMember', $manager->id)
+        ->assertDispatched('modal-show', name: 'revoke-member-access')
+        ->assertSet('removeMemberName', $manager->name)
+        ->call('removeMember')
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-close', name: 'revoke-member-access');
+
+    expect($manager->fresh()->belongsToTeam($team))->toBeFalse()
+        ->and(Idea::find($idea->id))->not->toBeNull()
+        ->and(IdeaComment::find($comment->id))->not->toBeNull();
+});
+
+test('revoking access switches the removed member off their now-inaccessible current team', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $manager = User::factory()->create();
+    $personalTeam = $manager->personalTeam();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+    $manager->switchTeam($team);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->call('confirmRemoveMember', $manager->id)
+        ->call('removeMember')
+        ->assertHasNoErrors();
+
+    expect($manager->fresh()->current_team_id)->toBe($personalTeam->id);
+});
+
+test('a non-owner cannot revoke a member\'s access', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->assertDontSeeHtml('data-test="revoke-member-access"')
+        ->call('confirmRemoveMember', $manager->id)
+        ->assertForbidden();
+
+    expect($manager->fresh()->belongsToTeam($team))->toBeTrue();
 });
 
 test('the Settings tab lets an admin update the team name and anonymous ideas preference', function () {

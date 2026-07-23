@@ -40,7 +40,7 @@
                     class="flex items-center rounded px-1 text-slate-500 transition hover:text-slate-800 dark:hover:text-slate-300"
                     data-test="breadcrumbs-ellipsis"
                 >
-                    <flux:icon name="ellipsis-horizontal" variant="mini" class="size-3.5" />
+                    <flux:icon name="ellipsis-horizontal" variant="outline" class="size-4" />
                 </button>
 
                 <flux:menu class="min-w-40">
@@ -56,8 +56,8 @@
                 </flux:menu>
             </flux:dropdown>
 
-            <flux:icon icon="chevron-right" variant="mini" class="mx-0.5 text-slate-400 rtl:hidden dark:text-white/80" />
-            <flux:icon icon="chevron-left" variant="mini" class="mx-0.5 hidden text-slate-400 rtl:inline dark:text-white/80" />
+            <flux:icon icon="chevron-right" variant="outline" class="mx-0.5 text-slate-400 rtl:hidden dark:text-white/80" />
+            <flux:icon icon="chevron-left" variant="outline" class="mx-0.5 hidden text-slate-400 rtl:inline dark:text-white/80" />
         </div>
 
         <flux:breadcrumbs.item :href="$last['href'] ?? null" class="{{ ($last['href'] ?? null) === null ? $activeClass : $inactiveClass }}">

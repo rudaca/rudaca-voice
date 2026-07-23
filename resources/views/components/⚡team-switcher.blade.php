@@ -133,7 +133,7 @@ new class extends Component {
                 data-test="team-switcher-trigger"
             >
                 <span class="truncate text-lg font-semibold">{{ $this->currentTeam()['name'] ?? __('Select organization') }}</span>
-                <flux:icon name="chevron-down" variant="micro" class="size-3.5 shrink-0" />
+                <flux:icon name="chevron-down" variant="outline" class="size-4 shrink-0" />
             </button>
         @else
             <flux:button variant="ghost" class="group w-full justify-start in-data-flux-sidebar-collapsed-desktop:justify-center" data-test="team-switcher-trigger">
@@ -141,8 +141,8 @@ new class extends Component {
                 <span class="truncate font-semibold in-data-flux-sidebar-collapsed-desktop:hidden">{{ $this->currentTeam()['name'] ?? __('Select organization') }}</span>
                 <flux:icon
                     name="chevrons-up-down"
-                    variant="micro"
-                    class="ms-auto size-4 in-data-flux-sidebar-collapsed-desktop:hidden"
+                    variant="outline"
+                    class="ms-auto size-4.5 in-data-flux-sidebar-collapsed-desktop:hidden"
                 />
             </flux:button>
         @endif

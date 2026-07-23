@@ -80,6 +80,51 @@ test('the active board is highlighted in the sidebar boards tree', function () {
         ->and(substr_count($content, $inactiveClasses))->toBe(2);
 });
 
+test('the owner sees the New dropdown in the header instead of the New Idea button', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+
+    $response = $this->actingAs($owner)->get(route('dashboard', ['current_team' => $team->slug]));
+
+    $response->assertOk()
+        ->assertSeeHtml('data-test="header-new-button"')
+        ->assertSeeHtml('data-test="new-menu-organization"')
+        ->assertSeeHtml('data-test="new-menu-board"')
+        ->assertSeeHtml('data-test="new-menu-group"')
+        ->assertSeeHtml('data-test="new-menu-category"')
+        ->assertSeeHtml('data-test="new-menu-idea"')
+        ->assertSeeHtml('data-test="new-menu-member"')
+        ->assertDontSeeHtml('data-test="header-new-idea-button"');
+});
+
+test('the admin sees the New dropdown for boards, groups, categories and ideas, but not organization or member', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    $response = $this->actingAs($admin)->get(route('dashboard', ['current_team' => $team->slug]));
+
+    $response->assertOk()
+        ->assertSeeHtml('data-test="header-new-button"')
+        ->assertSeeHtml('data-test="new-menu-board"')
+        ->assertSeeHtml('data-test="new-menu-group"')
+        ->assertSeeHtml('data-test="new-menu-category"')
+        ->assertSeeHtml('data-test="new-menu-idea"')
+        ->assertDontSeeHtml('data-test="new-menu-organization"')
+        ->assertDontSeeHtml('data-test="new-menu-member"')
+        ->assertDontSeeHtml('data-test="header-new-idea-button"');
+});
+
+test('managers and employees see the unchanged New Idea button in the header, not the New dropdown', function (TeamRole $role) {
+    ['team' => $team, 'user' => $user] = teamWithMember($role);
+
+    $response = $this->actingAs($user)->get(route('dashboard', ['current_team' => $team->slug]));
+
+    $response->assertOk()
+        ->assertSeeHtml('data-test="header-new-idea-button"')
+        ->assertDontSeeHtml('data-test="header-new-button"');
+})->with([
+    'manager' => TeamRole::Manager,
+    'employee' => TeamRole::Employee,
+]);
+
 test('only managers and above see the review queue link', function () {
     ['team' => $employeeTeam, 'user' => $employee] = teamWithMember(TeamRole::Employee);
     ['team' => $managerTeam, 'user' => $manager] = teamWithMember(TeamRole::Manager);

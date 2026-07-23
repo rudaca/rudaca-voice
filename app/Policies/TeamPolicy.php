@@ -28,15 +28,15 @@ class TeamPolicy
     /**
      * Determine whether the user can create models.
      *
-     * Viewers and employees are restricted to the team(s) they're added to
-     * and may not create their own; everyone else (including users with no
-     * current team yet) may.
+     * Viewers, employees, and managers are restricted to the team(s) they're
+     * added to and may not create their own; owners, admins, and users with
+     * no current team yet may.
      */
     public function create(User $user): bool
     {
         $role = $user->currentTeam ? $user->teamRole($user->currentTeam) : null;
 
-        return $role === null || $role->isAtLeast(TeamRole::Manager);
+        return $role === null || $role->isAtLeast(TeamRole::Admin);
     }
 
     /**

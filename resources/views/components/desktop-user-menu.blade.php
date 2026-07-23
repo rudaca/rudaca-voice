@@ -13,7 +13,7 @@
                 <span class="truncate text-xs text-slate-500 dark:text-slate-600">{{ $menuSubtitle }}</span>
             @endif
         </div>
-        <flux:icon name="chevrons-up-down" variant="micro" class="in-data-flux-sidebar-collapsed-desktop:hidden ms-auto size-4 text-slate-500 group-hover:text-slate-900 dark:text-white/80 dark:group-hover:text-white" />
+        <flux:icon name="chevrons-up-down" variant="outline" class="in-data-flux-sidebar-collapsed-desktop:hidden ms-auto size-4.5 text-slate-500 group-hover:text-slate-900 dark:text-white/80 dark:group-hover:text-white" />
     </button>
 
     <flux:menu>

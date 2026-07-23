@@ -105,6 +105,15 @@ test('a viewer cannot vote', function () {
     expect(IdeaVote::where('idea_id', $idea->id)->where('user_id', $viewer->id)->count())->toBe(0);
 });
 
+test('a viewer does not see the who voted dropdown', function () {
+    ['team' => $team, 'user' => $viewer] = teamWithMember(TeamRole::Viewer);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($viewer)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertDontSeeHtml('data-test="who-voted-trigger"');
+});
+
 test('who voted is sorted alphabetically by name with the current user always first', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
     $idea = makeIdea($team);

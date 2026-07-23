@@ -47,7 +47,7 @@ test('teams can be created', function () {
     ]);
 });
 
-test('viewers and employees cannot create a team', function (TeamRole $role) {
+test('viewers, employees and managers cannot create a team', function (TeamRole $role) {
     ['user' => $user] = teamWithMember($role);
 
     $this->actingAs($user);
@@ -63,9 +63,10 @@ test('viewers and employees cannot create a team', function (TeamRole $role) {
 })->with([
     'viewer' => TeamRole::Viewer,
     'employee' => TeamRole::Employee,
+    'manager' => TeamRole::Manager,
 ]);
 
-test('owners, admins and managers can create a team', function (TeamRole $role) {
+test('owners and admins can create a team', function (TeamRole $role) {
     ['user' => $user] = teamWithMember($role);
 
     $this->actingAs($user);
@@ -81,10 +82,9 @@ test('owners, admins and managers can create a team', function (TeamRole $role) 
 })->with([
     'owner' => TeamRole::Owner,
     'admin' => TeamRole::Admin,
-    'manager' => TeamRole::Manager,
 ]);
 
-test('the new team button and modal are hidden for viewers and employees', function (TeamRole $role) {
+test('the new team button and modal are hidden for viewers, employees and managers', function (TeamRole $role) {
     ['user' => $user] = teamWithMember($role);
 
     $this->actingAs($user);
@@ -95,6 +95,7 @@ test('the new team button and modal are hidden for viewers and employees', funct
 })->with([
     'viewer' => TeamRole::Viewer,
     'employee' => TeamRole::Employee,
+    'manager' => TeamRole::Manager,
 ]);
 
 test('teams created via the create team modal disallow anonymous ideas by default', function () {
