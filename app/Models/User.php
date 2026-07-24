@@ -27,6 +27,7 @@ use Illuminate\Support\Str;
  * @property string|null $remember_token
  * @property int|null $current_team_id
  * @property bool $is_super_admin
+ * @property bool $is_active
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Team|null $currentTeam
@@ -55,6 +56,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 

@@ -13,6 +13,7 @@
             $__canReview = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Manager) ?? false;
             $__canManageBoards = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Admin) ?? false;
             $__isOwner = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Owner) ?? false;
+            $__isSuperAdmin = auth()->user()?->is_super_admin ?? false;
 
             $__reviewQueueCount = $__canReview
                 ? $__currentTeam->ideas()->whereIn('status', ['new', 'under_review'])->count()
@@ -69,7 +70,7 @@
                 </div>
             </flux:sidebar.nav>
 
-            @if ($__canReview || $__canManageBoards)
+            @if ($__canReview || $__canManageBoards || $__isSuperAdmin)
                 <flux:separator variant="subtle" class="sidebar-divider" />
 
                 <flux:sidebar.nav>
@@ -103,6 +104,12 @@
 
                             <flux:sidebar.item icon="building-office" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
                                 {{ __('Organization') }}
+                            </flux:sidebar.item>
+                        @endif
+
+                        @if ($__isSuperAdmin)
+                            <flux:sidebar.item icon="user" :href="route('admin.users')" :current="request()->routeIs('admin.users')" wire:navigate>
+                                {{ __('System Users') }}
                             </flux:sidebar.item>
                         @endif
                     </div>

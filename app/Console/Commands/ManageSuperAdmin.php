@@ -26,7 +26,8 @@ class ManageSuperAdmin extends Command
 
         $isSuperAdmin = ! $this->option('revoke');
 
-        $user->update(['is_super_admin' => $isSuperAdmin]);
+        $user->is_super_admin = $isSuperAdmin;
+        $user->save();
 
         $this->info(
             $isSuperAdmin
