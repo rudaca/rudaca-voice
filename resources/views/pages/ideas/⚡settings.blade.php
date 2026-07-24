@@ -611,7 +611,7 @@ new #[Title('Organization Settings')] class extends Component {
         ]);
 
         if ($this->team->members()->where('users.id', $validated['memberUserId'])->exists()) {
-            $this->addError('memberUserId', __('This user is already a member of the organization.'));
+            $this->addError('memberUserId', __('This user is already a contributor of the organization.'));
 
             return;
         }
@@ -622,7 +622,7 @@ new #[Title('Organization Settings')] class extends Component {
 
         unset($this->members);
         $this->dispatch('modal-close', name: 'member');
-        Flux::toast(variant: 'success', text: __('Member added.'));
+        Flux::toast(variant: 'success', text: __('Contributor added.'));
     }
 
     public function confirmRemoveMember(int $userId): void
@@ -667,7 +667,7 @@ new #[Title('Organization Settings')] class extends Component {
 <section class="mx-auto w-full  px-6 pb-7 lg:px-8">
     <div class="flex flex-col gap-1">
         <flux:heading size="xl">{{ __('Organization Settings') }}</flux:heading>
-        <flux:text class="text-slate-600 dark:text-slate-500">{{ __('Manage boards, groups, categories, members and settings for :team.', ['team' => $this->team->name]) }}</flux:text>
+        <flux:text class="text-slate-600 dark:text-slate-500">{{ __('Manage boards, groups, categories, contributors and settings for :team.', ['team' => $this->team->name]) }}</flux:text>
     </div>
 
     {{-- Tabs --}}
@@ -697,7 +697,7 @@ new #[Title('Organization Settings')] class extends Component {
                 'boards' => __('Boards'),
                 'groups' => __('Groups'),
                 'categories' => __('Categories'),
-                'members' => __('Members'),
+                'members' => __('Contributors'),
                 // 'integrations' => __('Integrations'), // hidden — replaced by the Settings tab
                 'settings' => __('Settings'),
             ] as $key => $label)
@@ -902,14 +902,14 @@ new #[Title('Organization Settings')] class extends Component {
         <div class="mt-5 space-y-4">
         @if ($this->canAddMember)
             <div class="flex items-center justify-end gap-2">
-                <flux:button wire:click="newMember" variant="primary" icon="plus" size="sm" data-test="new-member">{{ __('New member') }}</flux:button>
+                <flux:button wire:click="newMember" variant="primary" icon="plus" size="sm" data-test="new-member">{{ __('New contributor') }}</flux:button>
             </div>
         @endif
         <div class="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table class="w-full text-sm">
                 <thead class="bg-zinc-50 dark:bg-zinc-800/50">
                     <tr class="text-xs font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-500">
-                        <th class="px-4 py-2.5 text-start">{{ __('Member') }}</th>
+                        <th class="px-4 py-2.5 text-start">{{ __('Contributor') }}</th>
                         <th class="px-4 py-2.5 text-start">{{ __('Email') }}</th>
                         <th class="px-4 py-2.5 text-start">{{ __('Role') }}</th>
                         @if ($this->canRemoveMember)
@@ -1081,7 +1081,7 @@ new #[Title('Organization Settings')] class extends Component {
     @if ($this->canAddMember)
         <flux:modal name="member" class="w-full max-w-2xl" :dismissible="false" data-test="member-modal">
             <form wire:submit="saveMember" class="space-y-5">
-                <flux:heading size="lg">{{ __('New member') }}</flux:heading>
+                <flux:heading size="lg">{{ __('New contributor') }}</flux:heading>
 
                 @if ($memberUserId)
                     <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
@@ -1133,7 +1133,7 @@ new #[Title('Organization Settings')] class extends Component {
 
                 <div class="flex justify-end gap-2">
                     <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
-                    <flux:button variant="primary" type="submit" data-test="save-member">{{ __('Add member') }}</flux:button>
+                    <flux:button variant="primary" type="submit" data-test="save-member">{{ __('Add contributor') }}</flux:button>
                 </div>
             </form>
         </flux:modal>

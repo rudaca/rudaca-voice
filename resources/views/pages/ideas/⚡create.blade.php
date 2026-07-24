@@ -236,9 +236,9 @@ new #[Title('Submit idea')] class extends Component {
 @endpush
 
 <section class="mx-auto w-full container px-6 py-7 lg:px-8">
-    <flux:link :href="route('ideas.index')" wire:navigate variant="subtle" class="inline-flex items-center gap-1 text-sm">
+    <flux:link as="button" x-data x-on:click="window.history.back()" variant="subtle" class="inline-flex items-center gap-1 text-sm">
         <flux:icon.arrow-left class="size-4" />
-        {{ __('Back to all ideas') }}
+        {{ __('Back') }}
     </flux:link>
 
     <div class="mt-5">

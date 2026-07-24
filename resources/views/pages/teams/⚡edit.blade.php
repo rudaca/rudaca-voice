@@ -77,7 +77,7 @@ new class extends Component
 
         $this->populateTeamData();
 
-        Flux::toast(variant: 'success', text: __('Member role updated.'));
+        Flux::toast(variant: 'success', text: __('Contributor role updated.'));
     }
 
     private function populateTeamData(): void
@@ -173,7 +173,7 @@ new class extends Component
             <div class="space-y-6">
                 <div class="flex items-center justify-between">
                     <div>
-                        <flux:heading>{{ __('Organization members') }}</flux:heading>
+                        <flux:heading>{{ __('Organization contributors') }}</flux:heading>
                         @if ($this->permissions->canAddMember || $this->permissions->canUpdateMember || $this->permissions->canRemoveMember)
                             <flux:subheading>{{ __('Manage who belongs to this organization') }}</flux:subheading>
                         @endif
@@ -182,7 +182,7 @@ new class extends Component
                     @if ($this->permissions->canCreateInvitation)
                         <flux:modal.trigger name="invite-member">
                             <flux:button variant="primary" icon="user-plus" data-test="invite-member-button">
-                                {{ __('Invite member') }}
+                                {{ __('Invite contributor') }}
                             </flux:button>
                         </flux:modal.trigger>
                     @endif
@@ -224,7 +224,7 @@ new class extends Component
 
                                 @if ($member['role'] !== 'owner' && $this->permissions->canRemoveMember)
                                     <flux:modal.trigger name="remove-member-{{ $member['id'] }}">
-                                        <flux:tooltip :content="__('Remove member')">
+                                        <flux:tooltip :content="__('Remove contributor')">
                                             <flux:button
                                                 variant="ghost"
                                                 size="sm"

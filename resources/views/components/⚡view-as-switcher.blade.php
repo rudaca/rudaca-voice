@@ -117,7 +117,7 @@ new class extends Component {
                             </flux:menu.item>
                         @empty
                             <div class="px-2 py-1.5 text-sm text-slate-500 dark:text-slate-600">
-                                {{ __('No other members to view as in this organization.') }}
+                                {{ __('No other contributors to view as in this organization.') }}
                             </div>
                         @endforelse
                     </div>

@@ -24,7 +24,7 @@ new class extends Component {
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
         'released' => ['label' => 'Implemented', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-rose-700! text-white!'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!'],
     ];
 
     public string $query = '';
@@ -229,7 +229,7 @@ new class extends Component {
                         <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">{{ __('Boards') }}</div>
                         @foreach ($this->boards as $board)
                             <a
-                                href="{{ route('ideas.index', ['board' => $board->id]) }}"
+                                href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
                                 wire:navigate
                                 x-on:click="open = false"
                                 class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 hover:bg-zinc-50 dark:text-slate-300 dark:hover:bg-zinc-800/60"

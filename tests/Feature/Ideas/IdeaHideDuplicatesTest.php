@@ -42,10 +42,29 @@ test('selecting the Duplicate status automatically unchecks hide duplicates', fu
         ->test('pages::ideas.index')
         ->set('hideDuplicates', true)
         ->assertSet('hideDuplicates', true)
-        ->set('status', 'duplicate')
+        ->set('status', ['duplicate'])
         ->assertSet('hideDuplicates', false);
 
     expect($component->instance()->ideas->pluck('id')->all())->toContain($duplicate->id);
+});
+
+test('checking hide duplicates automatically unchecks the Duplicate status', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $duplicate = makeIdea($team, ['status' => 'duplicate']);
+    $active = makeIdea($team, ['status' => 'new']);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->set('status', ['duplicate', 'new'])
+        ->assertSet('status', ['duplicate', 'new'])
+        ->set('hideDuplicates', true)
+        ->assertSet('status', ['new']);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->not->toContain($duplicate->id)
+        ->and($ids)->toContain($active->id);
 });
 
 test('hide duplicates resets pagination like other filters', function () {

@@ -108,7 +108,7 @@ Gate with policies/`@can` and Livewire authorization — do not merely hide with
   (12px/600/#8b8f99) + board name H1 + sub line "`N ideas · <board description>`". When viewing all,
   header is "All Ideas" + "`N ideas across M boards`" and no icon/breadcrumb.
 - **Controls row:** left = segmented **sort** control (Top voted / Newest / Trending) in a
-  `#eeeef1` track; right = **status** `<flux:select>` (All statuses / New / Under Review / Planned /
+  `#eeeef1` track; right = **status** `<flux:select>` (All status / New / Under Review / Planned /
   In Progress / Implemented / Declined). *(Board is chosen from the sidebar, not a dropdown here.)*
 - **Idea card (full):** `border-radius:13px; padding:16px 18px; gap:16px`. Left **vote button**
   (52px wide, column: triangle chevron + count). Right: status badge + category chip row → title

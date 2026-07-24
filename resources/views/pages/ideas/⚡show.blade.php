@@ -29,7 +29,7 @@ new #[Title('Idea')] class extends Component {
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
         'released' => ['label' => 'Implemented', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-rose-700! text-white!'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!'],
     ];
 
     /** @var array<string, string> */
@@ -301,11 +301,17 @@ new #[Title('Idea')] class extends Component {
 
         if ($existingVote) {
             $existingVote->delete();
+
+            $this->dispatch('modal-close', name: 'confirm-unvote');
         } else {
             IdeaVote::firstOrCreate([
                 'idea_id' => $this->ideaModel->id,
                 'user_id' => Auth::id(),
             ]);
+
+            $this->dispatch('idea-voted');
+
+            Flux::toast(variant: 'success', text: __('You have successfully casted your vote.'));
         }
     }
 
@@ -464,7 +470,7 @@ new #[Title('Idea')] class extends Component {
     <x-breadcrumbs :items="[
         ['label' => __('All Ideas'), 'href' => route('ideas.index')],
         ...($idea->boardGroup ? [['label' => $idea->boardGroup->name, 'href' => route('ideas.index', ['group' => $idea->board_group_id])]] : []),
-        ...($idea->board ? [['label' => $idea->board->name, 'href' => route('ideas.index', ['board' => $idea->board_id])]] : []),
+        ...($idea->board ? [['label' => $idea->board->name, 'href' => route('ideas.index', ['board' => [$idea->board_id]])]] : []),
         ['label' => $idea->title, 'href' => null],
     ]" />
 @endpush
@@ -534,7 +540,7 @@ new #[Title('Idea')] class extends Component {
                 <flux:tooltip :content="$this->canParticipate ? ($this->hasVoted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
                     <button
                         type="button"
-                        wire:click="toggleVote"
+                        @if (! $this->hasVoted) wire:click="toggleVote" @endif
                         wire:loading.attr="disabled"
                         @disabled(! $this->canParticipate)
                         aria-pressed="{{ $this->hasVoted ? 'true' : 'false' }}"
@@ -546,12 +552,42 @@ new #[Title('Idea')] class extends Component {
                             'border-zinc-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-slate-500 dark:hover:border-indigo-500/40' => ! $this->hasVoted,
                         ])
                         data-test="vote-button"
+                        x-data="{ justVoted: false }"
+                        x-on:idea-voted.window="justVoted = true; setTimeout(() => justVoted = false, 4000)"
+                        @if ($this->hasVoted) x-on:click="$dispatch('modal-show', { name: 'confirm-unvote' })" @endif
                     >
-                        <flux:icon.chevron-up class="size-5" />
+                        <flux:icon.chevron-up x-show="!justVoted" class="size-5" />
+                        <flux:icon.hand-thumb-up
+                            x-cloak
+                            x-show="justVoted"
+                            x-transition:enter="transition ease-out duration-300"
+                            x-transition:enter-start="opacity-0 translate-y-2"
+                            x-transition:enter-end="opacity-100 translate-y-0"
+                            x-transition:leave="transition ease-in duration-150"
+                            x-transition:leave-start="opacity-100 translate-y-0"
+                            x-transition:leave-end="opacity-0 translate-y-2"
+                            class="size-5"
+                        />
                         <span class="text-lg font-extrabold">{{ $this->voteCount }}</span>
                         <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-500' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
                     </button>
                 </flux:tooltip>
+
+                {{-- Confirm unvote modal --}}
+                <flux:modal name="confirm-unvote" class="max-w-lg" :dismissible="false" data-test="confirm-unvote-modal">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">{{ __('Remove your vote?') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('You are removing your vote from this idea.') }}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost" data-test="confirm-unvote-cancel">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button wire:click="toggleVote" variant="danger" data-test="confirm-unvote-yes">{{ __('Yes') }}</flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
 
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">

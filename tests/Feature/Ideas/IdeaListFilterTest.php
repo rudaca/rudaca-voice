@@ -1,8 +1,113 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Models\IdeaCategory;
+use App\Models\IdeaComment;
 use App\Models\User;
 use Livewire\Livewire;
+
+test('status filter accepts multiple statuses', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $new = makeIdea($team, ['status' => 'new']);
+    $planned = makeIdea($team, ['status' => 'planned']);
+    $released = makeIdea($team, ['status' => 'released']);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->set('status', ['new', 'planned']);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($new->id)
+        ->and($ids)->toContain($planned->id)
+        ->and($ids)->not->toContain($released->id);
+});
+
+test('board filter accepts multiple boards', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $stackOne = boardStack($team);
+    $stackTwo = boardStack($team);
+    $stackThree = boardStack($team);
+
+    $ideaOne = makeIdea($team, ['board_id' => $stackOne['board']->id, 'board_group_id' => $stackOne['board']->board_group_id]);
+    $ideaTwo = makeIdea($team, ['board_id' => $stackTwo['board']->id, 'board_group_id' => $stackTwo['board']->board_group_id]);
+    $ideaThree = makeIdea($team, ['board_id' => $stackThree['board']->id, 'board_group_id' => $stackThree['board']->board_group_id]);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->set('board', [(string) $stackOne['board']->id, (string) $stackTwo['board']->id]);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($ideaOne->id)
+        ->and($ids)->toContain($ideaTwo->id)
+        ->and($ids)->not->toContain($ideaThree->id);
+});
+
+test('category filter dedupes same-named categories across boards and matches ideas tagged under any of them', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $stackOne = boardStack($team);
+    $stackTwo = boardStack($team);
+
+    $bugOne = IdeaCategory::factory()->create(['team_id' => $team->id, 'board_id' => $stackOne['board']->id, 'name' => 'Bug', 'is_active' => true]);
+    $bugTwo = IdeaCategory::factory()->create(['team_id' => $team->id, 'board_id' => $stackTwo['board']->id, 'name' => 'Bug', 'is_active' => true]);
+
+    $ideaOne = makeIdea($team, ['board_id' => $stackOne['board']->id, 'board_group_id' => $stackOne['board']->board_group_id, 'category_id' => $bugOne->id]);
+    $ideaTwo = makeIdea($team, ['board_id' => $stackTwo['board']->id, 'board_group_id' => $stackTwo['board']->board_group_id, 'category_id' => $bugTwo->id]);
+    $unrelated = makeIdea($team, ['category_id' => $stackOne['category']->id]);
+
+    $component = Livewire::actingAs($user)->test('pages::ideas.index');
+
+    expect($component->instance()->categories->filter(fn ($name) => $name === 'Bug')->count())->toBe(1);
+
+    $component->set('category', ['Bug']);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($ideaOne->id)
+        ->and($ids)->toContain($ideaTwo->id)
+        ->and($ids)->not->toContain($unrelated->id);
+});
+
+test('only-internal-comments filter restricts the list to ideas with internal comments, for managers and above', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+
+    $withInternal = makeIdea($team);
+    IdeaComment::factory()->internal()->create(['idea_id' => $withInternal->id]);
+
+    $withoutInternal = makeIdea($team);
+    IdeaComment::factory()->create(['idea_id' => $withoutInternal->id]);
+
+    $component = Livewire::actingAs($manager)
+        ->test('pages::ideas.index')
+        ->set('onlyInternalComments', true);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($withInternal->id)
+        ->and($ids)->not->toContain($withoutInternal->id);
+});
+
+test('only-internal-comments filter is ignored for roles below manager', function () {
+    ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
+
+    $withInternal = makeIdea($team);
+    IdeaComment::factory()->internal()->create(['idea_id' => $withInternal->id]);
+
+    $withoutInternal = makeIdea($team);
+
+    $component = Livewire::actingAs($employee)
+        ->test('pages::ideas.index')
+        ->set('onlyInternalComments', true);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($withInternal->id)
+        ->and($ids)->toContain($withoutInternal->id);
+});
 
 test('search filters ideas by title', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
@@ -31,7 +136,7 @@ test('author filter restricts the list to ideas submitted by that user', functio
 
     $component = Livewire::actingAs($user)
         ->test('pages::ideas.index')
-        ->set('author', (string) $author->id);
+        ->set('author', [(string) $author->id]);
 
     $ids = $component->instance()->ideas->pluck('id')->all();
 
@@ -65,7 +170,7 @@ test('the second row filters indicator is off by default and turns on when a tuc
 
     expect($component->instance()->hasSecondRowFilters)->toBeFalse();
 
-    $component->set('author', '1');
+    $component->set('author', ['1']);
 
     expect($component->instance()->hasSecondRowFilters)->toBeTrue();
 });
@@ -83,29 +188,31 @@ test('hasActiveFilters is off by default and turns on when any filter is used', 
 });
 
 test('clearFilters resets every filter control back to its default', function () {
-    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Manager);
 
     $component = Livewire::actingAs($user)
         ->test('pages::ideas.index')
-        ->set('status', 'new')
-        ->set('board', '1')
-        ->set('category', '1')
-        ->set('author', '1')
+        ->set('status', ['new'])
+        ->set('board', ['1'])
+        ->set('category', ['Bug'])
+        ->set('author', ['1'])
         ->set('search', 'refund')
         ->set('dateFrom', '2026-06-01')
         ->set('dateTo', '2026-06-30')
         ->set('hideDuplicates', true)
+        ->set('onlyInternalComments', true)
         ->call('clearFilters');
 
     $component
-        ->assertSet('status', '')
-        ->assertSet('board', '')
-        ->assertSet('category', '')
-        ->assertSet('author', '')
+        ->assertSet('status', [])
+        ->assertSet('board', [])
+        ->assertSet('category', [])
+        ->assertSet('author', [])
         ->assertSet('search', '')
         ->assertSet('dateFrom', '')
         ->assertSet('dateTo', '')
-        ->assertSet('hideDuplicates', false);
+        ->assertSet('hideDuplicates', false)
+        ->assertSet('onlyInternalComments', false);
 
     expect($component->instance()->hasActiveFilters)->toBeFalse();
 });

@@ -107,10 +107,17 @@ function animateStatValue(el, target) {
 // elements and re-triggers x-init — replaying the count-up on every switch.
 // On the very first load we hold off until the page has fully finished
 // loading, so the animation doesn't compete with other page-load work.
-window.initStatCounter = function (el, target) {
+function initStatCounter(el, target) {
     if (document.readyState === 'complete') {
         animateStatValue(el, target);
     } else {
         window.addEventListener('load', () => animateStatValue(el, target), {once: true});
     }
-};
+}
+
+// Replay any calls the head partial's stub queued before this module ran (see
+// resources/views/partials/head.blade.php for why that race exists), then swap
+// in the real implementation for the rest of the page's life.
+(window.__pendingStatCounters || []).forEach(([el, target]) => initStatCounter(el, target));
+delete window.__pendingStatCounters;
+window.initStatCounter = initStatCounter;

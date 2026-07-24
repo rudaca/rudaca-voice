@@ -11,6 +11,20 @@
 
 @fonts
 
+<script>
+    // The fluxScripts directive (near the end of the body) renders a classic,
+    // render-blocking script that bundles Alpine + Livewire and starts Alpine as
+    // soon as it runs — before this deferred `type="module"` app.js below has
+    // executed. That means Alpine can call `initStatCounter` (defined in app.js)
+    // on the initial page's dashboard stat cards before it exists. This stub
+    // queues any such early calls, keeping the element reference and target, so
+    // app.js can replay them once it loads instead of Alpine throwing a
+    // ReferenceError and leaving that card stuck at 0.
+    window.initStatCounter = function (el, target) {
+        (window.__pendingStatCounters ??= []).push([el, target]);
+    };
+</script>
+
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 <script>
     if (window.localStorage.getItem('flux.appearance.seeded') === null) {

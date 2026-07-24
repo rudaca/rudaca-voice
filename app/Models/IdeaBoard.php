@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
 
 /**
@@ -29,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $createdBy
  * @property-read Collection<int, IdeaCategory> $categories
  * @property-read Collection<int, Idea> $ideas
+ * @property-read Collection<int, IdeaComment> $comments
  * @property-read Collection<int, IdeaBoardRoleAccess> $roleAccess
  * @property-read Collection<int, IdeaBoardUserAccess> $userAccess
  */
@@ -86,6 +88,16 @@ class IdeaBoard extends Model
     public function ideas(): HasMany
     {
         return $this->hasMany(Idea::class, 'board_id');
+    }
+
+    /**
+     * Get the comments left on this board's ideas.
+     *
+     * @return HasManyThrough<IdeaComment, Idea, $this>
+     */
+    public function comments(): HasManyThrough
+    {
+        return $this->hasManyThrough(IdeaComment::class, Idea::class, 'board_id', 'idea_id');
     }
 
     /**

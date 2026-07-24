@@ -21,7 +21,7 @@ test('the organization settings page renders all five tabs and defaults to Board
         ->assertSee('Boards')
         ->assertSee('Groups')
         ->assertSee('Categories')
-        ->assertSee('Members')
+        ->assertSee('Contributors')
         ->assertSee('Settings')
         ->assertDontSee('Integrations');
 });

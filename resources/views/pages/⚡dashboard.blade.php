@@ -1,10 +1,13 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Models\IdeaComment;
 use App\Models\IdeaStatusHistory;
 use App\Models\IdeaVote;
 use App\Models\Team;
+use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -17,16 +20,21 @@ new #[Title('Dashboard')] class extends Component {
     public string $statsTab = 'for_you';
 
     /**
-     * @var array<string, array{label: string, color: string, class?: string}>
+     * Which panel is showing in the boards/contributors card.
+     */
+    public string $boardsTab = 'boards';
+
+    /**
+     * @var array<string, array{label: string, color: string, class?: string, badge_dot: string}>
      */
     public const STATUS_META = [
-        'new' => ['label' => 'New', 'color' => 'zinc'],
-        'under_review' => ['label' => 'Under Review', 'color' => 'amber'],
-        'planned' => ['label' => 'Planned', 'color' => 'blue'],
-        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
-        'released' => ['label' => 'Implemented', 'color' => 'green'],
-        'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-rose-700! text-white!'],
+        'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
+        'under_review' => ['label' => 'Under Review', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
+        'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
+        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo', 'badge_dot' => 'bg-indigo-800 dark:bg-indigo-200'],
+        'released' => ['label' => 'Implemented', 'color' => 'green', 'badge_dot' => 'bg-green-800 dark:bg-green-200'],
+        'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
     ];
 
     #[Computed]
@@ -93,11 +101,17 @@ new #[Title('Dashboard')] class extends Component {
 
         if ($existingVote) {
             $existingVote->delete();
+
+            $this->dispatch('modal-close', name: "confirm-unvote-{$idea->id}");
         } else {
             IdeaVote::firstOrCreate([
                 'idea_id' => $idea->id,
                 'user_id' => Auth::id(),
             ]);
+
+            $this->dispatch('idea-voted', ideaId: $idea->id);
+
+            Flux::toast(variant: 'success', text: __('You have successfully casted your vote.'));
         }
     }
 
@@ -224,7 +238,7 @@ new #[Title('Dashboard')] class extends Component {
                 'dot' => 'bg-indigo-500',
             ],
             [
-                'label' => __('Members'),
+                'label' => __('Contributors'),
                 'value' => $team->memberships()->count(),
                 'caption' => __('in :team', ['team' => $team->name]),
                 'dot' => 'bg-rose-500',
@@ -306,12 +320,16 @@ new #[Title('Dashboard')] class extends Component {
     {
         return $this->team->ideas()
             ->visibleTo($this->role, Auth::id())
-            ->with('board:id,name')
-            ->withCount(['votes', 'comments'])
+            ->with(['board:id,name', 'submittedBy:id,name'])
+            ->withCount([
+                'votes',
+                'comments',
+                'comments as internal_comments_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
+            ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->orderByRaw('(votes_count + comments_count * 3) desc')
             ->orderByDesc('id')
-            ->limit(5)
+            ->limit(10)
             ->get();
     }
 
@@ -326,12 +344,16 @@ new #[Title('Dashboard')] class extends Component {
     {
         return $this->team->ideas()
             ->whereIn('status', ['new', 'under_review'])
-            ->with('board:id,name')
-            ->withCount(['votes', 'comments'])
+            ->with(['board:id,name', 'submittedBy:id,name'])
+            ->withCount([
+                'votes',
+                'comments',
+                'comments as internal_comments_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
+            ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->orderByDesc('votes_count')
             ->orderByDesc('id')
-            ->limit(4)
+            ->limit(10)
             ->get();
     }
 
@@ -345,29 +367,116 @@ new #[Title('Dashboard')] class extends Component {
     public function highestVoted(): Collection
     {
         return $this->team->ideas()
-            ->with('board:id,name')
-            ->withCount(['votes', 'comments'])
+            ->with(['board:id,name', 'submittedBy:id,name'])
+            ->withCount([
+                'votes',
+                'comments',
+                'comments as internal_comments_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
+            ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->orderByDesc('votes_count')
             ->orderByDesc('id')
-            ->limit(4)
+            ->limit(10)
             ->get();
     }
 
     /**
-     * Active boards for the current team with their idea counts.
+     * Active boards for the current team with their idea counts, ranked by
+     * idea count (ties broken alphabetically). Shown in the "Top Boards" tab.
      *
      * @return Collection<int, \App\Models\IdeaBoard>
      */
     #[Computed]
-    public function boards(): Collection
+    public function topBoards(): Collection
     {
-        return $this->team->boards()
+        $team = $this->team;
+        $role = $this->role;
+        $userId = Auth::id();
+
+        $boards = $team->boards()
             ->where('is_active', true)
-            ->withCount(['ideas' => fn ($query) => $query->visibleTo($this->role, Auth::id())])
-            ->orderBy('sort_order')
+            ->withCount([
+                'ideas' => fn ($query) => $query->visibleTo($role, $userId),
+                'comments',
+            ])
+            ->orderByDesc('ideas_count')
             ->orderBy('name')
+            ->limit(10)
             ->get(['id', 'name', 'slug']);
+
+        $ideaAuthorsByBoard = $team->ideas()
+            ->visibleTo($role, $userId)
+            ->whereNotNull('submitted_by_user_id')
+            ->select('board_id', 'submitted_by_user_id')
+            ->get()
+            ->groupBy('board_id')
+            ->map(fn ($ideas) => $ideas->pluck('submitted_by_user_id'));
+
+        $commentersByBoard = IdeaComment::whereHas('idea', fn ($query) => $query->where('team_id', $team->id)->visibleTo($role, $userId))
+            ->with('idea:id,board_id')
+            ->select('idea_id', 'user_id')
+            ->get()
+            ->groupBy(fn ($comment) => $comment->idea->board_id)
+            ->map(fn ($comments) => $comments->pluck('user_id'));
+
+        $boards->each(function ($board) use ($ideaAuthorsByBoard, $commentersByBoard) {
+            $board->contributors_count = $ideaAuthorsByBoard->get($board->id, collect())
+                ->merge($commentersByBoard->get($board->id, collect()))
+                ->unique()
+                ->count();
+        });
+
+        return $boards;
+    }
+
+    /**
+     * Team members ranked by contribution — ideas submitted, then comments
+     * (ties broken alphabetically) — with a breakdown of boards participated
+     * in, ideas submitted, and comments made. Shown in the "Top Contributors" tab.
+     *
+     * @return SupportCollection<int, array{user: \App\Models\User, role: TeamRole, boards: int, ideas: int, comments: int}>
+     */
+    #[Computed]
+    public function topContributors(): SupportCollection
+    {
+        $team = $this->team;
+        $role = $this->role;
+        $userId = Auth::id();
+
+        $ideaCounts = $team->ideas()
+            ->visibleTo($role, $userId)
+            ->selectRaw('submitted_by_user_id, count(*) as aggregate')
+            ->groupBy('submitted_by_user_id')
+            ->pluck('aggregate', 'submitted_by_user_id');
+
+        $commentCounts = IdeaComment::whereHas('idea', fn ($query) => $query->where('team_id', $team->id)->visibleTo($role, $userId))
+            ->selectRaw('user_id, count(*) as aggregate')
+            ->groupBy('user_id')
+            ->pluck('aggregate', 'user_id');
+
+        $boardCounts = $team->ideas()
+            ->visibleTo($role, $userId)
+            ->select('submitted_by_user_id', 'board_id')
+            ->distinct()
+            ->get()
+            ->groupBy('submitted_by_user_id')
+            ->map->count();
+
+        return $team->members()
+            ->get(['users.id', 'users.name'])
+            ->map(fn ($member) => [
+                'user' => $member,
+                'role' => $member->pivot->role,
+                'boards' => $boardCounts->get($member->id, 0),
+                'ideas' => $ideaCounts->get($member->id, 0),
+                'comments' => $commentCounts->get($member->id, 0),
+            ])
+            ->filter(fn ($contributor) => $contributor['boards'] > 0 || $contributor['ideas'] > 0 || $contributor['comments'] > 0)
+            ->sort(fn ($a, $b) => ($b['ideas'] <=> $a['ideas'])
+                ?: ($b['comments'] <=> $a['comments'])
+                ?: ($a['user']->name <=> $b['user']->name))
+            ->values()
+            ->take(10);
     }
 
     /**
@@ -379,7 +488,7 @@ new #[Title('Dashboard')] class extends Component {
     }
 }; ?>
 
-<div class="min-h-full dark:bg-zinc-950">
+<div class="min-h-full dark:bg-zinc-800">
     <div class="mx-auto w-full px-6 py-8 lg:px-8">
         <livewire:pages::teams.pending-invitations-modal />
 
@@ -410,6 +519,7 @@ new #[Title('Dashboard')] class extends Component {
                         class="mt-2 text-3xl font-extrabold tracking-tight text-slate-900 tabular-nums dark:text-slate-200"
                         x-data
                         x-init="initStatCounter($el, {{ (int) $stat['value'] }})"
+                        wire:ignore
                     >0</div>
                     <div class="mt-1 text-xs text-slate-500 dark:text-slate-600 {{ ($stat['caption_bold'] ?? false) ? 'font-bold' : '' }}">{{ $stat['caption'] }}</div>
                 </div>
@@ -445,13 +555,13 @@ new #[Title('Dashboard')] class extends Component {
                     @forelse (($panelMode === 'admin' ? $this->highestVoted : ($panelMode === 'manager' ? $this->queueTop : $this->trending)) as $idea)
                         @php($meta = $this->statusMeta($idea->status))
                         <div
-                            class="flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:border-indigo-200 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60"
+                            class="flex cursor-pointer items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:border-indigo-200 hover:bg-gray-50 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60 dark:hover:bg-gray-800/40"
                             wire:key="trending-{{ $idea->id }}"
                         >
                             <flux:tooltip :content="$this->canParticipate ? ($idea->voted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
                                 <button
                                     type="button"
-                                    wire:click="toggleVote({{ $idea->id }})"
+                                    @if (! $idea->voted) wire:click="toggleVote({{ $idea->id }})" @endif
                                     wire:loading.attr="disabled"
                                     @disabled(! $this->canParticipate)
                                     aria-pressed="{{ $idea->voted ? 'true' : 'false' }}"
@@ -463,27 +573,111 @@ new #[Title('Dashboard')] class extends Component {
                                         'border-zinc-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:hover:border-indigo-500/40' => ! $idea->voted,
                                     ])
                                     data-test="vote-button"
+                                    x-data="{ justVoted: false }"
+                                    x-on:idea-voted.window="if ($event.detail.ideaId === {{ $idea->id }}) { justVoted = true; setTimeout(() => justVoted = false, 4000) }"
+                                    @if ($idea->voted) x-on:click="$dispatch('modal-show', { name: 'confirm-unvote-{{ $idea->id }}' })" @endif
                                 >
-                                    <flux:icon.chevron-up class="size-4" />
+                                    <flux:icon.chevron-up x-show="!justVoted" class="size-4" />
+                                    <flux:icon.hand-thumb-up
+                                        x-cloak
+                                        x-show="justVoted"
+                                        x-transition:enter="transition ease-out duration-300"
+                                        x-transition:enter-start="opacity-0 translate-y-2"
+                                        x-transition:enter-end="opacity-100 translate-y-0"
+                                        x-transition:leave="transition ease-in duration-150"
+                                        x-transition:leave-start="opacity-100 translate-y-0"
+                                        x-transition:leave-end="opacity-0 translate-y-2"
+                                        class="size-4"
+                                    />
                                     <span class="text-sm font-extrabold">{{ $idea->votes_count }}</span>
+                                    <span class="text-[9px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-500' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
                                 </button>
                             </flux:tooltip>
 
-                            <a
-                                href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
-                                wire:navigate
-                                class="min-w-0 flex-1"
-                            >
-                                <div class="truncate font-semibold text-slate-900 dark:text-slate-200">{{ $idea->title }}</div>
-                                <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
-                                    <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">{{ $meta['label'] }}</flux:badge>
-                                    @if ($idea->board)
-                                        <span>{{ $idea->board->name }}</span>
-                                    @endif
-                                    <span aria-hidden="true">·</span>
-                                    <span>{{ trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]) }}</span>
+                            {{-- Confirm unvote modal --}}
+                            <flux:modal name="confirm-unvote-{{ $idea->id }}" class="max-w-lg" :dismissible="false" data-test="confirm-unvote-modal">
+                                <div class="space-y-5">
+                                    <div>
+                                        <flux:heading size="lg">{{ __('Remove your vote?') }}</flux:heading>
+                                        <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                            {{ __('You are removing your vote from this idea.') }}
+                                        </flux:text>
+                                    </div>
+                                    <div class="flex justify-end gap-2">
+                                        <flux:modal.close><flux:button variant="ghost" data-test="confirm-unvote-cancel">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                                        <flux:button wire:click="toggleVote({{ $idea->id }})" variant="danger" data-test="confirm-unvote-yes">{{ __('Yes') }}</flux:button>
+                                    </div>
                                 </div>
-                            </a>
+                            </flux:modal>
+
+                            <div class="min-w-0 flex-1">
+                                <div class="flex min-w-0 items-center gap-1.5">
+                                    <a
+                                        href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
+                                        wire:navigate
+                                        class="min-w-0"
+                                    >
+                                        <div class="w-fit max-w-full truncate font-semibold text-slate-900 hover:underline dark:text-slate-200">{{ $idea->title }}</div>
+                                    </a>
+
+                                    @if ($this->role?->isAtLeast(TeamRole::Manager) && $idea->internal_comments_count > 0)
+                                        <flux:tooltip :content="trans_choice(':count internal comment|:count internal comments', $idea->internal_comments_count, ['count' => $idea->internal_comments_count])">
+                                            <flux:badge size="sm" icon="exclamation-triangle" class="bg-red-100! text-red-800! dark:bg-red-950! dark:text-red-400!">{{ __('Internal Comments') }}</flux:badge>
+                                        </flux:tooltip>
+                                    @endif
+                                </div>
+
+                                @php($authorName = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
+
+                                <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
+                                    <flux:tooltip :content="__('Idea submitted by :name', ['name' => $authorName])">
+                                        @if ($idea->submitted_by_user_id)
+                                            <a href="{{ route('ideas.index', ['author' => $idea->submitted_by_user_id]) }}" wire:navigate class="flex items-center gap-1.5 hover:underline">
+                                                <flux:avatar size="xs" :name="$authorName" color="auto" color:seed="{{ $idea->submitted_by_user_id }}" />
+                                                <span>{{ $authorName }}</span>
+                                            </a>
+                                        @else
+                                            <div class="flex items-center gap-1.5">
+                                                <flux:avatar size="xs" :name="$authorName" color="auto" color:seed="{{ $authorName }}" />
+                                                <span>{{ $authorName }}</span>
+                                            </div>
+                                        @endif
+                                    </flux:tooltip>
+
+                                    <span aria-hidden="true" class="text-base leading-none">·</span>
+
+                                    <flux:tooltip :content="__('Current status')">
+                                        <a href="{{ route('ideas.index', ['status' => [$idea->status]]) }}" wire:navigate class="hover:underline">
+                                            <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">
+                                                <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                                            </flux:badge>
+                                        </a>
+                                    </flux:tooltip>
+
+                                    @if ($idea->board)
+                                        <span aria-hidden="true" class="text-base leading-none">·</span>
+                                        <flux:tooltip :content="__('The board where the idea was submitted')">
+                                            <a href="{{ route('ideas.index', ['board' => [$idea->board_id]]) }}" wire:navigate class="hover:underline">
+                                                <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $idea->board->name }}</flux:badge>
+                                            </a>
+                                        </flux:tooltip>
+                                    @endif
+
+                                    <span aria-hidden="true" class="text-base leading-none">·</span>
+
+                                    <flux:tooltip :content="__('Total number of comments')">
+                                        <flux:badge color="zinc" size="sm" variant="outline" icon="chat-bubble-left" icon:variant="outline" class="text-gray-500! dark:text-gray-400!">
+                                            {{ trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]) }}
+                                        </flux:badge>
+                                    </flux:tooltip>
+
+                                    <span aria-hidden="true" class="text-base leading-none">·</span>
+
+                                    <flux:tooltip :content="__('Submitted at :date', ['date' => $idea->created_at->format('M d, Y h:iA')])">
+                                        <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                                    </flux:tooltip>
+                                </div>
+                            </div>
                         </div>
                     @empty
                         <div class="rounded-xl border border-dashed border-zinc-300 py-12 text-center dark:border-zinc-700">
@@ -496,32 +690,118 @@ new #[Title('Dashboard')] class extends Component {
                 </div>
             </div>
 
-            {{-- Boards --}}
+            {{-- Top Boards / Top Contributor --}}
             <div>
-                <flux:heading size="lg" class="mb-3">{{ __('Boards') }}</flux:heading>
-
-                <div class="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs dark:border-zinc-700 dark:bg-zinc-900">
-                    @forelse ($this->boards as $board)
-                        <a
-                            href="{{ route('ideas.index', ['board' => $board->id]) }}"
-                            wire:navigate
-                            class="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 transition last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
-                            wire:key="board-{{ $board->id }}"
-                        >
-                            <x-board-avatar :name="$board->name" :index="$loop->index" />
-                            <div class="min-w-0 flex-1">
-                                <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-200">{{ $board->name }}</div>
-                                <div class="text-xs text-slate-500 dark:text-slate-600">{{ trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]) }}</div>
-                            </div>
-                            <flux:icon.chevron-right class="size-4 shrink-0 text-slate-400 dark:text-slate-700" />
-                        </a>
-                    @empty
-                        <div class="px-4 py-10 text-center">
-                            <flux:icon.chalkboard class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
-                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No boards yet.') }}</flux:text>
-                        </div>
-                    @endforelse
+                <div class="mb-3">
+                    <flux:radio.group wire:model.live="boardsTab" variant="segmented" size="sm" class="w-fit">
+                        <flux:radio value="boards">{{ __('Top Boards') }}</flux:radio>
+                        <flux:radio value="contributors">{{ __('Top Contributors') }}</flux:radio>
+                    </flux:radio.group>
                 </div>
+
+                @if ($boardsTab === 'boards')
+                    <div class="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs dark:border-zinc-700 dark:bg-zinc-900">
+                        @forelse ($this->topBoards as $board)
+                            <a
+                                href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
+                                wire:navigate
+                                class="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 transition last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
+                                wire:key="board-{{ $board->id }}"
+                            >
+                                <x-board-avatar :name="$board->name" :index="$loop->index" />
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-200">{{ $board->name }}</div>
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500 dark:text-slate-600">
+                                        <flux:tooltip :content="__('Ideas submitted')">
+                                            <div class="flex items-center gap-1">
+                                                <flux:icon.light-bulb class="size-3.5" />
+                                                <span x-data x-init="initStatCounter($el, {{ (int) $board->ideas_count }})" wire:ignore>0</span>
+                                            </div>
+                                        </flux:tooltip>
+                                        <span aria-hidden="true">·</span>
+                                        <flux:tooltip :content="__('Total comments')">
+                                            <div class="flex items-center gap-1">
+                                                <flux:icon.chat-bubble-left class="size-3.5" />
+                                                <span x-data x-init="initStatCounter($el, {{ (int) $board->comments_count }})" wire:ignore>0</span>
+                                            </div>
+                                        </flux:tooltip>
+                                        <span aria-hidden="true">·</span>
+                                        <flux:tooltip :content="trans_choice(':count total user contributed|:count total users contributed', $board->contributors_count, ['count' => $board->contributors_count])">
+                                            <div class="flex items-center gap-1">
+                                                <flux:icon.user-check class="size-3.5" />
+                                                <span x-data x-init="initStatCounter($el, {{ (int) $board->contributors_count }})" wire:ignore>0</span>
+                                            </div>
+                                        </flux:tooltip>
+                                    </div>
+                                </div>
+                                <flux:icon.chevron-right class="size-4 shrink-0 text-slate-400 dark:text-slate-700" />
+                            </a>
+                        @empty
+                            <div class="px-4 py-10 text-center">
+                                <flux:icon.chalkboard class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                                <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No boards yet.') }}</flux:text>
+                            </div>
+                        @endforelse
+                    </div>
+                @else
+                    <div class="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs dark:border-zinc-700 dark:bg-zinc-900">
+                        @forelse ($this->topContributors as $contributor)
+                            @php($member = $contributor['user'])
+                            @php($medal = match ($loop->index) {
+                                0 => ['label' => __('1st Place'), 'bg' => 'bg-gradient-to-br from-yellow-300 to-yellow-500', 'icon' => 'text-yellow-900'],
+                                1 => ['label' => __('2nd Place'), 'bg' => 'bg-gradient-to-br from-slate-300 to-slate-400', 'icon' => 'text-slate-700'],
+                                2 => ['label' => __('3rd Place'), 'bg' => 'bg-gradient-to-br from-orange-300 to-orange-500', 'icon' => 'text-orange-900'],
+                                default => null,
+                            })
+                            <div
+                                class="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 last:border-b-0 dark:border-zinc-800"
+                                wire:key="contributor-{{ $member->id }}"
+                            >
+                                <flux:avatar size="sm" :name="$member->name" color="auto" color:seed="{{ $member->id }}" />
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex min-w-0 items-center gap-1.5">
+                                        <span class="truncate text-sm font-semibold text-slate-900 dark:text-slate-200">{{ $member->name }}</span>
+                                        <flux:badge size="sm" :color="$contributor['role']->badgeColor()">{{ $contributor['role']->label() }}</flux:badge>
+                                    </div>
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500 dark:text-slate-600">
+                                        <flux:tooltip :content="__('Boards participated in')">
+                                            <div class="flex items-center gap-1">
+                                                <flux:icon.chalkboard class="size-3.5" />
+                                                <span x-data x-init="initStatCounter($el, {{ (int) $contributor['boards'] }})" wire:ignore>0</span>
+                                            </div>
+                                        </flux:tooltip>
+                                        <span aria-hidden="true">·</span>
+                                        <flux:tooltip :content="__('Ideas submitted')">
+                                            <div class="flex items-center gap-1">
+                                                <flux:icon.light-bulb class="size-3.5" />
+                                                <span x-data x-init="initStatCounter($el, {{ (int) $contributor['ideas'] }})" wire:ignore>0</span>
+                                            </div>
+                                        </flux:tooltip>
+                                        <span aria-hidden="true">·</span>
+                                        <flux:tooltip :content="__('Comments posted')">
+                                            <div class="flex items-center gap-1">
+                                                <flux:icon.chat-bubble-left class="size-3.5" />
+                                                <span x-data x-init="initStatCounter($el, {{ (int) $contributor['comments'] }})" wire:ignore>0</span>
+                                            </div>
+                                        </flux:tooltip>
+                                    </div>
+                                </div>
+                                @if ($medal)
+                                    <flux:tooltip :content="$medal['label']">
+                                        <span class="flex size-7 shrink-0 items-center justify-center rounded-full {{ $medal['bg'] }} shadow-sm">
+                                            <flux:icon.trophy variant="outline" class="size-3.5 {{ $medal['icon'] }}" />
+                                        </span>
+                                    </flux:tooltip>
+                                @endif
+                            </div>
+                        @empty
+                            <div class="px-4 py-10 text-center">
+                                <flux:icon.user-group class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                                <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No contributors yet.') }}</flux:text>
+                            </div>
+                        @endforelse
+                    </div>
+                @endif
             </div>
         </div>
     </div>

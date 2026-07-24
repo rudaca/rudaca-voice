@@ -103,8 +103,19 @@ body:has(> [data-flux-main]) {
     grid-area: breadcrumbs;
 }
 
+/*
+The header's own `sticky` prop (flux:header) pins it at `top: <its offsetTop>px`,
+which already accounts for the banner's height so the header sticks directly
+below it. But that only holds once the banner has scrolled out of view unless
+the banner is also pinned — otherwise the header sticks at that offset while
+the banner (and the gap it leaves) scrolls away above it. Stickying the banner
+at top:0 with a higher z-index than the header (z-30) keeps both pinned together.
+*/
 #view-as-banner {
     grid-area: viewas;
+    position: sticky;
+    top: 0;
+    z-index: 40;
 }
 
 /*
@@ -153,6 +164,17 @@ default resize-arrow cursor, which reads as a drag handle rather than a click ta
 */
 [data-flux-sidebar-collapse] button {
     cursor: pointer !important;
+}
+
+/*
+Flux also shows that same resize cursor across the entire collapsed-desktop
+sidebar (not just the toggle), so hovering anywhere over it reads as a drag
+handle. Reset it to auto so the sidebar itself gets a normal pointer/arrow,
+while menu items keep their own cursor via the browser's auto-cursor
+behavior over interactive elements.
+*/
+[data-flux-sidebar][data-flux-sidebar-collapsed-desktop] {
+    cursor: auto !important;
 }
 
 /*

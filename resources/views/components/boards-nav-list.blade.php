@@ -3,7 +3,8 @@
 @php
     $boardTileIndex = 0;
     $isIdeasIndex = request()->routeIs('ideas.index');
-    $activeBoardId = $isIdeasIndex ? (int) request()->query('board', 0) : 0;
+    $boardParam = request()->query('board', 0);
+    $activeBoardId = $isIdeasIndex ? (int) (is_array($boardParam) ? reset($boardParam) : $boardParam) : 0;
     $activeGroupId = $isIdeasIndex ? (int) request()->query('group', 0) : 0;
 @endphp
 
@@ -36,7 +37,7 @@
                 <div class="flex flex-col gap-0.5 overflow-hidden ps-2">
                     @foreach ($group->boards as $board)
                         <a
-                            href="{{ route('ideas.index', ['board' => $board->id]) }}"
+                            href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
                             wire:navigate
                             @class([
                                 'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition',
@@ -57,7 +58,7 @@
 
     @foreach ($ungrouped as $board)
         <a
-            href="{{ route('ideas.index', ['board' => $board->id]) }}"
+            href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
             wire:navigate
             @class([
                 'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition',

@@ -101,8 +101,8 @@
                                 {{ __('Moderate Comments') }}
                             </flux:sidebar.item>
 
-                            <flux:sidebar.item icon="adjustments-horizontal" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
-                                {{ __('Organization Settings') }}
+                            <flux:sidebar.item icon="building-office" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
+                                {{ __('Organization') }}
                             </flux:sidebar.item>
                         @endif
                     </div>
@@ -202,7 +202,7 @@
                             <flux:menu.separator />
 
                             <flux:menu.item icon="user-plus" :href="route('ideas.settings', ['tab' => 'members', 'new' => 'member'])" wire:navigate data-test="new-menu-member">
-                                {{ __('Member') }}
+                                {{ __('Contributor') }}
                             </flux:menu.item>
                         @endif
                     </flux:menu>
@@ -271,7 +271,7 @@
         @endcan
 
         @persist('toast')
-            <flux:toast.group>
+            <flux:toast.group position="bottom center">
                 <flux:toast />
             </flux:toast.group>
         @endpersist

@@ -156,7 +156,7 @@ new class extends Component {
 
         <flux:menu class="min-w-96">
             @if ($this->ownedTeams()->isNotEmpty())
-                <flux:menu.heading>{{ __('Owned Organizations') }}</flux:menu.heading>
+                <flux:menu.heading>{{ __('OWNED') }}</flux:menu.heading>
 
                 @foreach ($this->ownedTeams() as $team)
                     <flux:menu.item
@@ -177,6 +177,7 @@ new class extends Component {
             @if ($this->memberTeams()->isNotEmpty())
                 <flux:menu.separator />
 
+                <flux:menu.heading>{{ __('CONTRIBUTOR') }}</flux:menu.heading>
 
                 @foreach ($this->memberTeams() as $team)
                     <flux:menu.item
