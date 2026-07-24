@@ -3,9 +3,11 @@
 use App\Enums\TeamRole;
 use App\Models\IdeaComment;
 use App\Models\Team;
+use App\Models\User;
 use Flux\Flux;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -53,6 +55,24 @@ new #[Title('Moderate comments')] class extends Component {
     public string $search = '';
 
     /**
+     * @var array<int, string>
+     */
+    #[Url(as: 'category')]
+    public array $category = [];
+
+    /**
+     * @var array<int, string>
+     */
+    #[Url(as: 'author')]
+    public array $author = [];
+
+    #[Url(as: 'from')]
+    public string $dateFrom = '';
+
+    #[Url(as: 'to')]
+    public string $dateTo = '';
+
+    /**
      * Reset pagination whenever a filter changes.
      */
     public function updated(string $property): void
@@ -64,7 +84,7 @@ new #[Title('Moderate comments')] class extends Component {
             $this->board = [];
         }
 
-        if (in_array($property, ['filter', 'group', 'board', 'status', 'search'], true)) {
+        if (in_array($property, ['filter', 'group', 'board', 'status', 'search', 'category', 'author', 'dateFrom', 'dateTo'], true)) {
             $this->resetPage();
         }
     }
@@ -88,6 +108,24 @@ new #[Title('Moderate comments')] class extends Component {
     }
 
     /**
+     * Clear the category filter.
+     */
+    public function clearCategoryFilter(): void
+    {
+        $this->category = [];
+        $this->resetPage();
+    }
+
+    /**
+     * Clear the author filter.
+     */
+    public function clearAuthorFilter(): void
+    {
+        $this->author = [];
+        $this->resetPage();
+    }
+
+    /**
      * Escape LIKE wildcard characters so raw user input can't widen the match.
      */
     protected function likeTerm(): string
@@ -96,7 +134,21 @@ new #[Title('Moderate comments')] class extends Component {
     }
 
     /**
-     * Whether any filter control differs from its default, used to show/hide the "Clear" button.
+     * Whether any of the filters tucked away in the collapsible second row are active.
+     * Drives the "filters in use" indicator dot on the row's collapse toggle.
+     */
+    #[Computed]
+    public function hasSecondRowFilters(): bool
+    {
+        return $this->category !== []
+            || $this->author !== []
+            || $this->dateFrom !== ''
+            || $this->dateTo !== '';
+    }
+
+    /**
+     * Whether any filter control (across both rows) differs from its default, used to
+     * show/hide the "Clear" button.
      */
     #[Computed]
     public function hasActiveFilters(): bool
@@ -105,7 +157,8 @@ new #[Title('Moderate comments')] class extends Component {
             || $this->group !== ''
             || $this->board !== []
             || $this->status !== []
-            || $this->search !== '';
+            || $this->search !== ''
+            || $this->hasSecondRowFilters;
     }
 
     /**
@@ -113,7 +166,7 @@ new #[Title('Moderate comments')] class extends Component {
      */
     public function clearFilters(): void
     {
-        $this->reset(['filter', 'group', 'board', 'status', 'search']);
+        $this->reset(['filter', 'group', 'board', 'status', 'search', 'category', 'author', 'dateFrom', 'dateTo']);
         $this->resetPage();
     }
 
@@ -153,6 +206,42 @@ new #[Title('Moderate comments')] class extends Component {
     }
 
     /**
+     * Distinct active category names for the current team, used for the filter dropdown.
+     * Categories are scoped per board, so the same name may exist on multiple boards;
+     * only unique names are listed and the filter matches on name across all of them.
+     *
+     * @return SupportCollection<int, string>
+     */
+    #[Computed]
+    public function categories(): SupportCollection
+    {
+        return $this->team->categories()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->pluck('name')
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Users who have written at least one comment on the team's ideas, used for the
+     * author filter dropdown.
+     *
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function authors(): Collection
+    {
+        return User::query()
+            ->whereIn('id', IdeaComment::query()
+                ->whereHas('idea', fn ($query) => $query->where('team_id', $this->team->id))
+                ->distinct()
+                ->pluck('user_id'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
      * Whether the current user may hide or restore comments (admin and above).
      */
     #[Computed]
@@ -172,7 +261,8 @@ new #[Title('Moderate comments')] class extends Component {
 
     /**
      * Comments across the team's ideas, newest first. The "deleted" filter shows only
-     * soft-deleted comments; the other filters exclude them, as normal.
+     * soft-deleted comments; "visible" shows only unflagged ones; "hidden" shows only
+     * flagged ones; the other filters exclude soft-deleted comments, as normal.
      *
      * @return LengthAwarePaginator<int, IdeaComment>
      */
@@ -185,10 +275,15 @@ new #[Title('Moderate comments')] class extends Component {
                 $query->where('team_id', $this->team->id)
                     ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
                     ->when($this->board !== [], fn ($query) => $query->whereIn('board_id', $this->board))
-                    ->when($this->status !== [], fn ($query) => $query->whereIn('status', $this->status));
+                    ->when($this->status !== [], fn ($query) => $query->whereIn('status', $this->status))
+                    ->when($this->category !== [], fn ($query) => $query->whereHas('category', fn ($query) => $query->whereIn('name', $this->category)));
             })
+            ->when($this->filter === 'visible', fn ($query) => $query->whereNull('hidden_at'))
             ->when($this->filter === 'hidden', fn ($query) => $query->whereNotNull('hidden_at'))
+            ->when($this->author !== [], fn ($query) => $query->whereIn('user_id', $this->author))
             ->when(trim($this->search) !== '', fn ($query) => $query->where('body', 'like', $this->likeTerm()))
+            ->when($this->dateFrom !== '', fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo !== '', fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->with(['user:id,name', 'hiddenBy:id,name', 'idea:id,title,slug,status,board_id', 'idea.board:id,name'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -347,133 +442,263 @@ new #[Title('Moderate comments')] class extends Component {
         </div>
     </div>
 
-    <x-sticky-toolbar class="mt-6 flex flex-wrap items-center gap-2 py-3">
-        <flux:radio.group wire:model.live="filter" variant="segmented" size="sm">
-            <flux:radio value="all">{{ __('All') }}</flux:radio>
-            <flux:radio value="hidden">{{ __('Flagged') }}</flux:radio>
-            <flux:radio value="deleted">{{ __('Deleted') }}</flux:radio>
-        </flux:radio.group>
+    {{--
+        Controls: filter tabs + search (row 1 left), board/status filters + collapse toggle (row 1 right).
+        Category, author and the date range live in a collapsible second row that's tucked
+        away by default. Both rows stick below the app header while the list scrolls.
+    --}}
+    <x-sticky-toolbar class="mt-6 py-2.5">
+        <div class="flex flex-col gap-1.5" x-data="{ expanded: @js($this->hasSecondRowFilters) }">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex flex-wrap items-center gap-3">
+                    <flux:radio.group wire:model.live="filter" variant="segmented" size="sm">
+                        <flux:radio value="all">{{ __('All') }}</flux:radio>
+                        <flux:radio value="visible">{{ __('Visible') }}</flux:radio>
+                        <flux:radio value="hidden">{{ __('Flagged') }}</flux:radio>
+                        <flux:radio value="deleted">{{ __('Deleted') }}</flux:radio>
+                    </flux:radio.group>
 
-        <flux:input
-            wire:model.live.debounce.300ms="search"
-            icon="magnifying-glass"
-            size="sm"
-            clearable
-            placeholder="{{ __('Search comments') }}"
-            data-test="filter-search"
-            @class([
-                'w-full sm:w-64 md:w-80',
-                'border-gray-800! font-semibold! dark:border-gray-400!' => trim($search) !== '',
-            ])
-        />
+                    <flux:input
+                        wire:model.live.debounce.300ms="search"
+                        icon="magnifying-glass"
+                        icon:variant="outline"
+                        size="sm"
+                        clearable
+                        placeholder="{{ __('Search comments') }}"
+                        data-test="filter-search"
+                        @class([
+                            'w-full sm:w-64 md:w-80',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => trim($search) !== '',
+                        ])
+                    />
 
-        @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-green-500!')
+                    @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-green-500!')
 
-        <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
-            'w-auto min-w-32',
-            'border-gray-800! font-semibold! dark:border-gray-400!' => $group !== '',
-        ])>
-            <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
-            @foreach ($this->boardGroups as $boardGroup)
-                <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
-            @endforeach
-        </flux:select>
-
-        <flux:dropdown position="bottom" align="start">
-            <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-board-trigger" @class([
-                'w-auto',
-                'border-gray-800! font-semibold! dark:border-gray-400!' => $board !== [],
-            ])>
-                {{ __('Board') }}
-                @if ($board !== [])
-                    <flux:badge size="sm" color="zinc">{{ count($board) }}</flux:badge>
-                @endif
-            </flux:button>
-
-            <flux:menu class="w-56">
-                <flux:menu.item
-                    keep-open
-                    wire:click="clearBoardFilter"
-                    icon:trailing="{{ $board === [] ? 'check' : '' }}"
-                    class="{{ $board === [] ? 'font-semibold' : '' }}"
-                    data-test="filter-board-all"
-                >
-                    {{ __('All Boards') }}
-                </flux:menu.item>
-                <flux:menu.separator />
-
-                <flux:menu.checkbox.group wire:model.live="board">
-                    @foreach ($this->boards as $boardOption)
-                        <flux:menu.checkbox value="{{ $boardOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-board-{{ $boardOption->id }}">{{ $boardOption->name }}</flux:menu.checkbox>
-                    @endforeach
-                </flux:menu.checkbox.group>
-            </flux:menu>
-        </flux:dropdown>
-
-        <flux:dropdown position="bottom" align="start">
-            <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-status-trigger" @class([
-                'w-auto',
-                'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
-            ])>
-                {{ __('Idea Status') }}
-                @if ($status !== [])
-                    <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
-                @endif
-            </flux:button>
-
-            <flux:menu class="w-56">
-                <flux:menu.item
-                    keep-open
-                    wire:click="clearStatusFilter"
-                    icon:trailing="{{ $status === [] ? 'check' : '' }}"
-                    class="{{ $status === [] ? 'font-semibold' : '' }}"
-                    data-test="filter-status-all"
-                >
-                    {{ __('All Status') }}
-                </flux:menu.item>
-                <flux:menu.separator />
-
-                <flux:menu.checkbox.group wire:model.live="status">
-                    @php($statusGroups = [
-                        ['new', 'under_review', 'planned', 'in_progress', 'released'],
-                        ['not_doing', 'duplicate'],
-                    ])
-
-                    @foreach ($statusGroups as $groupIndex => $statusGroup)
-                        @if ($groupIndex > 0)
-                            <flux:menu.separator />
-                        @endif
-
-                        @foreach ($statusGroup as $value)
-                            @php($meta = self::STATUS_META[$value])
-                            @php($isDanger = in_array($value, ['not_doing', 'duplicate'], true))
-
-                            <flux:menu.checkbox
-                                value="{{ $value }}"
-                                keep-open
-                                class="{{ $selectedItemClasses }} {{ $isDanger ? 'text-red-600! dark:text-red-400!' : '' }}"
-                                data-test="filter-status-{{ $value }}"
-                            >
-                                <span class="me-2 inline-block size-2 shrink-0 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
-                            </flux:menu.checkbox>
+                    <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
+                        'w-auto min-w-32',
+                        'border-gray-800! font-semibold! dark:border-gray-400!' => $group !== '',
+                    ])>
+                        <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
+                        @foreach ($this->boardGroups as $boardGroup)
+                            <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
                         @endforeach
-                    @endforeach
-                </flux:menu.checkbox.group>
-            </flux:menu>
-        </flux:dropdown>
+                    </flux:select>
 
-        @if ($this->hasActiveFilters)
-            <flux:button
-                wire:click="clearFilters"
-                variant="outline"
-                size="sm"
-                icon="x-mark"
-                class="border-red-500! text-red-500! hover:bg-red-50! dark:hover:bg-red-500/10!"
-                data-test="clear-filters"
+                    <flux:dropdown position="bottom" align="start">
+                        <flux:button size="sm" icon:trailing="chevron-down" icon-trailing:variant="outline" data-test="filter-board-trigger" @class([
+                            'w-auto',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => $board !== [],
+                        ])>
+                            {{ __('Board') }}
+                            @if ($board !== [])
+                                <flux:badge size="sm" color="zinc">{{ count($board) }}</flux:badge>
+                            @endif
+                        </flux:button>
+
+                        <flux:menu class="w-56">
+                            <flux:menu.item
+                                keep-open
+                                wire:click="clearBoardFilter"
+                                icon:trailing="{{ $board === [] ? 'check' : '' }}"
+                                icon:variant="outline"
+                                class="{{ $board === [] ? 'font-semibold' : '' }}"
+                                data-test="filter-board-all"
+                            >
+                                {{ __('All Boards') }}
+                            </flux:menu.item>
+                            <flux:menu.separator />
+
+                            <flux:menu.checkbox.group wire:model.live="board">
+                                @foreach ($this->boards as $boardOption)
+                                    <flux:menu.checkbox value="{{ $boardOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-board-{{ $boardOption->id }}">{{ $boardOption->name }}</flux:menu.checkbox>
+                                @endforeach
+                            </flux:menu.checkbox.group>
+                        </flux:menu>
+                    </flux:dropdown>
+
+                    <flux:dropdown position="bottom" align="start">
+                        <flux:button size="sm" icon:trailing="chevron-down" icon-trailing:variant="outline" data-test="filter-status-trigger" @class([
+                            'w-auto',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
+                        ])>
+                            {{ __('Idea Status') }}
+                            @if ($status !== [])
+                                <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
+                            @endif
+                        </flux:button>
+
+                        <flux:menu class="w-56">
+                            <flux:menu.item
+                                keep-open
+                                wire:click="clearStatusFilter"
+                                icon:trailing="{{ $status === [] ? 'check' : '' }}"
+                                icon:variant="outline"
+                                class="{{ $status === [] ? 'font-semibold' : '' }}"
+                                data-test="filter-status-all"
+                            >
+                                {{ __('All Status') }}
+                            </flux:menu.item>
+                            <flux:menu.separator />
+
+                            <flux:menu.checkbox.group wire:model.live="status">
+                                @php($statusGroups = [
+                                    ['new', 'under_review', 'planned', 'in_progress', 'released'],
+                                    ['not_doing', 'duplicate'],
+                                ])
+
+                                @foreach ($statusGroups as $groupIndex => $statusGroup)
+                                    @if ($groupIndex > 0)
+                                        <flux:menu.separator />
+                                    @endif
+
+                                    @foreach ($statusGroup as $value)
+                                        @php($meta = self::STATUS_META[$value])
+                                        @php($isDanger = in_array($value, ['not_doing', 'duplicate'], true))
+
+                                        <flux:menu.checkbox
+                                            value="{{ $value }}"
+                                            keep-open
+                                            class="{{ $selectedItemClasses }} {{ $isDanger ? 'text-red-600! dark:text-red-400!' : '' }}"
+                                            data-test="filter-status-{{ $value }}"
+                                        >
+                                            <span class="me-2 inline-block size-2 shrink-0 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                                        </flux:menu.checkbox>
+                                    @endforeach
+                                @endforeach
+                            </flux:menu.checkbox.group>
+                        </flux:menu>
+                    </flux:dropdown>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    @if ($this->hasActiveFilters)
+                        <flux:button
+                            wire:click="clearFilters"
+                            variant="outline"
+                            size="sm"
+                            icon="x-mark"
+                            icon:variant="outline"
+                            class="border-red-500! text-red-500! hover:bg-red-50! dark:hover:bg-red-500/10!"
+                            data-test="clear-filters-row1"
+                        >
+                            {{ __('Clear') }}
+                        </flux:button>
+                    @endif
+
+                    <flux:tooltip :content="__('More filters')">
+                        <button
+                            type="button"
+                            x-on:click="expanded = !expanded"
+                            :aria-expanded="expanded.toString()"
+                            aria-controls="moderate-comments-more-filters"
+                            aria-label="{{ __('More filters') }}"
+                            class="relative inline-flex items-center justify-center rounded-lg border border-zinc-200 p-2 text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-slate-400 dark:hover:border-indigo-500/40"
+                            data-test="toggle-more-filters"
+                        >
+                            <flux:icon.chevron-down class="size-4 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''" />
+                            @if ($this->hasSecondRowFilters)
+                                <span
+                                    class="absolute -top-1 -right-1 block size-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-zinc-800"
+                                    data-test="filters-active-dot"
+                                ></span>
+                            @endif
+                        </button>
+                    </flux:tooltip>
+                </div>
+            </div>
+
+            <div
+                id="moderate-comments-more-filters"
+                class="grid transition-[grid-template-rows] duration-200 ease-out"
+                :class="expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
             >
-                {{ __('Clear') }}
-            </flux:button>
-        @endif
+                <div class="overflow-hidden">
+                    <div class="flex flex-wrap items-center gap-2 pt-2">
+                        <flux:dropdown position="bottom" align="start">
+                            <flux:button size="sm" icon:trailing="chevron-down" icon-trailing:variant="outline" data-test="filter-category-trigger" @class([
+                                'w-auto',
+                                'border-gray-800! font-semibold! dark:border-gray-400!' => $category !== [],
+                            ])>
+                                {{ __('Category') }}
+                                @if ($category !== [])
+                                    <flux:badge size="sm" color="zinc">{{ count($category) }}</flux:badge>
+                                @endif
+                            </flux:button>
+
+                            <flux:menu class="w-56">
+                                <flux:menu.item
+                                    keep-open
+                                    wire:click="clearCategoryFilter"
+                                    icon:trailing="{{ $category === [] ? 'check' : '' }}"
+                                    icon:variant="outline"
+                                    class="{{ $category === [] ? 'font-semibold' : '' }}"
+                                    data-test="filter-category-all"
+                                >
+                                    {{ __('All Categories') }}
+                                </flux:menu.item>
+                                <flux:menu.separator />
+
+                                <flux:menu.checkbox.group wire:model.live="category">
+                                    @foreach ($this->categories as $categoryIndex => $categoryName)
+                                        <flux:menu.checkbox value="{{ $categoryName }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-category-{{ $categoryIndex }}">{{ $categoryName }}</flux:menu.checkbox>
+                                    @endforeach
+                                </flux:menu.checkbox.group>
+                            </flux:menu>
+                        </flux:dropdown>
+
+                        <flux:dropdown position="bottom" align="start">
+                            <flux:button size="sm" icon:trailing="chevron-down" icon-trailing:variant="outline" data-test="filter-author-trigger" @class([
+                                'w-auto',
+                                'border-gray-800! font-semibold! dark:border-gray-400!' => $author !== [],
+                            ])>
+                                {{ __('Author') }}
+                                @if ($author !== [])
+                                    <flux:badge size="sm" color="zinc">{{ count($author) }}</flux:badge>
+                                @endif
+                            </flux:button>
+
+                            <flux:menu class="w-56">
+                                <flux:menu.item
+                                    keep-open
+                                    wire:click="clearAuthorFilter"
+                                    icon:trailing="{{ $author === [] ? 'check' : '' }}"
+                                    icon:variant="outline"
+                                    class="{{ $author === [] ? 'font-semibold' : '' }}"
+                                    data-test="filter-author-all"
+                                >
+                                    {{ __('All Authors') }}
+                                </flux:menu.item>
+                                <flux:menu.separator />
+
+                                <flux:menu.checkbox.group wire:model.live="author">
+                                    @foreach ($this->authors as $authorOption)
+                                        <flux:menu.checkbox value="{{ $authorOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-author-{{ $authorOption->id }}">{{ $authorOption->name }}</flux:menu.checkbox>
+                                    @endforeach
+                                </flux:menu.checkbox.group>
+                            </flux:menu>
+                        </flux:dropdown>
+
+                        <div class="flex items-center py-1 px-3 bg-gray-100 rounded-lg dark:bg-zinc-800">
+                            <div class="flex items-center gap-1.5">
+                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('Created From') }}</flux:text>
+                                <flux:input type="date" wire:model.live="dateFrom" size="sm" data-test="filter-date-from" @class([
+                                    'w-auto',
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $dateFrom !== '',
+                                ]) />
+                            </div>
+
+                            <div class="flex items-center gap-1.5">
+                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('To') }}</flux:text>
+                                <flux:input type="date" wire:model.live="dateTo" size="sm" data-test="filter-date-to" @class([
+                                    'w-auto',
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $dateTo !== '',
+                                ]) />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </x-sticky-toolbar>
 
     <div class="mt-4">
@@ -511,7 +736,7 @@ new #[Title('Moderate comments')] class extends Component {
                                     <span class="me-1 inline-block size-1.5 rounded-full {{ $ideaMeta['badge_dot'] }}"></span>{{ $ideaMeta['label'] }}
                                 </flux:badge>
                                 @if ($comment->idea->board)
-                                    <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $comment->idea->board->name }}</flux:badge>
+                                    <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard" icon:variant="outline">{{ $comment->idea->board->name }}</flux:badge>
                                 @endif
                             </div>
                         </flux:table.cell>
@@ -522,9 +747,9 @@ new #[Title('Moderate comments')] class extends Component {
 
                         <flux:table.cell>
                             @if ($comment->trashed())
-                                <flux:badge size="sm" icon="trash" class="bg-red-100! text-red-500! dark:bg-red-950! dark:text-red-500!">{{ __('Deleted') }}</flux:badge>
+                                <flux:badge size="sm" icon="trash" icon:variant="outline" class="bg-red-100! text-red-500! dark:bg-red-950! dark:text-red-500!">{{ __('Deleted') }}</flux:badge>
                             @elseif ($comment->isHidden())
-                                <flux:badge color="red" size="sm" icon="flag">{{ __('Flagged') }}</flux:badge>
+                                <flux:badge color="red" size="sm" icon="flag" icon:variant="outline">{{ __('Flagged') }}</flux:badge>
                                 @if ($comment->hiddenBy)
                                     <div class="mt-1 text-xs text-slate-500">{{ __('by :name', ['name' => $comment->hiddenBy->name]) }}</div>
                                 @endif
@@ -540,7 +765,9 @@ new #[Title('Moderate comments')] class extends Component {
                                         size="sm"
                                         variant="ghost"
                                         icon="ellipsis-vertical"
+                                        icon:variant="outline"
                                         icon:trailing="chevron-down"
+                                        icon-trailing:variant="outline"
                                         icon-trailing:class="transition-transform duration-200 group-data-open:rotate-180"
                                         class="group"
                                         :square="false"
@@ -549,8 +776,20 @@ new #[Title('Moderate comments')] class extends Component {
 
                                     <flux:menu>
                                         <flux:menu.item
+                                            href="{{ route('ideas.show', ['idea' => $comment->idea->slug]) }}"
+                                            wire:navigate
+                                            icon="light-bulb"
+                                            icon:variant="outline"
+                                            data-test="view-idea"
+                                        >
+                                            {{ __('View Idea') }}
+                                        </flux:menu.item>
+                                        <flux:menu.separator />
+
+                                        <flux:menu.item
                                             wire:click="restoreComment({{ $comment->id }})"
                                             icon="arrow-uturn-left"
+                                            icon:variant="outline"
                                             data-test="restore-comment"
                                         >
                                             {{ __('Restore') }}
@@ -560,6 +799,7 @@ new #[Title('Moderate comments')] class extends Component {
                                             <flux:modal.trigger name="confirm-permanent-delete-{{ $comment->id }}">
                                                 <flux:menu.item
                                                     icon="trash"
+                                                    icon:variant="outline"
                                                     class="text-red-600! hover:text-red-700! dark:text-red-400! dark:hover:text-red-300! data-flux-menu-item-icon:text-red-600! dark:data-flux-menu-item-icon:text-red-400!"
                                                     data-test="permanently-delete-comment"
                                                 >
@@ -594,7 +834,9 @@ new #[Title('Moderate comments')] class extends Component {
                                         size="sm"
                                         variant="ghost"
                                         icon="ellipsis-vertical"
+                                        icon:variant="outline"
                                         icon:trailing="chevron-down"
+                                        icon-trailing:variant="outline"
                                         icon-trailing:class="transition-transform duration-200 group-data-open:rotate-180"
                                         class="group"
                                         :square="false"
@@ -602,10 +844,22 @@ new #[Title('Moderate comments')] class extends Component {
                                     />
 
                                     <flux:menu>
+                                        <flux:menu.item
+                                            href="{{ route('ideas.show', ['idea' => $comment->idea->slug]) }}"
+                                            wire:navigate
+                                            icon="light-bulb"
+                                            icon:variant="outline"
+                                            data-test="view-idea"
+                                        >
+                                            {{ __('View Idea') }}
+                                        </flux:menu.item>
+                                        <flux:menu.separator />
+
                                         @if ($comment->isHidden())
                                             <flux:menu.item
                                                 wire:click="unhideComment({{ $comment->id }})"
                                                 icon="flag-slash"
+                                                icon:variant="outline"
                                                 class="text-red-600! hover:text-red-700! dark:text-red-400! dark:hover:text-red-300! data-flux-menu-item-icon:text-red-600! dark:data-flux-menu-item-icon:text-red-400!"
                                                 data-test="unhide-comment"
                                             >
@@ -615,6 +869,7 @@ new #[Title('Moderate comments')] class extends Component {
                                             <flux:menu.item
                                                 wire:click="hideComment({{ $comment->id }})"
                                                 icon="flag"
+                                                icon:variant="outline"
                                                 class="text-red-600! hover:text-red-700! dark:text-red-400! dark:hover:text-red-300! data-flux-menu-item-icon:text-red-600! dark:data-flux-menu-item-icon:text-red-400!"
                                                 data-test="hide-comment"
                                             >
@@ -626,6 +881,7 @@ new #[Title('Moderate comments')] class extends Component {
                                             wire:click="deleteComment({{ $comment->id }})"
                                             wire:confirm="{{ __('Delete this comment?') }}"
                                             icon="trash"
+                                            icon:variant="outline"
                                             class="text-red-600! hover:text-red-700! dark:text-red-400! dark:hover:text-red-300! data-flux-menu-item-icon:text-red-600! dark:data-flux-menu-item-icon:text-red-400!"
                                             data-test="delete-comment"
                                         >
@@ -662,6 +918,7 @@ new #[Title('Moderate comments')] class extends Component {
                                         variant="ghost"
                                         size="sm"
                                         icon="arrow-uturn-left"
+                                        icon:variant="outline"
                                         data-test="restore-comment-modal"
                                     >
                                         {{ __('Restore') }}
@@ -669,7 +926,7 @@ new #[Title('Moderate comments')] class extends Component {
 
                                     @if ($this->canPermanentlyDelete)
                                         <flux:modal.trigger name="confirm-permanent-delete-{{ $comment->id }}">
-                                            <flux:button variant="danger" size="sm" icon="trash" data-test="permanently-delete-comment-modal">
+                                            <flux:button variant="danger" size="sm" icon="trash" icon:variant="outline" data-test="permanently-delete-comment-modal">
                                                 {{ __('Delete Permanently') }}
                                             </flux:button>
                                         </flux:modal.trigger>
@@ -681,6 +938,7 @@ new #[Title('Moderate comments')] class extends Component {
                                             variant="ghost"
                                             size="sm"
                                             icon="flag-slash"
+                                            icon:variant="outline"
                                             class="text-red-600! hover:text-red-700! dark:text-red-400!"
                                             data-test="unhide-comment-modal"
                                         >
@@ -692,6 +950,7 @@ new #[Title('Moderate comments')] class extends Component {
                                             variant="ghost"
                                             size="sm"
                                             icon="flag"
+                                            icon:variant="outline"
                                             class="text-red-600! hover:text-red-700! dark:text-red-400!"
                                             data-test="hide-comment-modal"
                                         >
@@ -705,6 +964,7 @@ new #[Title('Moderate comments')] class extends Component {
                                         variant="ghost"
                                         size="sm"
                                         icon="trash"
+                                        icon:variant="outline"
                                         class="text-red-600! hover:text-red-700! dark:text-red-400!"
                                         data-test="delete-comment-modal"
                                     >

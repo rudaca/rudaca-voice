@@ -69,11 +69,11 @@ new #[Title('Review queue')] class extends Component {
     /**
      * Display metadata for each queue status (label + Flux badge color).
      *
-     * @var array<string, array{label: string, color: string}>
+     * @var array<string, array{label: string, color: string, badge_dot: string}>
      */
     public const STATUS_META = [
-        'new' => ['label' => 'New', 'color' => 'zinc'],
-        'under_review' => ['label' => 'Under Review', 'color' => 'amber'],
+        'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
+        'under_review' => ['label' => 'Under Review', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
     ];
 
     /**
@@ -360,11 +360,11 @@ new #[Title('Review queue')] class extends Component {
     /**
      * Get the display metadata for a queue status value.
      *
-     * @return array{label: string, color: string}
+     * @return array{label: string, color: string, badge_dot: string}
      */
     public function statusMeta(string $status): array
     {
-        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
+        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
     }
 }; ?>
 
@@ -642,82 +642,83 @@ new #[Title('Review queue')] class extends Component {
         </div>
     </x-sticky-toolbar>
 
-    <div class="mt-4">
-        <flux:table>
-            <flux:table.columns>
-                <flux:table.column>{{ __('Votes') }}</flux:table.column>
-                <flux:table.column>{{ __('Idea') }}</flux:table.column>
-                <flux:table.column>{{ __('Board') }}</flux:table.column>
-                <flux:table.column>{{ __('Status') }}</flux:table.column>
-                <flux:table.column>{{ __('Decision') }}</flux:table.column>
-            </flux:table.columns>
+    <div class="mt-4 space-y-3">
+        @forelse ($this->ideas as $idea)
+            @php($meta = $this->statusMeta($idea->status))
+            @php($authorName = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
+            <div
+                class="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900 sm:flex-row sm:items-center"
+                wire:key="queue-{{ $idea->id }}"
+                data-test="queue-row"
+            >
+                <div class="flex w-14 shrink-0 flex-col items-center gap-0.5 self-start rounded-lg border border-zinc-200 py-1.5 dark:border-zinc-700 sm:self-center">
+                    <span class="text-base font-extrabold text-slate-900 dark:text-slate-200">{{ $idea->votes_count }}</span>
+                    <flux:icon.chevron-up class="size-3 text-slate-500" />
+                </div>
 
-            <flux:table.rows>
-                @forelse ($this->ideas as $idea)
-                    @php($meta = $this->statusMeta($idea->status))
-                    <flux:table.row :key="'queue-'.$idea->id" data-test="queue-row">
-                        <flux:table.cell>
-                            <div class="flex w-14 flex-col items-center gap-0.5 rounded-lg border border-zinc-200 py-1.5 dark:border-zinc-700">
-                                <span class="text-base font-extrabold text-slate-900 dark:text-slate-200">{{ $idea->votes_count }}</span>
-                                <flux:icon.chevron-up class="size-3 text-slate-500" />
-                            </div>
-                        </flux:table.cell>
+                <div class="min-w-0 flex-1">
+                    <a href="{{ route('ideas.show', ['idea' => $idea->slug]) }}" wire:navigate class="hover:underline">
+                        <flux:heading size="lg" class="w-fit max-w-full truncate">{{ $idea->title }}</flux:heading>
+                    </a>
 
-                        <flux:table.cell>
-                            <a href="{{ route('ideas.show', ['idea' => $idea->slug]) }}" wire:navigate class="hover:underline">
-                                <flux:heading size="sm">{{ $idea->title }}</flux:heading>
-                            </a>
-                            <div class="mt-0.5 text-xs text-slate-600 dark:text-slate-500">
-                                {{ $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')) }}
-                                &middot; {{ trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]) }}
-                            </div>
-                        </flux:table.cell>
+                    <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
+                        <div class="flex items-center gap-1.5">
+                            <flux:avatar size="xs" :name="$authorName" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $authorName }}" />
+                            <span>{{ $authorName }}</span>
+                        </div>
 
-                        <flux:table.cell class="text-slate-700 dark:text-slate-400">
-                            {{ $idea->board?->name }}
-                        </flux:table.cell>
+                        <span aria-hidden="true" class="text-base leading-none">&middot;</span>
 
-                        <flux:table.cell>
-                            <flux:badge :color="$meta['color']" size="sm">{{ $meta['label'] }}</flux:badge>
-                        </flux:table.cell>
+                        <flux:badge :color="$meta['color']" size="sm">
+                            <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                        </flux:badge>
 
-                        <flux:table.cell>
-                            <div class="flex items-center gap-2">
-                                <flux:button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="review-action-button border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400"
-                                    wire:click="approve({{ $idea->id }})"
-                                    data-test="approve-idea"
-                                >
-                                    {{ __('Approve') }}
-                                </flux:button>
+                        @if ($idea->board)
+                            <span aria-hidden="true" class="text-base leading-none">&middot;</span>
+                            <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $idea->board->name }}</flux:badge>
+                        @endif
 
-                                <flux:button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="review-action-button border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950 dark:text-red-400"
-                                    wire:click="decline({{ $idea->id }})"
-                                    data-test="decline-idea"
-                                >
-                                    {{ __('Decline') }}
-                                </flux:button>
-                            </div>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @empty
-                    <flux:table.row>
-                        <flux:table.cell colspan="5">
-                            <div class="py-14 text-center" data-test="review-empty">
-                                <flux:icon.check-circle class="mx-auto size-8 text-emerald-400 dark:text-emerald-500" />
-                                <flux:heading class="mt-3">{{ __('Queue is clear') }}</flux:heading>
-                                <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">{{ __('Nothing needs attention right now. Nice work. 🎉') }}</flux:text>
-                            </div>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforelse
-            </flux:table.rows>
-        </flux:table>
+                        <span aria-hidden="true" class="text-base leading-none">&middot;</span>
+
+                        <flux:badge color="zinc" size="sm" variant="outline" icon="chat-bubble-left" icon:variant="outline" class="text-gray-500! dark:text-gray-400!">
+                            {{ trans_choice(':count comment|:count comments', $idea->comments_count, ['count' => $idea->comments_count]) }}
+                        </flux:badge>
+
+                        <span aria-hidden="true" class="text-base leading-none">&middot;</span>
+
+                        <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                    </div>
+                </div>
+
+                <div class="flex shrink-0 items-center gap-2">
+                    <flux:button
+                        variant="ghost"
+                        size="sm"
+                        class="review-action-button border border-emerald-600 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                        wire:click="approve({{ $idea->id }})"
+                        data-test="approve-idea"
+                    >
+                        {{ __('Approve') }}
+                    </flux:button>
+
+                    <flux:button
+                        variant="ghost"
+                        size="sm"
+                        class="review-action-button border border-red-600 text-red-600 hover:bg-red-50 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-950"
+                        wire:click="decline({{ $idea->id }})"
+                        data-test="decline-idea"
+                    >
+                        {{ __('Decline') }}
+                    </flux:button>
+                </div>
+            </div>
+        @empty
+            <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="review-empty">
+                <flux:icon.check-circle class="mx-auto size-8 text-emerald-400 dark:text-emerald-500" />
+                <flux:heading class="mt-3">{{ __('Queue is clear') }}</flux:heading>
+                <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">{{ __('Nothing needs attention right now. Nice work. 🎉') }}</flux:text>
+            </div>
+        @endforelse
     </div>
 
     @if ($this->ideas->hasPages())

@@ -2,7 +2,18 @@
 
 use App\Enums\TeamRole;
 use App\Models\IdeaComment;
+use App\Models\User;
 use Livewire\Livewire;
+
+test('the comment actions menu links to the idea', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->assertSeeHtml(route('ideas.show', ['idea' => $idea->slug]));
+});
 
 test('an admin can hide a comment', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
@@ -83,6 +94,26 @@ test('the hidden filter only shows hidden comments', function () {
         ->assertDontSee('Still visible comment');
 });
 
+test('the visible filter only shows unflagged, non-deleted comments', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+
+    $visible = IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id, 'body' => 'Still visible unicorn comment']);
+
+    $flagged = IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id, 'body' => 'Flagged unicorn comment']);
+    $flagged->hide($admin->id);
+
+    $deleted = IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id, 'body' => 'Deleted unicorn comment']);
+    $deleted->delete();
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->set('filter', 'visible')
+        ->assertSee('Still visible unicorn comment')
+        ->assertDontSee('Flagged unicorn comment')
+        ->assertDontSee('Deleted unicorn comment');
+});
+
 test('the board filter only shows comments on ideas from the selected board', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
     $ideaOnBoardA = makeIdea($team);
@@ -111,6 +142,51 @@ test('the group filter only shows comments on ideas from the selected board grou
         ->set('group', $ideaOnGroupA->board_group_id)
         ->assertSee('Comment on group A')
         ->assertDontSee('Comment on group B');
+});
+
+test('the category filter only shows comments on ideas with the selected category', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $ideaInCategoryA = makeIdea($team);
+    $ideaInCategoryB = makeIdea($team);
+
+    IdeaComment::factory()->create(['idea_id' => $ideaInCategoryA->id, 'user_id' => $admin->id, 'body' => 'Comment in category A']);
+    IdeaComment::factory()->create(['idea_id' => $ideaInCategoryB->id, 'user_id' => $admin->id, 'body' => 'Comment in category B']);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->set('category', [$ideaInCategoryA->category->name])
+        ->assertSee('Comment in category A')
+        ->assertDontSee('Comment in category B');
+});
+
+test('the author filter only shows comments written by the selected author', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+    $otherAuthor = User::factory()->create();
+
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id, 'body' => 'Comment from admin']);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $otherAuthor->id, 'body' => 'Comment from other author']);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->set('author', [$otherAuthor->id])
+        ->assertSee('Comment from other author')
+        ->assertDontSee('Comment from admin');
+});
+
+test('the date range filter only shows comments created within the range', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id, 'body' => 'Comment in range', 'created_at' => '2026-01-15']);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id, 'body' => 'Comment out of range', 'created_at' => '2026-03-01']);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->set('dateFrom', '2026-01-01')
+        ->set('dateTo', '2026-01-31')
+        ->assertSee('Comment in range')
+        ->assertDontSee('Comment out of range');
 });
 
 test('the search filter only shows comments matching the search term', function () {
