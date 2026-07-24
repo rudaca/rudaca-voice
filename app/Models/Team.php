@@ -81,6 +81,19 @@ class Team extends Model
     }
 
     /**
+     * Get members holding Manager role or above, used as the contact point
+     * for disputing a flagged comment.
+     *
+     * @return Collection<int, User>
+     */
+    public function managers(): Collection
+    {
+        return $this->members()
+            ->wherePivotIn('role', [TeamRole::Owner->value, TeamRole::Admin->value, TeamRole::Manager->value])
+            ->get();
+    }
+
+    /**
      * Get all memberships for this team.
      *
      * @return HasMany<Membership, $this>

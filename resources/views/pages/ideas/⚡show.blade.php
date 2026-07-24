@@ -8,6 +8,7 @@ use App\Models\IdeaVote;
 use App\Models\Team;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -405,7 +406,8 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
-     * Visible comments for the idea, oldest first.
+     * Comments for the idea, oldest first. Flagged comments are included so a
+     * moderation notice can be shown in their place, rather than vanishing.
      *
      * @return Collection<int, \App\Models\IdeaComment>
      */
@@ -413,12 +415,23 @@ new #[Title('Idea')] class extends Component {
     public function comments(): Collection
     {
         return $this->ideaModel->comments()
-            ->notHidden()
             ->with('user:id,name')
             ->when(! $this->canViewInternalComments, fn ($query) => $query->where('is_internal', false))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
+    }
+
+    /**
+     * Email addresses of the team's managers and above, offered as a contact
+     * point for disputing a flagged comment.
+     *
+     * @return SupportCollection<int, string>
+     */
+    #[Computed]
+    public function managerEmails(): SupportCollection
+    {
+        return $this->team->managers()->pluck('email');
     }
 
     /**
@@ -437,17 +450,18 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
-     * User ids that hold a staff role (manager and above) on the team.
+     * Team roles (manager and above) keyed by user id, for the staff role
+     * badge shown next to commenters who hold one of these roles.
      *
-     * @return array<int, int>
+     * @return array<int, TeamRole>
      */
     #[Computed]
-    public function staffUserIds(): array
+    public function staffRoles(): array
     {
         return $this->team->memberships()
             ->get(['user_id', 'role'])
             ->filter(fn ($membership) => $membership->role->isAtLeast(TeamRole::Manager))
-            ->pluck('user_id')
+            ->pluck('role', 'user_id')
             ->all();
     }
 
@@ -679,17 +693,35 @@ new #[Title('Idea')] class extends Component {
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-sm font-medium text-slate-900 dark:text-slate-200">{{ $comment->user?->name ?? __('Unknown') }}</span>
-                                @if (in_array($comment->user_id, $this->staffUserIds, true))
-                                    <flux:badge color="teal" size="sm">{{ __('Staff') }}</flux:badge>
+                                @if ($staffRole = $this->staffRoles[$comment->user_id] ?? null)
+                                    <flux:badge size="sm" :color="$staffRole->badgeColor()">{{ $staffRole->label() }}</flux:badge>
                                 @endif
                                 @if ($comment->is_internal)
                                     <flux:badge color="amber" size="sm">{{ __('Internal') }}</flux:badge>
+                                @endif
+                                @if ($comment->isHidden())
+                                    <flux:badge color="red" size="sm" icon="flag">{{ __('Flagged') }}</flux:badge>
                                 @endif
                                 <flux:tooltip content="{{ $comment->created_at->format('M j, Y g:i A') }}">
                                     <span class="text-xs text-slate-500">{{ $comment->created_at->diffForHumans() }}</span>
                                 </flux:tooltip>
                             </div>
-                            <div class="mt-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</div>
+
+                            @if ($comment->isHidden())
+                                <div class="mt-2 flex items-start gap-2 rounded-lg border border-dashed border-red-300 bg-red-50/60 p-3 dark:border-red-900 dark:bg-red-950/20">
+                                    <flux:icon.flag class="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" />
+                                    <div class="space-y-1">
+                                        <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ __('This comment was flagged by a moderator.') }}</p>
+                                        @if ($this->managerEmails->isNotEmpty())
+                                            <p class="text-xs text-slate-600 dark:text-slate-500">
+                                                {{ __("If you'd like to dispute this, please reach out to :emails — we're happy to take another look.", ['emails' => $this->managerEmails->implode(', ')]) }}
+                                            </p>
+                                        @endif
+                                    </div>
+                                </div>
+                            @else
+                                <div class="mt-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</div>
+                            @endif
                         </div>
                         @if ($this->canDelete)
                             <flux:button
