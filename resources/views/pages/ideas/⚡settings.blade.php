@@ -761,17 +761,13 @@ new #[Title('Organization Settings')] class extends Component {
                                 @endunless
                             </div>
                             <flux:text class="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
-                                @php
-                                    $boardSubheadingSegments = array_filter([
-                                        trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]),
-                                        $board->boardGroup?->name ?? __('No group'),
-                                        $board->description,
-                                    ]);
-                                @endphp
-                                @foreach ($boardSubheadingSegments as $segment)
-                                    @if ($loop->first)<span class="font-semibold">{{ $segment }}</span>@else<span>{{ $segment }}</span>@endif
-                                    @unless ($loop->last)<flux:separator vertical class="bg-indigo-700! dark:bg-indigo-200!" />@endunless
-                                @endforeach
+                                <span class="font-semibold">{{ trans_choice(':count idea|:count ideas', $board->ideas_count, ['count' => $board->ideas_count]) }}</span>
+                                <flux:separator vertical class="bg-indigo-700! dark:bg-indigo-200!" />
+                                <flux:badge size="sm" class="bg-gray-100! text-gray-700! dark:bg-zinc-700! dark:text-zinc-200!">{{ $board->boardGroup?->name ?? __('No group') }}</flux:badge>
+                                @if ($board->description)
+                                    <flux:separator vertical class="bg-indigo-700! dark:bg-indigo-200!" />
+                                    <span>{{ $board->description }}</span>
+                                @endif
                             </flux:text>
                             </div>
                         </div>
@@ -822,7 +818,6 @@ new #[Title('Organization Settings')] class extends Component {
                                     @php
                                         $groupSubheadingSegments = array_filter([
                                             trans_choice(':count board|:count boards', $group->boards_count, ['count' => $group->boards_count]),
-                                            $group->slug,
                                             $group->description,
                                         ]);
                                     @endphp
