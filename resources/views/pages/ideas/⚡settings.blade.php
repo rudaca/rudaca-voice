@@ -22,16 +22,6 @@ new #[Title('Organization Settings')] class extends Component {
         'external' => 'External',
     ];
 
-    /** @var array<string, string> */
-    public const ROLE_BADGE_COLORS = [
-        'owner' => 'pink',
-        'admin' => 'pink',
-        'manager' => 'teal',
-        'employee' => 'zinc',
-        'viewer' => 'zinc',
-        'member' => 'zinc',
-    ];
-
     #[Url(as: 'tab')]
     public string $tab = 'boards';
 
@@ -938,7 +928,7 @@ new #[Title('Organization Settings')] class extends Component {
                             </td>
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-500">{{ $member->email }}</td>
                             <td class="px-4 py-3">
-                                <flux:badge size="sm" :color="self::ROLE_BADGE_COLORS[$member->pivot->role->value] ?? 'zinc'">
+                                <flux:badge size="sm" :color="$member->pivot->role->badgeColor()">
                                     {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Owner') : $member->pivot->role->label() }}
                                 </flux:badge>
                             </td>

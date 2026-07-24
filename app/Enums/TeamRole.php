@@ -28,6 +28,18 @@ enum TeamRole: string
     }
 
     /**
+     * Get the Flux badge color used to represent this role.
+     */
+    public function badgeColor(): string
+    {
+        return match ($this) {
+            self::Owner, self::Admin => 'pink',
+            self::Manager => 'teal',
+            self::Employee, self::Viewer, self::Member => 'zinc',
+        };
+    }
+
+    /**
      * Get a short summary of what the role can do, for display alongside
      * the role picker when inviting or changing a member's role.
      */

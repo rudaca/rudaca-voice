@@ -6,6 +6,7 @@ use App\Models\Team;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Component;
 
 new class extends Component {
@@ -23,28 +24,34 @@ new class extends Component {
     }
 
     /**
-     * Get the teams this user actually belongs to.
+     * Get every team this user belongs to, memoized for the request.
      *
      * @return Collection<int, UserTeam>
      */
-    public function ownedTeams(): Collection
+    #[Computed]
+    public function userTeams(): Collection
     {
         return Auth::user()->toUserTeams(includeCurrent: true);
     }
 
     /**
-     * Heading for the team list: "Owned Organization(s)" when the user is
-     * Owner on their current team, otherwise just "Organization(s)".
+     * Teams the user owns.
+     *
+     * @return Collection<int, UserTeam>
      */
-    public function ownedTeamsHeading(): string
+    public function ownedTeams(): Collection
     {
-        $label = Str::plural('Organization', $this->ownedTeams()->count());
+        return $this->userTeams->filter(fn (UserTeam $team) => $team->role === TeamRole::Owner->value)->values();
+    }
 
-        $role = Auth::user()->currentTeam
-            ? Auth::user()->teamRole(Auth::user()->currentTeam)
-            : null;
-
-        return $role === TeamRole::Owner ? "Owned {$label}" : $label;
+    /**
+     * Teams the user has access to but does not own.
+     *
+     * @return Collection<int, UserTeam>
+     */
+    public function memberTeams(): Collection
+    {
+        return $this->userTeams->filter(fn (UserTeam $team) => $team->role !== TeamRole::Owner->value)->values();
     }
 
     /**
@@ -148,29 +155,49 @@ new class extends Component {
         @endif
 
         <flux:menu class="min-w-96">
-            <flux:menu.heading>{{ __($this->ownedTeamsHeading()) }}</flux:menu.heading>
+            @if ($this->ownedTeams()->isNotEmpty())
+                <flux:menu.heading>{{ __('Owned Organizations') }}</flux:menu.heading>
 
-            @foreach ($this->ownedTeams() as $team)
-                <flux:menu.item
-                    wire:click="switchTeam('{{ $team->slug }}')"
-                    class="cursor-pointer {{ $team->isCurrent ? 'bg-zinc-50 font-semibold dark:bg-white/10' : '' }}"
-                    data-test="team-switcher-item"
-                >
-                    <div class="flex w-full items-center justify-between gap-2">
-                        <div class="flex min-w-0 items-center gap-1.5">
+                @foreach ($this->ownedTeams() as $team)
+                    <flux:menu.item
+                        wire:click="switchTeam('{{ $team->slug }}')"
+                        class="cursor-pointer {{ $team->isCurrent ? 'bg-zinc-50 font-semibold dark:bg-white/10' : '' }}"
+                        data-test="team-switcher-item"
+                    >
+                        <div class="flex w-full items-center justify-between gap-2">
                             <span class="truncate">{{ $team->name }}</span>
-                            @if ($team->isPersonal)
-                                <flux:tooltip content="{{ __('Personal') }}">
-                                    <flux:icon name="lock-closed" variant="outline" class="size-4 shrink-0 text-rose-900 dark:text-rose-400" />
-                                </flux:tooltip>
+                            @if ($team->isCurrent)
+                                <flux:icon name="check" class="size-4 shrink-0" />
                             @endif
                         </div>
-                        @if ($team->isCurrent)
-                            <flux:icon name="check" class="size-4 shrink-0" />
-                        @endif
-                    </div>
-                </flux:menu.item>
-            @endforeach
+                    </flux:menu.item>
+                @endforeach
+            @endif
+
+            @if ($this->memberTeams()->isNotEmpty())
+                <flux:menu.separator />
+
+
+                @foreach ($this->memberTeams() as $team)
+                    <flux:menu.item
+                        wire:click="switchTeam('{{ $team->slug }}')"
+                        class="cursor-pointer {{ $team->isCurrent ? 'bg-zinc-50 font-semibold dark:bg-white/10' : '' }}"
+                        data-test="team-switcher-item"
+                    >
+                        <div class="flex w-full items-center justify-between gap-2">
+                            <span class="truncate">{{ $team->name }}</span>
+                            <div class="flex shrink-0 items-center gap-1.5">
+                                @if (in_array($team->role, [TeamRole::Admin->value, TeamRole::Manager->value], true))
+                                    <flux:badge size="sm" color="zinc">{{ $team->roleLabel }}</flux:badge>
+                                @endif
+                                @if ($team->isCurrent)
+                                    <flux:icon name="check" class="size-4" />
+                                @endif
+                            </div>
+                        </div>
+                    </flux:menu.item>
+                @endforeach
+            @endif
 
             @if ($this->otherTeams()->isNotEmpty())
                 <flux:menu.separator />
@@ -185,14 +212,7 @@ new class extends Component {
                             data-test="team-switcher-item"
                         >
                             <div class="flex w-full items-center justify-between gap-2">
-                                <div class="flex min-w-0 items-center gap-1.5">
-                                    <span class="truncate">{{ $team->name }}</span>
-                                    @if ($team->isPersonal)
-                                        <flux:tooltip content="{{ __('Private') }}">
-                                            <flux:icon name="lock-closed" variant="outline" class="size-4 shrink-0 text-rose-900 dark:text-rose-400" />
-                                        </flux:tooltip>
-                                    @endif
-                                </div>
+                                <span class="truncate">{{ $team->name }}</span>
                                 <div class="flex shrink-0 items-center gap-1.5">
                                     <flux:tooltip content="{{ __('View only') }}">
                                         <flux:icon name="eye" variant="outline" class="size-4 text-slate-500" />

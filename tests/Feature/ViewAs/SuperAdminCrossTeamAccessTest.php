@@ -53,13 +53,13 @@ test('super admin sees their own teams and every other team as separate sections
     $this->actingAs($superAdmin);
 
     $component = Livewire::test('team-switcher');
-    $owned = $component->instance()->ownedTeams();
+    $own = $component->instance()->ownedTeams()->merge($component->instance()->memberTeams());
     $other = $component->instance()->otherTeams();
 
-    expect($owned->pluck('id')->sort()->values()->all())
+    expect($own->pluck('id')->sort()->values()->all())
         ->toBe($superAdmin->teams()->pluck('teams.id')->sort()->values()->all())
-        ->and($owned->count() + $other->count())->toBe(Team::count())
-        ->and($owned->pluck('id')->intersect($other->pluck('id')))->toBeEmpty();
+        ->and($own->count() + $other->count())->toBe(Team::count())
+        ->and($own->pluck('id')->intersect($other->pluck('id')))->toBeEmpty();
 });
 
 test('non super admin only sees their own teams and no other teams section', function () {
@@ -69,9 +69,24 @@ test('non super admin only sees their own teams and no other teams section', fun
     $this->actingAs($user);
 
     $component = Livewire::test('team-switcher');
+    $own = $component->instance()->ownedTeams()->merge($component->instance()->memberTeams());
 
-    expect($component->instance()->ownedTeams()->pluck('id')->sort()->values()->all())
+    expect($own->pluck('id')->sort()->values()->all())
         ->toBe($user->teams()->pluck('teams.id')->sort()->values()->all())
-        ->and($component->instance()->ownedTeams()->pluck('id'))->toContain($ownTeam->id)
+        ->and($own->pluck('id'))->toContain($ownTeam->id)
         ->and($component->instance()->otherTeams())->toBeEmpty();
+});
+
+test('team switcher separates owned teams from teams the user has access to', function () {
+    ['team' => $ownedTeam, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $memberTeam = Team::factory()->create();
+    $memberTeam->members()->attach($owner, ['role' => TeamRole::Manager->value]);
+
+    $this->actingAs($owner);
+
+    $component = Livewire::test('team-switcher');
+
+    expect($component->instance()->ownedTeams()->pluck('id')->all())->toContain($ownedTeam->id)
+        ->and($component->instance()->ownedTeams()->pluck('id'))->not->toContain($memberTeam->id)
+        ->and($component->instance()->memberTeams()->pluck('id')->all())->toBe([$memberTeam->id]);
 });

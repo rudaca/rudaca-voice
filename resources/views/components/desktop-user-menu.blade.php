@@ -1,7 +1,7 @@
-@props(['showTeam' => true, 'subtitle' => null])
+@props(['showTeam' => true, 'subtitle' => null, 'role' => null])
 
 @php
-    $menuSubtitle = $subtitle ?? ($showTeam ? auth()->user()->currentTeam?->name : null);
+    $menuSubtitle = $role ? null : ($subtitle ?? ($showTeam ? auth()->user()->currentTeam?->name : null));
 @endphp
 
 <flux:dropdown position="bottom" align="start">
@@ -9,7 +9,9 @@
         <flux:avatar :initials="auth()->user()->initials()" size="sm" color="auto" color:seed="{{ auth()->id() }}" />
         <div class="in-data-flux-sidebar-collapsed-desktop:hidden mx-2 grid flex-1 text-start text-sm leading-tight">
             <span class="truncate font-medium text-slate-600 group-hover:text-slate-900 dark:text-white/80 dark:group-hover:text-white">{{ auth()->user()->name }}</span>
-            @if($menuSubtitle)
+            @if($role)
+                <flux:badge size="sm" :color="$role->badgeColor()" class="mt-0.5 w-fit">{{ $role->label() }}</flux:badge>
+            @elseif($menuSubtitle)
                 <span class="truncate text-xs text-slate-500 dark:text-slate-600">{{ $menuSubtitle }}</span>
             @endif
         </div>

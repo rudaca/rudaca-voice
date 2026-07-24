@@ -153,7 +153,7 @@
 
             <flux:separator variant="subtle" class="sidebar-divider" />
 
-            <x-desktop-user-menu class="hidden lg:block" :subtitle="$__currentRole?->label()" />
+            <x-desktop-user-menu class="hidden lg:block" :role="$__currentRole" />
         </flux:sidebar>
 
         <!-- Header -->
