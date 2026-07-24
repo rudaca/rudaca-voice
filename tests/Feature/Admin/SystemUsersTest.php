@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Models\Team;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -19,6 +20,17 @@ test('super admins can view the system users page', function () {
         ->get(route('admin.users'))
         ->assertOk()
         ->assertSee('System Users');
+});
+
+test('the user list shows the last login time, or "Never" if the user has not logged in', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $loggedIn = User::factory()->create(['name' => 'Has Logged In', 'last_login_at' => now()->subDay()]);
+    $neverLoggedIn = User::factory()->create(['name' => 'Never Logged In', 'last_login_at' => null]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->assertSee($loggedIn->last_login_at->format('M d, Y'))
+        ->assertSeeInOrder(['Never Logged In', 'Never']);
 });
 
 test('the sidebar only shows the System Users link to super admins', function () {
@@ -170,17 +182,57 @@ test('the Super Admin checkbox in the edit user modal grants and revokes access 
     expect($user->fresh()->is_super_admin)->toBeFalse();
 });
 
-test('the Super Admin checkbox is hidden when editing your own account and cannot revoke your own access', function () {
+test('the Super Admin and Active checkboxes are hidden when editing your own account and cannot revoke your own access', function () {
     $superAdmin = User::factory()->create(['is_super_admin' => true]);
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
         ->call('editUser', $superAdmin->id)
         ->assertDontSeeHtml('data-test="user-super-admin-checkbox"')
+        ->assertDontSeeHtml('data-test="user-active-checkbox"')
         ->set('isSuperAdmin', false)
+        ->set('isActive', false)
         ->call('saveUser');
 
-    expect($superAdmin->fresh()->is_super_admin)->toBeTrue();
+    expect($superAdmin->fresh())
+        ->is_super_admin->toBeTrue()
+        ->is_active->toBeTrue();
+});
+
+test('the Active checkbox in the new user modal creates an inactive user when unchecked', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->set('name', 'Inactive From Birth')
+        ->set('email', 'inactive-from-birth@example.com')
+        ->set('password', 'password123!A')
+        ->set('password_confirmation', 'password123!A')
+        ->set('isActive', false)
+        ->call('saveUser');
+
+    expect(User::where('email', 'inactive-from-birth@example.com')->firstOrFail()->is_active)->toBeFalse();
+});
+
+test('the Active checkbox in the edit user modal deactivates and reactivates another user', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('editUser', $user->id)
+        ->set('isActive', false)
+        ->call('saveUser');
+
+    expect($user->fresh()->is_active)->toBeFalse();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('editUser', $user->id)
+        ->set('isActive', true)
+        ->call('saveUser');
+
+    expect($user->fresh()->is_active)->toBeTrue();
 });
 
 test('a super admin can deactivate and reactivate another user, locking them out of login', function () {
@@ -253,4 +305,69 @@ test('the user list can be filtered by role', function () {
         ->set('role', '')
         ->assertSee('Super One')
         ->assertSee('Regular One');
+});
+
+test('the user list can be filtered by status', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $active = User::factory()->create(['name' => 'Active Person']);
+    $inactive = User::factory()->inactive()->create(['name' => 'Inactive Person']);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->set('status', ['active'])
+        ->assertSee('Active Person')
+        ->assertDontSee('Inactive Person')
+        ->set('status', ['inactive'])
+        ->assertDontSee('Active Person')
+        ->assertSee('Inactive Person')
+        ->set('status', [])
+        ->assertSee('Active Person')
+        ->assertSee('Inactive Person');
+});
+
+test('the user list can be filtered by organization', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $orgA = Team::factory()->create(['name' => 'Org A', 'is_personal' => false]);
+    $orgB = Team::factory()->create(['name' => 'Org B', 'is_personal' => false]);
+    $memberA = User::factory()->create(['name' => 'Member Of A']);
+    $memberB = User::factory()->create(['name' => 'Member Of B']);
+    $orgA->members()->attach($memberA, ['role' => TeamRole::Employee->value]);
+    $orgB->members()->attach($memberB, ['role' => TeamRole::Employee->value]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->set('organization', [$orgA->id])
+        ->assertSee('Member Of A')
+        ->assertDontSee('Member Of B')
+        ->set('organization', [])
+        ->assertSee('Member Of A')
+        ->assertSee('Member Of B');
+});
+
+test('the Clear button only appears when a filter is active and resets every filter', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $team = Team::factory()->create(['is_personal' => false]);
+
+    $component = Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->assertDontSeeHtml('data-test="clear-filters"')
+        ->set('search', 'something')
+        ->assertSeeHtml('data-test="clear-filters"')
+        ->set('search', '')
+        ->set('role', 'user')
+        ->assertSeeHtml('data-test="clear-filters"')
+        ->set('role', '')
+        ->set('status', ['active'])
+        ->assertSeeHtml('data-test="clear-filters"')
+        ->set('status', [])
+        ->set('organization', [$team->id])
+        ->assertSeeHtml('data-test="clear-filters"');
+
+    $component->call('clearFilters')
+        ->assertDontSeeHtml('data-test="clear-filters"');
+
+    expect($component->get('search'))->toBe('')
+        ->and($component->get('role'))->toBe('')
+        ->and($component->get('status'))->toBe([])
+        ->and($component->get('organization'))->toBe([]);
 });

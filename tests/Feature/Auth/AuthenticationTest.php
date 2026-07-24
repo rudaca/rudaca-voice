@@ -24,6 +24,19 @@ test('users can authenticate using the login screen', function () {
     $this->assertAuthenticated();
 });
 
+test('a successful login records the last_login_at timestamp', function () {
+    $user = User::factory()->create();
+
+    expect($user->last_login_at)->toBeNull();
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    expect($user->fresh()->last_login_at)->not->toBeNull();
+});
+
 test('users can not authenticate with invalid password', function () {
     $user = User::factory()->create();
 

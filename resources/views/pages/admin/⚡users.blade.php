@@ -1,8 +1,10 @@
 <?php
 
 use App\Actions\Teams\CreateTeam;
+use App\Models\Team;
 use App\Models\User;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -22,6 +24,18 @@ new #[Title('System Users')] class extends Component {
     #[Url(as: 'role')]
     public string $role = '';
 
+    /**
+     * @var array<int, string>
+     */
+    #[Url(as: 'status')]
+    public array $status = [];
+
+    /**
+     * @var array<int, int>
+     */
+    #[Url(as: 'org')]
+    public array $organization = [];
+
     // --- User form (Add/Edit modal) ---
     public ?int $userId = null;
 
@@ -35,6 +49,8 @@ new #[Title('System Users')] class extends Component {
 
     public bool $isSuperAdmin = false;
 
+    public bool $isActive = true;
+
     public function updatingSearch(): void
     {
         $this->resetPage();
@@ -45,6 +61,52 @@ new #[Title('System Users')] class extends Component {
         $this->resetPage();
     }
 
+    public function updatingStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingOrganization(): void
+    {
+        $this->resetPage();
+    }
+
+    /**
+     * Active organizations selectable in the filter dropdown. Personal teams
+     * are excluded — they're one-per-user and not meaningful to filter by.
+     *
+     * @return Collection<int, Team>
+     */
+    #[Computed]
+    public function organizations(): Collection
+    {
+        return Team::query()
+            ->where('is_personal', false)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Whether any filter differs from its default, used to show/hide the "Clear" button.
+     */
+    #[Computed]
+    public function hasActiveFilters(): bool
+    {
+        return $this->search !== ''
+            || $this->role !== ''
+            || $this->status !== []
+            || $this->organization !== [];
+    }
+
+    /**
+     * Reset every filter control back to its default.
+     */
+    public function clearFilters(): void
+    {
+        $this->reset(['search', 'role', 'status', 'organization']);
+        $this->resetPage();
+    }
+
     /**
      * @return LengthAwarePaginator<int, User>
      */
@@ -52,6 +114,7 @@ new #[Title('System Users')] class extends Component {
     public function users(): LengthAwarePaginator
     {
         $search = trim($this->search);
+        $statusValues = collect($this->status)->map(fn ($value) => $value === 'active')->all();
 
         return User::query()
             ->when($search !== '', fn ($query) => $query
@@ -59,6 +122,8 @@ new #[Title('System Users')] class extends Component {
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")))
             ->when($this->role !== '', fn ($query) => $query->where('is_super_admin', $this->role === 'super_admin'))
+            ->when($this->status !== [], fn ($query) => $query->whereIn('is_active', $statusValues))
+            ->when($this->organization !== [], fn ($query) => $query->whereHas('teams', fn ($query) => $query->whereIn('teams.id', $this->organization)))
             ->orderBy('name')
             ->paginate(15);
     }
@@ -66,6 +131,7 @@ new #[Title('System Users')] class extends Component {
     public function newUser(): void
     {
         $this->reset('userId', 'name', 'email', 'password', 'password_confirmation', 'isSuperAdmin');
+        $this->isActive = true;
         $this->resetValidation();
         $this->dispatch('modal-show', name: 'user');
     }
@@ -80,6 +146,7 @@ new #[Title('System Users')] class extends Component {
         $this->password = null;
         $this->password_confirmation = null;
         $this->isSuperAdmin = $user->is_super_admin;
+        $this->isActive = $user->is_active;
 
         $this->resetValidation();
         $this->dispatch('modal-show', name: 'user');
@@ -104,12 +171,13 @@ new #[Title('System Users')] class extends Component {
                 $user->password = $validated['password'];
             }
 
-            // Editing yourself never changes your own super admin status, even
-            // if the checkbox were somehow submitted — the modal hides it for
-            // your own row so a super admin can't accidentally lock themselves
-            // out of this screen.
+            // Editing yourself never changes your own super admin status or
+            // active status, even if the checkboxes were somehow submitted —
+            // the modal hides them for your own row so a super admin can't
+            // accidentally lock themselves out of this screen.
             if ($user->id !== Auth::id()) {
                 $user->is_super_admin = $this->isSuperAdmin;
+                $user->is_active = $this->isActive;
             }
 
             $user->save();
@@ -120,7 +188,7 @@ new #[Title('System Users')] class extends Component {
                 'password' => $validated['password'],
             ]);
 
-            $user->is_active = true;
+            $user->is_active = $this->isActive;
             $user->is_super_admin = $this->isSuperAdmin;
             $user->save();
 
@@ -185,82 +253,167 @@ new #[Title('System Users')] class extends Component {
     </div>
 
     <x-sticky-toolbar class="mt-6 py-2.5">
-        <div class="flex flex-wrap items-center gap-3">
-            <div
-                class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
-                role="group"
-                aria-label="{{ __('Filter by role') }}"
-                data-role="{{ $role }}"
-                x-data="{
-                    role: null,
-                    indicator: { left: 0, width: 0 },
-                    updateIndicator() {
-                        let el = this.$refs['role-' + (this.role === '' ? 'all' : this.role)];
-                        if (el) {
-                            this.indicator = { left: el.offsetLeft, width: el.offsetWidth };
-                        }
-                    },
-                }"
-                x-init="role = $el.dataset.role; updateIndicator()"
-                x-effect="role; updateIndicator()"
-            >
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap items-center gap-3">
                 <div
-                    class="absolute inset-y-0.5 rounded-md bg-white shadow-sm transition-all duration-200 ease-out dark:bg-zinc-700"
-                    :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
-                ></div>
+                    class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+                    role="group"
+                    aria-label="{{ __('Filter by role') }}"
+                    data-role="{{ $role }}"
+                    x-data="{
+                        role: null,
+                        indicator: { left: 0, width: 0 },
+                        updateIndicator() {
+                            let el = this.$refs['role-' + (this.role === '' ? 'all' : this.role)];
+                            if (el) {
+                                this.indicator = { left: el.offsetLeft, width: el.offsetWidth };
+                            }
+                        },
+                    }"
+                    x-init="role = $el.dataset.role; updateIndicator()"
+                    x-effect="role; updateIndicator()"
+                >
+                    <div
+                        class="absolute inset-y-0.5 rounded-md bg-white shadow-sm transition-all duration-200 ease-out dark:bg-zinc-700"
+                        :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
+                    ></div>
 
-                @foreach (['' => __('All'), 'super_admin' => __('Super Admin'), 'user' => __('User')] as $value => $label)
-                    <button
-                        type="button"
-                        x-ref="role-{{ $value === '' ? 'all' : $value }}"
-                        x-on:click="role = '{{ $value }}'"
-                        wire:click="$set('role', '{{ $value }}')"
-                        @class([
-                            'relative rounded-md px-3 py-1 text-sm font-medium transition-colors',
-                            'text-slate-900 dark:text-white' => $role === $value,
-                            'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $role !== $value,
-                        ])
-                        data-test="role-filter-{{ $value === '' ? 'all' : $value }}"
-                    >
-                        {{ $label }}
-                    </button>
-                @endforeach
+                    @foreach (['' => __('All'), 'super_admin' => __('Super Admin'), 'user' => __('User')] as $value => $label)
+                        <button
+                            type="button"
+                            x-ref="role-{{ $value === '' ? 'all' : $value }}"
+                            x-on:click="role = '{{ $value }}'"
+                            wire:click="$set('role', '{{ $value }}')"
+                            @class([
+                                'relative rounded-md px-3 py-1 text-sm font-medium transition-colors',
+                                'text-slate-900 dark:text-white' => $role === $value,
+                                'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $role !== $value,
+                            ])
+                            data-test="role-filter-{{ $value === '' ? 'all' : $value }}"
+                        >
+                            {{ $label }}
+                        </button>
+                    @endforeach
+                </div>
+
+                <flux:input
+                    wire:model.live.debounce.300ms="search"
+                    icon="magnifying-glass"
+                    size="sm"
+                    clearable
+                    :placeholder="__('Search by name or email...')"
+                    class="w-full sm:w-64 md:w-80"
+                    data-test="user-search-input"
+                />
+
+                <flux:dropdown position="bottom" align="start">
+                    <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-status-trigger" @class([
+                        'w-auto',
+                        'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
+                    ])>
+                        {{ __('Status') }}
+                        @if ($status !== [])
+                            <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
+                        @endif
+                    </flux:button>
+
+                    <flux:menu class="w-48">
+                        <flux:menu.item
+                            keep-open
+                            wire:click="$set('status', [])"
+                            icon:trailing="{{ $status === [] ? 'check' : '' }}"
+                            class="{{ $status === [] ? 'font-semibold' : '' }}"
+                            data-test="filter-status-all"
+                        >
+                            {{ __('All Status') }}
+                        </flux:menu.item>
+                        <flux:menu.separator />
+
+                        <flux:menu.checkbox.group wire:model.live="status">
+                            <flux:menu.checkbox value="active" keep-open data-test="filter-status-active">{{ __('Active') }}</flux:menu.checkbox>
+                            <flux:menu.checkbox value="inactive" keep-open data-test="filter-status-inactive">{{ __('Inactive') }}</flux:menu.checkbox>
+                        </flux:menu.checkbox.group>
+                    </flux:menu>
+                </flux:dropdown>
+
+                <flux:dropdown position="bottom" align="start">
+                    <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-organization-trigger" @class([
+                        'w-auto',
+                        'border-gray-800! font-semibold! dark:border-gray-400!' => $organization !== [],
+                    ])>
+                        {{ __('Organization') }}
+                        @if ($organization !== [])
+                            <flux:badge size="sm" color="zinc">{{ count($organization) }}</flux:badge>
+                        @endif
+                    </flux:button>
+
+                    <flux:menu class="w-56">
+                        <flux:menu.item
+                            keep-open
+                            wire:click="$set('organization', [])"
+                            icon:trailing="{{ $organization === [] ? 'check' : '' }}"
+                            class="{{ $organization === [] ? 'font-semibold' : '' }}"
+                            data-test="filter-organization-all"
+                        >
+                            {{ __('All Organizations') }}
+                        </flux:menu.item>
+                        <flux:menu.separator />
+
+                        <flux:menu.checkbox.group wire:model.live="organization">
+                            @foreach ($this->organizations as $org)
+                                <flux:menu.checkbox value="{{ $org->id }}" keep-open data-test="filter-organization-{{ $org->id }}">{{ $org->name }}</flux:menu.checkbox>
+                            @endforeach
+                        </flux:menu.checkbox.group>
+                    </flux:menu>
+                </flux:dropdown>
             </div>
 
-            <flux:input
-                wire:model.live.debounce.300ms="search"
-                icon="magnifying-glass"
-                size="sm"
-                clearable
-                :placeholder="__('Search by name or email...')"
-                class="w-full sm:w-64 md:w-80"
-                data-test="user-search-input"
-            />
+            @if ($this->hasActiveFilters)
+                <flux:button
+                    wire:click="clearFilters"
+                    variant="outline"
+                    size="sm"
+                    icon="x-mark"
+                    class="border-red-500! text-red-500! hover:bg-red-50! dark:hover:bg-red-500/10!"
+                    data-test="clear-filters"
+                >
+                    {{ __('Clear') }}
+                </flux:button>
+            @endif
         </div>
     </x-sticky-toolbar>
 
-    <div class="mt-4 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-        <table class="w-full text-sm">
-            <thead class="bg-zinc-50 dark:bg-zinc-800/50">
-                <tr class="text-xs font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-500">
-                    <th class="px-4 py-2.5 text-start">{{ __('User') }}</th>
-                    <th class="px-4 py-2.5 text-start">{{ __('Email') }}</th>
-                    <th class="px-4 py-2.5 text-start">{{ __('Role') }}</th>
-                    <th class="px-4 py-2.5 text-start">{{ __('Status') }}</th>
-                    <th class="px-4 py-2.5 text-end">{{ __('Actions') }}</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
+    <div class="mt-4">
+        <flux:table>
+            <flux:table.columns>
+                <flux:table.column>{{ __('User') }}</flux:table.column>
+                <flux:table.column>{{ __('Email') }}</flux:table.column>
+                <flux:table.column>{{ __('Role') }}</flux:table.column>
+                <flux:table.column>{{ __('Status') }}</flux:table.column>
+                <flux:table.column>{{ __('Actions') }}</flux:table.column>
+            </flux:table.columns>
+
+            <flux:table.rows>
                 @forelse ($this->users as $user)
-                    <tr wire:key="user-{{ $user->id }}" data-test="user-row">
-                        <td class="px-4 py-3">
+                    <flux:table.row :key="'user-'.$user->id" data-test="user-row">
+                        <flux:table.cell>
                             <div class="flex items-center gap-3">
-                                <flux:avatar :name="$user->name" size="xs" color="auto" color:seed="{{ $user->id }}" />
-                                <span class="font-bold text-slate-900 dark:text-slate-200">{{ $user->name }}</span>
+                                <flux:avatar :name="$user->name" size="lg" color="auto" color:seed="{{ $user->id }}" />
+                                <div>
+                                    <span class="font-bold text-slate-900 dark:text-slate-200">{{ $user->name }}</span>
+                                    <flux:tooltip content="{{ __('Last Login') }}">
+                                        <div class="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                                            <flux:icon.clock class="size-3.5" />
+                                            {{ $user->last_login_at?->format('M d, Y h:i A') ?? __('Never') }}
+                                        </div>
+                                    </flux:tooltip>
+                                </div>
                             </div>
-                        </td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-500">{{ $user->email }}</td>
-                        <td class="px-4 py-3">
+                        </flux:table.cell>
+
+                        <flux:table.cell class="text-slate-600 dark:text-slate-500">{{ $user->email }}</flux:table.cell>
+
+                        <flux:table.cell>
                             @if ($user->id === auth()->id())
                                 <flux:badge size="sm" :color="$user->is_super_admin ? 'pink' : 'zinc'">
                                     {{ $user->is_super_admin ? __('Super Admin') : __('User') }}
@@ -280,14 +433,16 @@ new #[Title('System Users')] class extends Component {
                                     </flux:menu>
                                 </flux:dropdown>
                             @endif
-                        </td>
-                        <td class="px-4 py-3">
+                        </flux:table.cell>
+
+                        <flux:table.cell>
                             <flux:badge size="sm" :color="$user->is_active ? 'green' : 'zinc'">
                                 {{ $user->is_active ? __('Active') : __('Inactive') }}
                             </flux:badge>
-                        </td>
-                        <td class="px-4 py-3 text-end">
-                            <div class="flex items-center justify-end gap-1">
+                        </flux:table.cell>
+
+                        <flux:table.cell>
+                            <div class="flex items-center justify-end gap-1.5">
                                 @if ($user->id === auth()->id())
                                     <flux:badge size="sm" color="zinc">{{ __('You') }}</flux:badge>
                                 @else
@@ -295,6 +450,7 @@ new #[Title('System Users')] class extends Component {
                                         wire:click="toggleActive({{ $user->id }})"
                                         variant="outline"
                                         size="sm"
+                                        class="px-2! py-1! text-xs!"
                                         data-test="toggle-user-active"
                                         :class="$user->is_active
                                             ? 'text-rose-700! border-rose-700! dark:text-rose-400! dark:border-rose-800!'
@@ -303,20 +459,30 @@ new #[Title('System Users')] class extends Component {
                                         {{ $user->is_active ? __('Deactivate') : __('Activate') }}
                                     </flux:button>
                                 @endif
-                                <flux:button wire:click="editUser({{ $user->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-user" />
+                                <flux:button
+                                    wire:click="editUser({{ $user->id }})"
+                                    variant="outline"
+                                    size="sm"
+                                    class="px-2! py-1! text-xs! text-slate-600! border-slate-300! dark:text-slate-400! dark:border-zinc-700!"
+                                    data-test="edit-user"
+                                >
+                                    {{ __('Edit') }}
+                                </flux:button>
                             </div>
-                        </td>
-                    </tr>
+                        </flux:table.cell>
+                    </flux:table.row>
                 @empty
-                    <tr>
-                        <td colspan="5" class="px-4 py-10 text-center">
-                            <flux:icon.user class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
-                            <flux:text class="mt-2 text-slate-600 dark:text-slate-500">{{ __('No users found.') }}</flux:text>
-                        </td>
-                    </tr>
+                    <flux:table.row>
+                        <flux:table.cell colspan="5">
+                            <div class="py-14 text-center" data-test="users-empty">
+                                <flux:icon.user class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                                <flux:text class="mt-2 text-slate-600 dark:text-slate-500">{{ __('No users found.') }}</flux:text>
+                            </div>
+                        </flux:table.cell>
+                    </flux:table.row>
                 @endforelse
-            </tbody>
-        </table>
+            </flux:table.rows>
+        </flux:table>
     </div>
 
     <div class="mt-4">
@@ -351,6 +517,13 @@ new #[Title('System Users')] class extends Component {
             />
 
             @if ($userId !== auth()->id())
+                <flux:checkbox
+                    wire:model="isActive"
+                    :label="__('Active')"
+                    :description="__('Unchecking this locks the account out of logging in.')"
+                    data-test="user-active-checkbox"
+                />
+
                 <flux:checkbox
                     wire:model="isSuperAdmin"
                     :label="__('Super Admin')"
