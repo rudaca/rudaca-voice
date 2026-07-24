@@ -939,7 +939,7 @@ new #[Title('Organization Settings')] class extends Component {
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-500">{{ $member->email }}</td>
                             <td class="px-4 py-3">
                                 <flux:badge size="sm" :color="self::ROLE_BADGE_COLORS[$member->pivot->role->value] ?? 'zinc'">
-                                    {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Admin / Owner') : $member->pivot->role->label() }}
+                                    {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Owner') : $member->pivot->role->label() }}
                                 </flux:badge>
                             </td>
                             @if ($this->canRemoveMember)
