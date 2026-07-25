@@ -680,7 +680,7 @@ new #[Title('Moderate comments')] class extends Component {
 
                         <div class="flex items-center py-1 px-3 bg-gray-100 rounded-lg dark:bg-zinc-800">
                             <div class="flex items-center gap-1.5">
-                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('Created From') }}</flux:text>
+                                <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('Created From') }}</flux:text>
                                 <flux:input type="date" wire:model.live="dateFrom" size="sm" data-test="filter-date-from" @class([
                                     'w-auto',
                                     'border-gray-800! font-semibold! dark:border-gray-400!' => $dateFrom !== '',
@@ -688,7 +688,7 @@ new #[Title('Moderate comments')] class extends Component {
                             </div>
 
                             <div class="flex items-center gap-1.5">
-                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('To') }}</flux:text>
+                                <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('To') }}</flux:text>
                                 <flux:input type="date" wire:model.live="dateTo" size="sm" data-test="filter-date-to" @class([
                                     'w-auto',
                                     'border-gray-800! font-semibold! dark:border-gray-400!' => $dateTo !== '',
@@ -720,9 +720,9 @@ new #[Title('Moderate comments')] class extends Component {
                                     {{ str($comment->body)->limit(30) }}
                                 </button>
                             </flux:modal.trigger>
-                            <div class="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                            <div class="mt-1 flex items-center gap-1 text-xs text-slate-700">
                                 <flux:icon.clock class="size-3.5" />
-                                {{ $comment->created_at->format('M d, Y h:i A') }}
+                                {{ $comment->created_at->forUser()->format('M d, Y h:i A') }}
                             </div>
                         </flux:table.cell>
 
@@ -751,7 +751,7 @@ new #[Title('Moderate comments')] class extends Component {
                             @elseif ($comment->isHidden())
                                 <flux:badge color="red" size="sm" icon="flag" icon:variant="outline">{{ __('Flagged') }}</flux:badge>
                                 @if ($comment->hiddenBy)
-                                    <div class="mt-1 text-xs text-slate-500">{{ __('by :name', ['name' => $comment->hiddenBy->name]) }}</div>
+                                    <div class="mt-1 text-xs text-slate-700">{{ __('by :name', ['name' => $comment->hiddenBy->name]) }}</div>
                                 @endif
                             @else
                                 <flux:badge color="green" size="sm" variant="outline">{{ __('Visible') }}</flux:badge>
@@ -897,11 +897,11 @@ new #[Title('Moderate comments')] class extends Component {
                         <div class="flex min-h-[min(60vh,28rem)] flex-col space-y-5">
                             <div>
                                 <flux:heading size="lg">{{ __('Comment') }}</flux:heading>
-                                <flux:text class="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                                <flux:text class="mt-1 flex items-center gap-1 text-xs text-slate-700">
                                     {{ $comment->user?->name ?? __('Unknown') }}
                                     <span aria-hidden="true">·</span>
                                     <flux:icon.clock class="size-3.5" />
-                                    {{ $comment->created_at->format('M d, Y h:i A') }}
+                                    {{ $comment->created_at->forUser()->format('M d, Y h:i A') }}
                                 </flux:text>
                             </div>
 

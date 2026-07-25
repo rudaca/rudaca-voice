@@ -29,7 +29,7 @@ test('the user list shows the last login time, or "Never" if the user has not lo
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
-        ->assertSee($loggedIn->last_login_at->format('M d, Y'))
+        ->assertSee($loggedIn->last_login_at->forUser()->format('M d, Y'))
         ->assertSeeInOrder(['Never Logged In', 'Never']);
 });
 

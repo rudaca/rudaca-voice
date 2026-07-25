@@ -430,7 +430,7 @@ new #[Title('Dashboard')] class extends Component {
     }
 
     /**
-     * Team members ranked by contribution — ideas submitted, then comments
+     * Team members ranked by contribution — ideas submitted plus comments made
      * (ties broken alphabetically) — with a breakdown of boards participated
      * in, ideas submitted, and comments made. Shown in the "Top Contributors" tab.
      *
@@ -472,8 +472,7 @@ new #[Title('Dashboard')] class extends Component {
                 'comments' => $commentCounts->get($member->id, 0),
             ])
             ->filter(fn ($contributor) => $contributor['boards'] > 0 || $contributor['ideas'] > 0 || $contributor['comments'] > 0)
-            ->sort(fn ($a, $b) => ($b['ideas'] <=> $a['ideas'])
-                ?: ($b['comments'] <=> $a['comments'])
+            ->sort(fn ($a, $b) => (($b['ideas'] + $b['comments']) <=> ($a['ideas'] + $a['comments']))
                 ?: ($a['user']->name <=> $b['user']->name))
             ->values()
             ->take(10);
@@ -521,7 +520,7 @@ new #[Title('Dashboard')] class extends Component {
                         x-init="initStatCounter($el, {{ (int) $stat['value'] }})"
                         wire:ignore
                     >0</div>
-                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-600 {{ ($stat['caption_bold'] ?? false) ? 'font-bold' : '' }}">{{ $stat['caption'] }}</div>
+                    <div class="mt-1 text-xs text-slate-700 dark:text-slate-600 {{ ($stat['caption_bold'] ?? false) ? 'font-bold' : '' }}">{{ $stat['caption'] }}</div>
                 </div>
             @endforeach
         </div>
@@ -570,7 +569,7 @@ new #[Title('Dashboard')] class extends Component {
                                         'cursor-not-allowed opacity-60' => ! $this->canParticipate,
                                         'cursor-pointer' => $this->canParticipate,
                                         'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
-                                        'border-zinc-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:hover:border-indigo-500/40' => ! $idea->voted,
+                                        'border-zinc-200 text-slate-700 hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:hover:border-indigo-500/40' => ! $idea->voted,
                                     ])
                                     data-test="vote-button"
                                     x-data="{ justVoted: false }"
@@ -590,7 +589,7 @@ new #[Title('Dashboard')] class extends Component {
                                         class="size-4"
                                     />
                                     <span class="text-sm font-extrabold">{{ $idea->votes_count }}</span>
-                                    <span class="text-[9px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-500' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
+                                    <span class="text-[9px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-700' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
                                 </button>
                             </flux:tooltip>
 
@@ -673,8 +672,8 @@ new #[Title('Dashboard')] class extends Component {
 
                                     <span aria-hidden="true" class="text-base leading-none">·</span>
 
-                                    <flux:tooltip :content="__('Submitted at :date', ['date' => $idea->created_at->format('M d, Y h:iA')])">
-                                        <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                                    <flux:tooltip :content="__('Submitted at :date', ['date' => $idea->created_at->forUser()->format('M d, Y h:iA')])">
+                                        <span>{{ $idea->created_at->forUser()->format('M j, Y') }}</span>
                                     </flux:tooltip>
                                 </div>
                             </div>
@@ -711,7 +710,7 @@ new #[Title('Dashboard')] class extends Component {
                                 <x-board-avatar :name="$board->name" :index="$loop->index" />
                                 <div class="min-w-0 flex-1">
                                     <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-200">{{ $board->name }}</div>
-                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500 dark:text-slate-600">
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-700 dark:text-slate-600">
                                         <flux:tooltip :content="__('Ideas submitted')">
                                             <div class="flex items-center gap-1">
                                                 <flux:icon.light-bulb class="size-3.5" />
@@ -763,7 +762,7 @@ new #[Title('Dashboard')] class extends Component {
                                         <span class="truncate text-sm font-semibold text-slate-900 dark:text-slate-200">{{ $member->name }}</span>
                                         <flux:badge size="sm" :color="$contributor['role']->badgeColor()">{{ $contributor['role']->label() }}</flux:badge>
                                     </div>
-                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-500 dark:text-slate-600">
+                                    <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-700 dark:text-slate-600">
                                         <flux:tooltip :content="__('Boards participated in')">
                                             <div class="flex items-center gap-1">
                                                 <flux:icon.chalkboard class="size-3.5" />

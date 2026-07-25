@@ -1,6 +1,7 @@
 <?php
 
 use App\Concerns\ProfileValidationRules;
+use App\Enums\Timezone;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +15,7 @@ new #[Title('Profile settings')] class extends Component {
 
     public string $name = '';
     public string $email = '';
+    public string $timezone = '';
 
     /**
      * Mount the component.
@@ -22,6 +24,7 @@ new #[Title('Profile settings')] class extends Component {
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+        $this->timezone = Auth::user()->timezone->value;
     }
 
     /**
@@ -74,6 +77,12 @@ new #[Title('Profile settings')] class extends Component {
         return ! Auth::user() instanceof MustVerifyEmail
             || (Auth::user() instanceof MustVerifyEmail && Auth::user()->hasVerifiedEmail());
     }
+
+    #[Computed]
+    public function timezoneOptions(): array
+    {
+        return Timezone::options();
+    }
 }; ?>
 
 @push('breadcrumbs')
@@ -113,6 +122,12 @@ new #[Title('Profile settings')] class extends Component {
                     </div>
                 @endif
             </div>
+
+            <flux:select wire:model="timezone" :label="__('Timezone')" data-test="timezone-select">
+                @foreach ($this->timezoneOptions as $option)
+                    <flux:select.option value="{{ $option['value'] }}">{{ $option['label'] }}</flux:select.option>
+                @endforeach
+            </flux:select>
 
             <div class="flex items-center gap-4">
                 <div class="flex items-center justify-end">

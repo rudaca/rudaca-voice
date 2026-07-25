@@ -402,9 +402,9 @@ new #[Title('System Users')] class extends Component {
                                 <div>
                                     <span class="font-bold text-slate-900 dark:text-slate-200">{{ $user->name }}</span>
                                     <flux:tooltip content="{{ __('Last Login') }}">
-                                        <div class="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                                        <div class="mt-1 flex items-center gap-1 text-xs text-slate-700">
                                             <flux:icon.clock class="size-3.5" />
-                                            {{ $user->last_login_at?->format('M d, Y h:i A') ?? __('Never') }}
+                                            {{ $user->last_login_at?->forUser()->format('M d, Y h:i A') ?? __('Never') }}
                                         </div>
                                     </flux:tooltip>
                                 </div>

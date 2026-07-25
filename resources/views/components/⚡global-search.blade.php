@@ -191,7 +191,7 @@ new class extends Component {
             @else
                 @if ($this->ideas->isNotEmpty())
                     <div class="border-b border-zinc-100 py-2 dark:border-zinc-800">
-                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">{{ __('Ideas') }}</div>
+                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-600">{{ __('Ideas') }}</div>
                         @foreach ($this->ideas as $idea)
                             @php($meta = $this->statusMeta($idea->status))
                             @php($author = $this->ideaAuthor($idea))
@@ -202,7 +202,7 @@ new class extends Component {
                                 class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 hover:bg-zinc-50 dark:text-slate-300 dark:hover:bg-zinc-800/60"
                                 data-test="global-search-idea"
                             >
-                                <flux:icon.light-bulb class="mt-0.5 size-4 shrink-0 text-slate-500" />
+                                <flux:icon.light-bulb class="mt-0.5 size-4 shrink-0 text-slate-700" />
                                 <div class="min-w-0 flex-1">
                                     <span class="block truncate text-sm font-semibold">{{ $idea->title }}</span>
                                     <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
@@ -211,7 +211,7 @@ new class extends Component {
                                         <span aria-hidden="true">·</span>
                                         <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">{{ $meta['label'] }}</flux:badge>
                                         <span aria-hidden="true">·</span>
-                                        <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                                        <span>{{ $idea->created_at->forUser()->format('M j, Y') }}</span>
                                         <span aria-hidden="true">·</span>
                                         <flux:icon.chevron-up class="size-3.5" />
                                         <span>{{ $idea->votes_count }}</span>
@@ -226,7 +226,7 @@ new class extends Component {
 
                 @if ($this->boards->isNotEmpty())
                     <div class="border-b border-zinc-100 py-2 dark:border-zinc-800">
-                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">{{ __('Boards') }}</div>
+                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-600">{{ __('Boards') }}</div>
                         @foreach ($this->boards as $board)
                             <a
                                 href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
@@ -254,7 +254,7 @@ new class extends Component {
 
                 @if ($this->people->isNotEmpty())
                     <div class="py-2">
-                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">{{ __('People') }}</div>
+                        <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-600">{{ __('People') }}</div>
                         @foreach ($this->people as $person)
                             @php($stats = $this->personStats($person))
                             <div class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 dark:text-slate-300" data-test="global-search-person">

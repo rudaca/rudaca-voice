@@ -411,7 +411,7 @@ new class extends Component {
                 <flux:heading size="xl" class="flex items-center gap-2">
                     @if ($this->activeFilterLabel)
                         <flux:tooltip :content="$this->board !== [] ? __('Board') : __('Board group')">
-                            <flux:icon.chalkboard class="size-6 shrink-0 text-slate-500 dark:text-slate-600" />
+                            <flux:icon.chalkboard class="size-6 shrink-0 text-slate-700 dark:text-slate-600" />
                         </flux:tooltip>
                     @endif
                     {{ $this->activeFilterLabel ?? __('All Ideas') }}
@@ -701,7 +701,7 @@ new class extends Component {
 
                             <div class="flex items-center py-1 px-3 bg-gray-100 rounded-lg dark:bg-zinc-800">
                                 <div class="flex items-center gap-1.5">
-                                    <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('Created From') }}</flux:text>
+                                    <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('Created From') }}</flux:text>
                                     <flux:input type="date" wire:model.live="dateFrom" size="sm" data-test="filter-date-from" @class([
                                         'w-auto',
                                         'border-gray-800! font-semibold! dark:border-gray-400!' => $dateFrom !== '',
@@ -709,7 +709,7 @@ new class extends Component {
                                 </div>
 
                                 <div class="flex items-center gap-1.5">
-                                    <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('To') }}</flux:text>
+                                    <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('To') }}</flux:text>
                                     <flux:input type="date" wire:model.live="dateTo" size="sm" data-test="filter-date-to" @class([
                                         'w-auto',
                                         'border-gray-800! font-semibold! dark:border-gray-400!' => $dateTo !== '',
@@ -784,7 +784,7 @@ new class extends Component {
                                 class="size-4"
                             />
                             <span class="text-sm font-extrabold">{{ $idea->votes_count }}</span>
-                            <span class="text-[10px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-500' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
+                            <span class="text-[10px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-700' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
                         </button>
                     </flux:tooltip>
 
@@ -875,8 +875,8 @@ new class extends Component {
 
                             <span aria-hidden="true" class="text-base leading-none">·</span>
 
-                            <flux:tooltip :content="__('Submitted at :date', ['date' => $idea->created_at->format('M d, Y h:iA')])">
-                                <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                            <flux:tooltip :content="__('Submitted at :date', ['date' => $idea->created_at->forUser()->format('M d, Y h:iA')])">
+                                <span>{{ $idea->created_at->forUser()->format('M j, Y') }}</span>
                             </flux:tooltip>
                         </div>
                     </div>

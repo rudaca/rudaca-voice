@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Timezone;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -26,6 +27,42 @@ test('profile information can be updated', function () {
     expect($user->name)->toEqual('Test User');
     expect($user->email)->toEqual('test@example.com');
     expect($user->email_verified_at)->toBeNull();
+});
+
+test('new users default to the Toronto timezone', function () {
+    $user = User::factory()->create();
+
+    expect($user->timezone)->toBe(Timezone::Toronto);
+});
+
+test('profile timezone can be updated', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    $response = Livewire::test('pages::settings.profile')
+        ->set('name', $user->name)
+        ->set('email', $user->email)
+        ->set('timezone', Timezone::Vancouver->value)
+        ->call('updateProfileInformation');
+
+    $response->assertHasNoErrors();
+
+    expect($user->refresh()->timezone)->toBe(Timezone::Vancouver);
+});
+
+test('profile timezone must be a valid timezone', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    $response = Livewire::test('pages::settings.profile')
+        ->set('name', $user->name)
+        ->set('email', $user->email)
+        ->set('timezone', 'Not/A_Timezone')
+        ->call('updateProfileInformation');
+
+    $response->assertHasErrors(['timezone']);
 });
 
 test('email verification status is unchanged when email address is unchanged', function () {

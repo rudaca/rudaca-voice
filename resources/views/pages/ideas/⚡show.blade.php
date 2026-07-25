@@ -503,7 +503,7 @@ new #[Title('Idea')] class extends Component {
                     size="sm"
                     icon="hand-thumb-up"
                     icon:trailing="chevron-down"
-                    class="border-slate-500! text-slate-500! hover:bg-slate-50! dark:border-slate-400! dark:text-slate-400! dark:hover:bg-slate-500/10!"
+                    class="border-slate-500! text-slate-700! hover:bg-slate-50! dark:border-slate-400! dark:text-slate-400! dark:hover:bg-slate-500/10!"
                     data-test="who-voted-trigger"
                 >
                     {{ __('Who voted') }}
@@ -519,17 +519,17 @@ new #[Title('Idea')] class extends Component {
                                         <div class="truncate">
                                             {{ $vote->user->name }}
                                             @if ($vote->user_id === Auth::id())
-                                                <span class="text-slate-500">({{ __('You') }})</span>
+                                                <span class="text-slate-700">({{ __('You') }})</span>
                                             @endif
                                         </div>
                                         <flux:tooltip content="{{ __('Date Voted') }}">
-                                            <div style="font-size:9px" class="truncate  text-slate-500">{{ $vote->created_at->format('M j, Y g:i A') }}</div>
+                                            <div style="font-size:9px" class="truncate  text-slate-700">{{ $vote->created_at->forUser()->format('M j, Y g:i A') }}</div>
                                         </flux:tooltip>
                                     </div>
                                 </div>
                             </flux:menu.item>
                         @empty
-                            <flux:menu.item class="cursor-default text-slate-500">
+                            <flux:menu.item class="cursor-default text-slate-700">
                                 {{ __('No votes yet') }}
                             </flux:menu.item>
                         @endforelse
@@ -583,7 +583,7 @@ new #[Title('Idea')] class extends Component {
                             class="size-5"
                         />
                         <span class="text-lg font-extrabold">{{ $this->voteCount }}</span>
-                        <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-500' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
+                        <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-700' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
                     </button>
                 </flux:tooltip>
 
@@ -624,7 +624,7 @@ new #[Title('Idea')] class extends Component {
                         <span>
                             {{ __('Submitted by') }}
                             <span class="font-medium text-slate-800 dark:text-slate-400">{{ $author }}</span>
-                            · {{ $idea->created_at->format('M j, Y g:i A') }}
+                            · {{ $idea->created_at->forUser()->format('M j, Y g:i A') }}
                         </span>
                     </div>
                 </div>
@@ -702,8 +702,8 @@ new #[Title('Idea')] class extends Component {
                                 @if ($comment->isHidden())
                                     <flux:badge color="red" size="sm" icon="flag">{{ __('Flagged') }}</flux:badge>
                                 @endif
-                                <flux:tooltip content="{{ $comment->created_at->format('M j, Y g:i A') }}">
-                                    <span class="text-xs text-slate-500">{{ $comment->created_at->diffForHumans() }}</span>
+                                <flux:tooltip content="{{ $comment->created_at->forUser()->format('M j, Y g:i A') }}">
+                                    <span class="text-xs text-slate-700">{{ $comment->created_at->diffForHumans() }}</span>
                                 </flux:tooltip>
                             </div>
 
@@ -750,8 +750,8 @@ new #[Title('Idea')] class extends Component {
                 <ui-disclosure class="group/disclosure block overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900" data-test="manage-panel">
                     <button type="button" class="group/disclosure-button flex w-full items-center justify-between p-5" data-test="manage-panel-toggle">
                         <flux:heading size="sm">{{ __('Manage idea') }}</flux:heading>
-                        <flux:icon.chevron-right class="size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:hidden rtl:rotate-180" />
-                        <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:block" />
+                        <flux:icon.chevron-right class="size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:hidden rtl:rotate-180" />
+                        <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:block" />
                     </button>
 
                     <div class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out data-open:grid-rows-[1fr]">
@@ -856,8 +856,8 @@ new #[Title('Idea')] class extends Component {
             <ui-disclosure open class="group/disclosure block overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
                 <button type="button" class="group/disclosure-button flex w-full items-center justify-between p-5" data-test="activity-panel-toggle">
                     <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
-                    <flux:icon.chevron-right class="size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:hidden rtl:rotate-180" />
-                    <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-500 group-data-open/disclosure-button:block" />
+                    <flux:icon.chevron-right class="size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:hidden rtl:rotate-180" />
+                    <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:block" />
                 </button>
 
                 <div class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out data-open:grid-rows-[1fr]" data-open>
@@ -877,7 +877,7 @@ new #[Title('Idea')] class extends Component {
                                         @if ($entry->note)
                                             <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{{ $entry->note }}</p>
                                         @endif
-                                        <p class="mt-1 text-xs text-slate-500">
+                                        <p class="mt-1 text-xs text-slate-700">
                                             {{ $entry->changedBy?->name ?? __('Unknown') }}
                                             @if ($entry->created_at)
                                                 · {{ $entry->created_at->diffForHumans() }}

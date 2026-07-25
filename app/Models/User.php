@@ -4,9 +4,11 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Concerns\HasTeams;
+use App\Enums\Timezone;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,6 +21,7 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property Timezone $timezone
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -39,7 +42,7 @@ use Illuminate\Support\Str;
  * @property-read Collection<int, IdeaVote> $ideaVotes
  * @property-read Collection<int, IdeaComment> $ideaComments
  */
-#[Fillable(['name', 'email', 'password', 'current_team_id'])]
+#[Fillable(['name', 'email', 'timezone', 'password', 'current_team_id'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -60,6 +63,19 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The user's timezone, falling back to the default when unset.
+     *
+     * @return Attribute<Timezone, Timezone|string>
+     */
+    protected function timezone(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => $value !== null ? Timezone::from($value) : Timezone::default(),
+            set: fn (Timezone|string $value) => $value instanceof Timezone ? $value->value : $value,
+        );
     }
 
     /**

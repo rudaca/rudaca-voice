@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Enums\Timezone;
 use App\Models\User;
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -42,6 +45,14 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         Date::use(CarbonImmutable::class);
+
+        $forUser = function () {
+            /** @var Carbon|CarbonImmutable $this */
+            return $this->setTimezone((Auth::user()?->timezone ?? Timezone::default())->value);
+        };
+
+        Carbon::macro('forUser', fn () => $forUser->call($this->copy()));
+        CarbonImmutable::macro('forUser', $forUser);
 
         DB::prohibitDestructiveCommands(
             app()->isProduction(),

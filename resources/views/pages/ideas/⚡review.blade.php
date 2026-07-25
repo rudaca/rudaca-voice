@@ -621,7 +621,7 @@ new #[Title('Review queue')] class extends Component {
 
                         <div class="flex items-center py-1 px-3 bg-gray-100 rounded-lg dark:bg-zinc-800">
                             <div class="flex items-center gap-1.5">
-                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('Created From') }}</flux:text>
+                                <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('Created From') }}</flux:text>
                                 <flux:input type="date" wire:model.live="dateFrom" size="sm" data-test="filter-date-from" @class([
                                     'w-auto',
                                     'border-gray-800! font-semibold! dark:border-gray-400!' => $dateFrom !== '',
@@ -629,7 +629,7 @@ new #[Title('Review queue')] class extends Component {
                             </div>
 
                             <div class="flex items-center gap-1.5">
-                                <flux:text class="shrink-0 text-xs text-slate-500 dark:text-slate-500">{{ __('To') }}</flux:text>
+                                <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('To') }}</flux:text>
                                 <flux:input type="date" wire:model.live="dateTo" size="sm" data-test="filter-date-to" @class([
                                     'w-auto',
                                     'border-gray-800! font-semibold! dark:border-gray-400!' => $dateTo !== '',
@@ -653,7 +653,7 @@ new #[Title('Review queue')] class extends Component {
             >
                 <div class="flex w-14 shrink-0 flex-col items-center gap-0.5 self-start rounded-lg border border-zinc-200 py-1.5 dark:border-zinc-700 sm:self-center">
                     <span class="text-base font-extrabold text-slate-900 dark:text-slate-200">{{ $idea->votes_count }}</span>
-                    <flux:icon.chevron-up class="size-3 text-slate-500" />
+                    <flux:icon.chevron-up class="size-3 text-slate-700" />
                 </div>
 
                 <div class="min-w-0 flex-1">
@@ -686,7 +686,7 @@ new #[Title('Review queue')] class extends Component {
 
                         <span aria-hidden="true" class="text-base leading-none">&middot;</span>
 
-                        <span>{{ $idea->created_at->format('M j, Y') }}</span>
+                        <span>{{ $idea->created_at->forUser()->format('M j, Y') }}</span>
                     </div>
                 </div>
 
