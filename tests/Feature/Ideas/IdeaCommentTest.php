@@ -2,6 +2,7 @@
 
 use App\Enums\TeamRole;
 use App\Models\IdeaComment;
+use App\Models\User;
 use Livewire\Livewire;
 
 test('owner, admin, manager and employee can comment on an idea', function (TeamRole $role) {
@@ -84,4 +85,59 @@ test('the comment composer is hidden for a viewer', function () {
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->assertSee('Viewers have read-only access')
         ->assertDontSee('Comment');
+});
+
+test('an admin can flag and unflag a comment from the idea page', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+    $comment = IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->call('hideComment', $comment->id)
+        ->assertHasNoErrors();
+
+    expect($comment->refresh()->isHidden())->toBeTrue();
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->call('unhideComment', $comment->id)
+        ->assertHasNoErrors();
+
+    expect($comment->refresh()->isHidden())->toBeFalse();
+});
+
+test('a manager cannot flag a comment from the idea page', function () {
+    ['team' => $team, 'user' => $author] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+    $comment = IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $author->id]);
+
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+    $manager->switchTeam($team);
+
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->call('hideComment', $comment->id)
+        ->assertStatus(403);
+
+    expect($comment->refresh()->isHidden())->toBeFalse();
+});
+
+test('the moderation menu is hidden from a manager but visible to an admin', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id]);
+
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+    $manager->switchTeam($team);
+
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertDontSeeHtml('data-test="comment-actions-trigger"');
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertSeeHtml('data-test="comment-actions-trigger"');
 });

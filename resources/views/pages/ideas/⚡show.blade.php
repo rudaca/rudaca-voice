@@ -130,6 +130,15 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
+     * Whether the current user may flag or unflag comments (admin and above).
+     */
+    #[Computed]
+    public function canModerate(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Admin) ?? false;
+    }
+
+    /**
      * Update the idea's triage fields. Records a status-history entry only when the status changes.
      */
     public function updateManagement(): void
@@ -354,6 +363,36 @@ new #[Title('Idea')] class extends Component {
         unset($this->comments);
 
         Flux::toast(variant: 'success', text: __('Comment deleted.'));
+    }
+
+    /**
+     * Flag a comment, replacing it with a moderation notice in this thread (admin and above).
+     */
+    public function hideComment(int $commentId): void
+    {
+        abort_unless($this->canModerate, 403);
+
+        $comment = $this->ideaModel->comments()->whereKey($commentId)->firstOrFail();
+        $comment->hide(Auth::id());
+
+        unset($this->comments);
+
+        Flux::toast(variant: 'success', text: __('Comment flagged.'));
+    }
+
+    /**
+     * Unflag a previously flagged comment, restoring it in this thread (admin and above).
+     */
+    public function unhideComment(int $commentId): void
+    {
+        abort_unless($this->canModerate, 403);
+
+        $comment = $this->ideaModel->comments()->whereKey($commentId)->firstOrFail();
+        $comment->unhide();
+
+        unset($this->comments);
+
+        Flux::toast(variant: 'success', text: __('Comment unflagged.'));
     }
 
     #[Computed]
@@ -723,16 +762,56 @@ new #[Title('Idea')] class extends Component {
                                 <div class="mt-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</div>
                             @endif
                         </div>
-                        @if ($this->canDelete)
-                            <flux:button
-                                wire:click="deleteComment({{ $comment->id }})"
-                                wire:confirm="{{ __('Delete this comment?') }}"
-                                variant="ghost"
-                                size="sm"
-                                icon="trash"
-                                class="text-red-600"
-                                data-test="delete-comment"
-                            />
+                        @if ($this->canModerate || $this->canDelete)
+                            <flux:dropdown position="bottom" align="end">
+                                <flux:button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="ellipsis-vertical"
+                                    icon:variant="outline"
+                                    :square="false"
+                                    data-test="comment-actions-trigger"
+                                />
+
+                                <flux:menu>
+                                    @if ($this->canModerate)
+                                        @if ($comment->isHidden())
+                                            <flux:menu.item
+                                                wire:click="unhideComment({{ $comment->id }})"
+                                                icon="flag-slash"
+                                                icon:variant="outline"
+                                                class="text-red-600! hover:text-red-700! dark:text-red-400! dark:hover:text-red-300! data-flux-menu-item-icon:text-red-600! dark:data-flux-menu-item-icon:text-red-400!"
+                                                data-test="unhide-comment"
+                                            >
+                                                {{ __('Unflag') }}
+                                            </flux:menu.item>
+                                        @else
+                                            <flux:menu.item
+                                                wire:click="hideComment({{ $comment->id }})"
+                                                icon="flag"
+                                                icon:variant="outline"
+                                                class="text-red-600! hover:text-red-700! dark:text-red-400! dark:hover:text-red-300! data-flux-menu-item-icon:text-red-600! dark:data-flux-menu-item-icon:text-red-400!"
+                                                data-test="hide-comment"
+                                            >
+                                                {{ __('Flag') }}
+                                            </flux:menu.item>
+                                        @endif
+                                    @endif
+
+                                    @if ($this->canDelete)
+                                        <flux:menu.item
+                                            wire:click="deleteComment({{ $comment->id }})"
+                                            wire:confirm="{{ __('Delete this comment?') }}"
+                                            icon="trash"
+                                            icon:variant="outline"
+                                            class="text-red-600! hover:text-red-700! dark:text-red-400! dark:hover:text-red-300! data-flux-menu-item-icon:text-red-600! dark:data-flux-menu-item-icon:text-red-400!"
+                                            data-test="delete-comment"
+                                        >
+                                            {{ __('Delete') }}
+                                        </flux:menu.item>
+                                    @endif
+                                </flux:menu>
+                            </flux:dropdown>
                         @endif
                     </div>
                 @empty
