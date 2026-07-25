@@ -74,7 +74,7 @@
                 <flux:separator variant="subtle" class="sidebar-divider" />
 
                 <flux:sidebar.nav>
-                    <div class="in-data-flux-sidebar-collapsed-desktop:hidden px-4 pt-1 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">
+                    <div class="in-data-flux-sidebar-collapsed-desktop:hidden px-4 pt-1 pb-1 text-xs font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-600">
                         {{ __('Administration') }}
                     </div>
 
@@ -120,7 +120,7 @@
                 <flux:separator variant="subtle" class="sidebar-divider" />
 
                 <div class="in-data-flux-sidebar-collapsed-desktop:hidden mt-2 px-3">
-                    <div class="flex items-center gap-1.5 px-1 py-2 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-600">
+                    <div class="flex items-center gap-1.5 px-1 py-2 text-xs font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-600">
                         <flux:icon.chalkboard class="size-3.5" />
                         {{ __('Boards') }}
                     </div>
@@ -160,7 +160,7 @@
 
             <flux:separator variant="subtle" class="sidebar-divider" />
 
-            <x-desktop-user-menu class="hidden lg:block" :role="$__currentRole" />
+            <x-desktop-user-menu class="hidden lg:block" :is-super-admin="$__isSuperAdmin" />
         </flux:sidebar>
 
         <!-- Header -->

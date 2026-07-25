@@ -284,7 +284,7 @@ test('Top Boards counts unique contributors across idea submitters and commenter
     expect($board->contributors_count)->toBe(3);
 });
 
-test('Top Contributors ranks members by ideas then comments, tie-broken alphabetically', function () {
+test('Top Contributors ranks members by ideas plus comments, tie-broken alphabetically', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
 
     $alice = User::factory()->create(['name' => 'Alice Zephyr']);
@@ -295,23 +295,23 @@ test('Top Contributors ranks members by ideas then comments, tie-broken alphabet
     $boardOne = boardStack($team);
     $boardTwo = boardStack($team);
 
-    // Alice: 2 ideas across 2 boards, 1 comment.
+    // Alice: 2 ideas across 2 boards, 1 comment — total 3.
     $aliceIdea = makeIdea($team, ['submitted_by_user_id' => $alice->id, 'board_id' => $boardOne['board']->id, 'board_group_id' => $boardOne['board']->board_group_id, 'category_id' => $boardOne['category']->id]);
     makeIdea($team, ['submitted_by_user_id' => $alice->id, 'board_id' => $boardTwo['board']->id, 'board_group_id' => $boardTwo['board']->board_group_id, 'category_id' => $boardTwo['category']->id]);
     IdeaComment::factory()->create(['idea_id' => $aliceIdea->id, 'user_id' => $alice->id]);
 
-    // Bob: 1 idea, 3 comments.
+    // Bob: 1 idea, 3 comments — total 4, ranks first despite fewer ideas than Alice.
     $bobIdea = makeIdea($team, ['submitted_by_user_id' => $bob->id, 'board_id' => $boardOne['board']->id, 'board_group_id' => $boardOne['board']->board_group_id, 'category_id' => $boardOne['category']->id]);
     IdeaComment::factory()->count(3)->create(['idea_id' => $bobIdea->id, 'user_id' => $bob->id]);
 
-    // Carol: 1 idea, 1 comment — ties Bob on ideas but loses on comments.
+    // Carol: 1 idea, 1 comment — total 2, ranks last.
     $carolIdea = makeIdea($team, ['submitted_by_user_id' => $carol->id, 'board_id' => $boardOne['board']->id, 'board_group_id' => $boardOne['board']->board_group_id, 'category_id' => $boardOne['category']->id]);
     IdeaComment::factory()->create(['idea_id' => $carolIdea->id, 'user_id' => $carol->id]);
 
     Livewire::actingAs($owner)
         ->test('pages::dashboard')
         ->set('boardsTab', 'contributors')
-        ->assertSeeInOrder(['Alice Zephyr', 'Bob Young', 'Carol Xu']);
+        ->assertSeeInOrder(['Bob Young', 'Alice Zephyr', 'Carol Xu']);
 });
 
 test('Top Contributors shows each contributor role with its badge color', function () {

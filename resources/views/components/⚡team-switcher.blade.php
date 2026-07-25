@@ -2,9 +2,12 @@
 
 use App\Data\UserTeam;
 use App\Enums\TeamRole;
+use App\Models\Idea;
 use App\Models\Team;
+use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route as RouteFacade;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -108,9 +111,9 @@ new class extends Component {
             request()->header('Referer'),
             $currentTeamSlug,
             $team->slug,
-        );
+        ) ?? request()->header('Referer');
 
-        $this->redirect($redirectTo ?? request()->header('Referer'), navigate: true);
+        $this->redirect($this->avoidDeadIdeaLink($redirectTo, $team), navigate: true);
     }
 
     protected function replaceCurrentTeamInReferer(string $referer, string $currentTeamSlug, string $newTeamSlug): ?string
@@ -128,6 +131,33 @@ new class extends Component {
             $redirectTo ?? $referer,
             1,
         );
+    }
+
+    /**
+     * The team switch just rewrites the team segment of the current URL, so
+     * switching away from an idea's detail page carries its slug over into
+     * the new team — where it likely doesn't exist. Redirect to the
+     * dashboard instead of landing on a dead idea link.
+     */
+    protected function avoidDeadIdeaLink(string $redirectTo, Team $team): string
+    {
+        try {
+            $route = RouteFacade::getRoutes()->match(HttpRequest::create($redirectTo));
+        } catch (\Throwable) {
+            return $redirectTo;
+        }
+
+        if ($route->getName() !== 'ideas.show') {
+            return $redirectTo;
+        }
+
+        $exists = Idea::query()
+            ->where('team_id', $team->id)
+            ->where('slug', $route->parameter('idea'))
+            ->visibleTo(Auth::user()->teamRole($team), Auth::id())
+            ->exists();
+
+        return $exists ? $redirectTo : route('dashboard', ['current_team' => $team->slug]);
     }
 }; ?>
 
@@ -216,7 +246,7 @@ new class extends Component {
                                 <span class="truncate">{{ $team->name }}</span>
                                 <div class="flex shrink-0 items-center gap-1.5">
                                     <flux:tooltip content="{{ __('View only') }}">
-                                        <flux:icon name="eye" variant="outline" class="size-4 text-slate-500" />
+                                        <flux:icon name="eye" variant="outline" class="size-4 text-slate-700" />
                                     </flux:tooltip>
                                     @if ($team->isCurrent)
                                         <flux:icon name="check" class="size-4" />
