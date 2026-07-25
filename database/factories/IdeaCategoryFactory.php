@@ -19,6 +19,8 @@ class IdeaCategoryFactory extends Factory
      */
     public function definition(): array
     {
+        // Suffixed with a unique number since the category filter matches by name, and
+        // two categories sharing a name in the same test would make them indistinguishable.
         $name = fake()->randomElement([
             'Process Improvement',
             'Software Request',
@@ -27,7 +29,7 @@ class IdeaCategoryFactory extends Factory
             'Customer Service',
             'HR / Onboarding',
             'Cost Savings',
-        ]);
+        ]).' '.fake()->unique()->numberBetween(1, 999999);
 
         return [
             // Derive team_id from the board so the graph stays internally consistent.
