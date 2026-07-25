@@ -30,7 +30,7 @@
             >
                 <flux:icon.chevron-right class="size-3.5 shrink-0 transition-transform duration-200 ease-out rtl:-scale-x-100" :class="{ 'rotate-90': open }" />
                 <span class="truncate">{{ $group->name }}</span>
-                <span class="ms-auto font-normal text-slate-500 dark:text-slate-600">{{ $group->boards->sum('ideas_count') }}</span>
+                <span class="ms-auto font-normal text-slate-700 dark:text-slate-600">{{ $group->boards->sum('ideas_count') }}</span>
             </div>
 
             <div class="grid transition-[grid-template-rows] duration-200 ease-out" :class="open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
@@ -48,7 +48,7 @@
                         >
                             <x-board-avatar :name="$board->name" :index="$boardTileIndex++" size="size-6 text-xs" />
                             <span class="min-w-0 flex-1 truncate">{{ $board->name }}</span>
-                            <span class="text-xs text-slate-500 dark:text-slate-600">{{ $board->ideas_count }}</span>
+                            <span class="text-xs text-slate-700 dark:text-slate-600">{{ $board->ideas_count }}</span>
                         </a>
                     @endforeach
                 </div>
@@ -69,7 +69,7 @@
         >
             <x-board-avatar :name="$board->name" :index="$boardTileIndex++" size="size-6 text-xs" />
             <span class="min-w-0 flex-1 truncate">{{ $board->name }}</span>
-            <span class="text-xs text-slate-500 dark:text-slate-600">{{ $board->ideas_count }}</span>
+            <span class="text-xs text-slate-700 dark:text-slate-600">{{ $board->ideas_count }}</span>
         </a>
     @endforeach
 </div>

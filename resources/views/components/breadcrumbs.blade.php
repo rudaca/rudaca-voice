@@ -37,7 +37,7 @@
             <flux:dropdown position="bottom" align="start">
                 <button
                     type="button"
-                    class="flex items-center rounded px-1 text-slate-500 transition hover:text-slate-800 dark:hover:text-slate-300"
+                    class="flex items-center rounded px-1 text-slate-700 transition hover:text-slate-800 dark:hover:text-slate-300"
                     data-test="breadcrumbs-ellipsis"
                 >
                     <flux:icon name="ellipsis-horizontal" variant="outline" class="size-4" />
