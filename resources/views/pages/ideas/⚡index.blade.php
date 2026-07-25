@@ -852,7 +852,9 @@ new class extends Component {
                             @if ($idea->category)
                                 <span aria-hidden="true" class="text-base leading-none">·</span>
                                 <flux:tooltip :content="__('Category')">
-                                    <flux:badge color="zinc" size="sm" variant="outline">{{ $idea->category->name }}</flux:badge>
+                                    <a href="{{ route('ideas.index', ['category' => [$idea->category->name]]) }}" wire:navigate class="hover:underline">
+                                        <flux:badge color="zinc" size="sm" variant="outline">{{ $idea->category->name }}</flux:badge>
+                                    </a>
                                 </flux:tooltip>
                             @endif
 

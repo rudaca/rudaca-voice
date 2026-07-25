@@ -74,6 +74,8 @@ new #[Title('Review queue')] class extends Component {
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
         'under_review' => ['label' => 'Under Review', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
+        'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
+        'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
     ];
 
     /**
@@ -310,11 +312,15 @@ new #[Title('Review queue')] class extends Component {
     }
 
     /**
-     * Approve a queued idea, moving it to Planned.
+     * Approve a queued idea: New moves to Under Review first; Under Review moves to Planned.
      */
     public function approve(int $ideaId): void
     {
-        $this->decide($ideaId, 'planned');
+        abort_unless($this->canReview, 403);
+
+        $idea = $this->queueQuery()->findOrFail($ideaId);
+
+        $this->decide($idea, $this->approveTargetStatus($idea->status));
 
         Flux::toast(variant: 'success', text: __('Idea approved.'));
     }
@@ -324,20 +330,28 @@ new #[Title('Review queue')] class extends Component {
      */
     public function decline(int $ideaId): void
     {
-        $this->decide($ideaId, 'not_doing');
+        abort_unless($this->canReview, 403);
+
+        $idea = $this->queueQuery()->findOrFail($ideaId);
+
+        $this->decide($idea, 'not_doing');
 
         Flux::toast(variant: 'success', text: __('Idea declined.'));
     }
 
     /**
+     * The status approving an idea currently at the given status would move it to.
+     */
+    public function approveTargetStatus(string $currentStatus): string
+    {
+        return $currentStatus === 'new' ? 'under_review' : 'planned';
+    }
+
+    /**
      * Move a queued idea to the given status and record the change in its history.
      */
-    private function decide(int $ideaId, string $newStatus): void
+    private function decide(Idea $idea, string $newStatus): void
     {
-        abort_unless($this->canReview, 403);
-
-        $idea = $this->queueQuery()->findOrFail($ideaId);
-
         $previousStatus = $idea->status;
 
         $idea->update(['status' => $newStatus]);
@@ -365,6 +379,19 @@ new #[Title('Review queue')] class extends Component {
     public function statusMeta(string $status): array
     {
         return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
+    }
+
+    /**
+     * Tailwind text-color classes matching a status badge's color, for inline status text.
+     */
+    public function statusTextClass(string $color): string
+    {
+        return match ($color) {
+            'amber' => 'text-amber-700 dark:text-amber-400',
+            'blue' => 'text-blue-700 dark:text-blue-400',
+            'red' => 'text-red-700 dark:text-red-400',
+            default => 'text-zinc-700 dark:text-zinc-300',
+        };
     }
 }; ?>
 
@@ -645,6 +672,7 @@ new #[Title('Review queue')] class extends Component {
     <div class="mt-4 space-y-3">
         @forelse ($this->ideas as $idea)
             @php($meta = $this->statusMeta($idea->status))
+            @php($approveTargetMeta = $this->statusMeta($this->approveTargetStatus($idea->status)))
             @php($authorName = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
             <div
                 class="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900 sm:flex-row sm:items-center"
@@ -669,13 +697,21 @@ new #[Title('Review queue')] class extends Component {
 
                         <span aria-hidden="true" class="text-base leading-none">&middot;</span>
 
-                        <flux:badge :color="$meta['color']" size="sm">
-                            <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
-                        </flux:badge>
+                        <flux:tooltip :content="__('Current status')">
+                            <a href="{{ route('ideas.review', ['status' => $idea->status]) }}" wire:navigate class="hover:underline">
+                                <flux:badge :color="$meta['color']" size="sm">
+                                    <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                                </flux:badge>
+                            </a>
+                        </flux:tooltip>
 
                         @if ($idea->board)
                             <span aria-hidden="true" class="text-base leading-none">&middot;</span>
-                            <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $idea->board->name }}</flux:badge>
+                            <flux:tooltip :content="__('The board where the idea was submitted')">
+                                <a href="{{ route('ideas.review', ['board' => [$idea->board_id]]) }}" wire:navigate class="hover:underline">
+                                    <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $idea->board->name }}</flux:badge>
+                                </a>
+                            </flux:tooltip>
                         @endif
 
                         <span aria-hidden="true" class="text-base leading-none">&middot;</span>
@@ -691,26 +727,63 @@ new #[Title('Review queue')] class extends Component {
                 </div>
 
                 <div class="flex shrink-0 items-center gap-2">
-                    <flux:button
-                        variant="ghost"
-                        size="sm"
-                        class="review-action-button border border-emerald-600 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-400 dark:hover:bg-emerald-950"
-                        wire:click="approve({{ $idea->id }})"
-                        data-test="approve-idea"
-                    >
-                        {{ __('Approve') }}
-                    </flux:button>
+                    <flux:modal.trigger name="confirm-approve-{{ $idea->id }}">
+                        <flux:button
+                            variant="ghost"
+                            size="sm"
+                            class="review-action-button border border-emerald-600 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                            data-test="approve-idea"
+                        >
+                            {{ __('Approve') }}
+                        </flux:button>
+                    </flux:modal.trigger>
 
-                    <flux:button
-                        variant="ghost"
-                        size="sm"
-                        class="review-action-button border border-red-600 text-red-600 hover:bg-red-50 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-950"
-                        wire:click="decline({{ $idea->id }})"
-                        data-test="decline-idea"
-                    >
-                        {{ __('Decline') }}
-                    </flux:button>
+                    <flux:modal.trigger name="confirm-decline-{{ $idea->id }}">
+                        <flux:button
+                            variant="ghost"
+                            size="sm"
+                            class="review-action-button border border-red-600 text-red-600 hover:bg-red-50 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-950"
+                            data-test="decline-idea"
+                        >
+                            {{ __('Decline') }}
+                        </flux:button>
+                    </flux:modal.trigger>
                 </div>
+
+                {{-- Confirm approve modal --}}
+                <flux:modal name="confirm-approve-{{ $idea->id }}" class="max-w-lg" :dismissible="false" data-test="confirm-approve-modal">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">{{ __('Approve this idea?') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {!! __('You are about to move this idea into :target from :current status.', [
+                                    'target' => '<span class="font-semibold '.$this->statusTextClass($approveTargetMeta['color']).'">'.e($approveTargetMeta['label']).'</span>',
+                                    'current' => '<span class="font-semibold '.$this->statusTextClass($meta['color']).'">'.e($meta['label']).'</span>',
+                                ]) !!}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost" data-test="confirm-approve-cancel">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button wire:click="approve({{ $idea->id }})" variant="primary" data-test="confirm-approve-yes">{{ __('Approve') }}</flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
+
+                {{-- Confirm decline modal --}}
+                <flux:modal name="confirm-decline-{{ $idea->id }}" class="max-w-lg" :dismissible="false" data-test="confirm-decline-modal">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">{{ __('Decline this idea?') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('You are about to move this idea to Declined status.') }}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost" data-test="confirm-decline-cancel">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button wire:click="decline({{ $idea->id }})" variant="danger" data-test="confirm-decline-yes">{{ __('Decline') }}</flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
             </div>
         @empty
             <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="review-empty">
