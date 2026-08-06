@@ -29,6 +29,17 @@ new #[Title('Submit idea')] class extends Component {
     public bool $is_private = false;
 
     /**
+     * Whether the board group and board were inherited from a specific board's context
+     * (as opposed to a board group scoped view or general navigation). When true, the
+     * board group and board fields are locked and cannot be changed by the user.
+     */
+    public bool $boardLocked = false;
+
+    public string $lockedBoardGroupId = '';
+
+    public string $lockedBoardId = '';
+
+    /**
      * Preselect the board group, board, and/or category when arriving from a scoped
      * view, e.g. `ideas/create?board=5&category=Bug` (preselects the board, its group,
      * and the matching category) or `ideas/create?group=3` (preselects the group only).
@@ -36,6 +47,10 @@ new #[Title('Submit idea')] class extends Component {
      * is inactive, or belongs to another team/board. A valid `board` takes precedence
      * over `group`; `category` only applies alongside a valid `board`, since category
      * names aren't unique across boards.
+     *
+     * When a specific board is inherited this way, the board group and board are locked
+     * (see updatedBoardGroupId()/updatedBoardId() and save()) so the user cannot change
+     * where the idea is submitted.
      */
     public function mount(): void
     {
@@ -47,6 +62,10 @@ new #[Title('Submit idea')] class extends Component {
             if ($board !== null) {
                 $this->board_group_id = (string) $board->board_group_id;
                 $this->board_id = (string) $board->id;
+
+                $this->boardLocked = true;
+                $this->lockedBoardGroupId = $this->board_group_id;
+                $this->lockedBoardId = $this->board_id;
 
                 $this->preselectCategory($board->id, request()->query('category'));
 
@@ -86,20 +105,49 @@ new #[Title('Submit idea')] class extends Component {
     }
 
     /**
-     * Reset the chosen board and category when the group changes.
+     * Reset the chosen board and category when the group changes. When the board group
+     * is locked, revert any change instead — this guards against both accidental edits
+     * and a client attempting to change the value directly.
      */
     public function updatedBoardGroupId(): void
     {
+        if ($this->boardLocked) {
+            $this->board_group_id = $this->lockedBoardGroupId;
+
+            return;
+        }
+
         $this->board_id = '';
         $this->category_id = '';
     }
 
     /**
      * Reset the chosen category whenever the board changes (categories are board-specific).
+     * When the board is locked, revert any change instead — see updatedBoardGroupId().
      */
     public function updatedBoardId(): void
     {
+        if ($this->boardLocked) {
+            $this->board_id = $this->lockedBoardId;
+
+            return;
+        }
+
         $this->category_id = '';
+    }
+
+    /**
+     * The locked board, for display alongside its board group name. Null unless a
+     * specific board's context was inherited.
+     */
+    #[Computed]
+    public function lockedBoard(): ?IdeaBoard
+    {
+        if (! $this->boardLocked) {
+            return null;
+        }
+
+        return $this->team->boards()->with('boardGroup')->find($this->board_id);
     }
 
     #[Computed]
@@ -221,6 +269,11 @@ new #[Title('Submit idea')] class extends Component {
      */
     public function save(): void
     {
+        if ($this->boardLocked) {
+            $this->board_group_id = $this->lockedBoardGroupId;
+            $this->board_id = $this->lockedBoardId;
+        }
+
         $validated = $this->validate();
 
         $team = $this->team;
@@ -318,31 +371,29 @@ new #[Title('Submit idea')] class extends Component {
                 data-test="idea-title"
             />
 
-            <flux:select wire:model.live="board_group_id" :label="__('Board group')" :placeholder="__('Choose a board group')" required data-test="idea-board-group">
-                @foreach ($this->boardGroups as $group)
-                    <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
-                @endforeach
-            </flux:select>
+            @if ($this->boardLocked)
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" data-test="idea-board-context">
+                    <div>
+                        <flux:label>{{ __('Board group') }}</flux:label>
+                        <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300" data-test="idea-board-context-group">
+                            <flux:icon.rectangle-group class="size-4 shrink-0 text-slate-500 dark:text-slate-400" />
+                            {{ $this->lockedBoard?->boardGroup?->name }}
+                        </div>
+                    </div>
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <flux:select
-                    wire:model.live="board_id"
-                    :label="__('Board')"
-                    :placeholder="$this->board_group_id === '' ? __('Select a board group first') : __('Choose a board')"
-                    :disabled="$this->board_group_id === ''"
-                    required
-                    data-test="idea-board"
-                >
-                    @foreach ($this->boards as $board)
-                        <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
+                    <div>
+                        <flux:label>{{ __('Board') }}</flux:label>
+                        <div class="mt-1.5 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300" data-test="idea-board-context-board">
+                            <flux:icon.squares-2x2 class="size-4 shrink-0 text-slate-500 dark:text-slate-400" />
+                            {{ $this->lockedBoard?->name }}
+                        </div>
+                    </div>
+                </div>
 
                 <flux:select
                     wire:model="category_id"
                     :label="__('Category')"
-                    :placeholder="$this->board_id === '' ? __('Select a board first') : __('Choose a category')"
-                    :disabled="$this->board_id === ''"
+                    :placeholder="__('Choose a category')"
                     required
                     data-test="idea-category"
                 >
@@ -350,7 +401,41 @@ new #[Title('Submit idea')] class extends Component {
                         <flux:select.option value="{{ $category->id }}">{{ $category->name }}</flux:select.option>
                     @endforeach
                 </flux:select>
-            </div>
+            @else
+                <flux:select wire:model.live="board_group_id" :label="__('Board group')" :placeholder="__('Choose a board group')" required data-test="idea-board-group">
+                    @foreach ($this->boardGroups as $group)
+                        <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <flux:select
+                        wire:model.live="board_id"
+                        :label="__('Board')"
+                        :placeholder="$this->board_group_id === '' ? __('Select a board group first') : __('Choose a board')"
+                        :disabled="$this->board_group_id === ''"
+                        required
+                        data-test="idea-board"
+                    >
+                        @foreach ($this->boards as $board)
+                            <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+
+                    <flux:select
+                        wire:model="category_id"
+                        :label="__('Category')"
+                        :placeholder="$this->board_id === '' ? __('Select a board first') : __('Choose a category')"
+                        :disabled="$this->board_id === ''"
+                        required
+                        data-test="idea-category"
+                    >
+                        @foreach ($this->categories as $category)
+                            <flux:select.option value="{{ $category->id }}">{{ $category->name }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </div>
+            @endif
 
             <flux:textarea
                 wire:model="description"
