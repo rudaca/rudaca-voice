@@ -578,7 +578,7 @@ new #[Title('Idea')] class extends Component {
         @endif
     </div>
 
-    <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+    <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
         {{-- Main column --}}
         <div>
             @if ($this->duplicateOriginal)
@@ -588,7 +588,7 @@ new #[Title('Idea')] class extends Component {
                 </div>
             @endif
 
-            <div class="flex gap-4">
+            <div class="flex gap-3">
                 {{-- Vote toggle --}}
                 <flux:tooltip :content="$this->canParticipate ? ($this->hasVoted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
                     <button
@@ -598,7 +598,7 @@ new #[Title('Idea')] class extends Component {
                         @disabled(! $this->canParticipate)
                         aria-pressed="{{ $this->hasVoted ? 'true' : 'false' }}"
                         @class([
-                            'flex w-[72px] shrink-0 flex-col items-center justify-center gap-1 self-start rounded-xl border py-3 transition',
+                            'flex w-[72px] shrink-0 flex-col py-2.5 items-center justify-center gap-1 rounded-xl border transition',
                             'cursor-not-allowed opacity-60' => ! $this->canParticipate,
                             'cursor-pointer' => $this->canParticipate,
                             'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $this->hasVoted,
@@ -656,43 +656,26 @@ new #[Title('Idea')] class extends Component {
                         @endif
                     </div>
 
-                    <div
-                        class="mt-3 inline-flex"
-                        x-data="{ copied: false, copy() { navigator.clipboard.writeText(@js('#'.$idea->id.' '.$idea->title)); copied = true; setTimeout(() => copied = false, 2000) } }"
-                    >
-                        <flux:tooltip position="top">
-                            <button
-                                type="button"
-                                x-on:click="copy()"
-                                class="text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-500 dark:hover:text-slate-300"
-                                data-test="idea-reference"
-                            >
-                                {{ __('Idea') }} #{{ $idea->id }}
-                            </button>
-
-                            <flux:tooltip.content>
-                                <span x-show="!copied">{{ __('Click to Copy ID # and Idea title') }}</span>
-                                <span x-show="copied" x-cloak>{{ __('Copied!') }}</span>
-                            </flux:tooltip.content>
-                        </flux:tooltip>
+                    <div class="mt-1.5 text-xs font-medium text-slate-600 dark:text-slate-500" data-test="idea-reference">
+                        {{ __('Idea') }} #{{ $idea->id }}
                     </div>
 
-                    <flux:heading size="xl" class="mt-1">{{ $idea->title }}</flux:heading>
-
-                    <div class="mt-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
-                        <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
-                        <span>
-                            {{ __('Submitted by') }}
-                            <span class="font-medium text-slate-800 dark:text-slate-400">{{ $author }}</span>
-                            · {{ $idea->created_at->forUser()->format('M j, Y g:i A') }}
-                        </span>
-                    </div>
+                    <flux:heading size="xl" class="mt-0.5">{{ $idea->title }}</flux:heading>
                 </div>
             </div>
 
-            <div class="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
+            <div class="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
+                <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
+                <span>
+                    {{ __('Submitted by') }}
+                    <span class="font-medium text-slate-800 dark:text-slate-400">{{ $author }}</span>
+                    · {{ $idea->created_at->forUser()->format('M j, Y g:i A') }}
+                </span>
+            </div>
 
-            <flux:separator class="my-8" />
+            <div class="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
+
+            <flux:separator class="my-6" />
 
             {{-- Comments --}}
             <flux:heading size="lg">
