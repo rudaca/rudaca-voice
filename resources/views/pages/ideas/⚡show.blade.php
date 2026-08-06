@@ -656,7 +656,28 @@ new #[Title('Idea')] class extends Component {
                         @endif
                     </div>
 
-                    <flux:heading size="xl" class="mt-3">{{ $idea->title }}</flux:heading>
+                    <div
+                        class="mt-3 inline-flex"
+                        x-data="{ copied: false, copy() { navigator.clipboard.writeText(@js('#'.$idea->id.' '.$idea->title)); copied = true; setTimeout(() => copied = false, 2000) } }"
+                    >
+                        <flux:tooltip position="top">
+                            <button
+                                type="button"
+                                x-on:click="copy()"
+                                class="text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-500 dark:hover:text-slate-300"
+                                data-test="idea-reference"
+                            >
+                                {{ __('Idea') }} #{{ $idea->id }}
+                            </button>
+
+                            <flux:tooltip.content>
+                                <span x-show="!copied">{{ __('Click to Copy ID # and Idea title') }}</span>
+                                <span x-show="copied" x-cloak>{{ __('Copied!') }}</span>
+                            </flux:tooltip.content>
+                        </flux:tooltip>
+                    </div>
+
+                    <flux:heading size="xl" class="mt-1">{{ $idea->title }}</flux:heading>
 
                     <div class="mt-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
                         <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />

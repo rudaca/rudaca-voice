@@ -204,6 +204,7 @@ new class extends Component {
                             >
                                 <flux:icon.light-bulb class="mt-0.5 size-4 shrink-0 text-slate-700" />
                                 <div class="min-w-0 flex-1">
+                                    <div class="text-xs text-slate-600 dark:text-slate-500">{{ __('Idea') }} #{{ $idea->id }}</div>
                                     <span class="block truncate text-sm font-semibold">{{ $idea->title }}</span>
                                     <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                                         <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />

@@ -610,6 +610,8 @@ new #[Title('Dashboard')] class extends Component {
                             </flux:modal>
 
                             <div class="min-w-0 flex-1">
+                                <div class="text-xs text-slate-600 dark:text-slate-500">{{ __('Idea') }} #{{ $idea->id }}</div>
+
                                 <div class="flex min-w-0 items-center gap-1.5">
                                     <a
                                         href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"

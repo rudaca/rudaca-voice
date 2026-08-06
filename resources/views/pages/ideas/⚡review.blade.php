@@ -685,6 +685,8 @@ new #[Title('Review queue')] class extends Component {
                 </div>
 
                 <div class="min-w-0 flex-1">
+                    <div class="text-xs text-slate-600 dark:text-slate-500">{{ __('Idea') }} #{{ $idea->id }}</div>
+
                     <a href="{{ route('ideas.show', ['idea' => $idea->slug]) }}" wire:navigate class="hover:underline">
                         <flux:heading size="lg" class="w-fit max-w-full truncate">{{ $idea->title }}</flux:heading>
                     </a>
