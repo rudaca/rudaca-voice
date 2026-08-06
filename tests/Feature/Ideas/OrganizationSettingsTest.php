@@ -468,3 +468,123 @@ test('quick-adding a category on the Categories tab creates it against the chose
         ->and($category->board_id)->toBe($stack['board']->id)
         ->and($category->is_active)->toBeTrue();
 });
+
+// The Categories tab has no Livewire-tracked "open"/"collapsed" property — sections
+// collapse client-side only (Alpine), so the full category list and every idea count
+// are always present in the server-rendered HTML below, regardless of section state.
+test('the Categories tab groups categories under their board, disambiguates same-named categories across boards, and preserves idea counts', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    $group = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id]);
+    $boardA = IdeaBoard::factory()->create(['team_id' => $team->id, 'board_group_id' => $group->id, 'created_by_user_id' => $admin->id, 'name' => 'Accounting', 'sort_order' => 1]);
+    $boardB = IdeaBoard::factory()->create(['team_id' => $team->id, 'board_group_id' => $group->id, 'created_by_user_id' => $admin->id, 'name' => 'Operations', 'sort_order' => 2]);
+
+    $automationA = IdeaCategory::factory()->create(['team_id' => $team->id, 'board_id' => $boardA->id, 'name' => 'Automation', 'slug' => 'automation']);
+    $reportingA = IdeaCategory::factory()->create(['team_id' => $team->id, 'board_id' => $boardA->id, 'name' => 'Reporting', 'slug' => 'reporting']);
+    $automationB = IdeaCategory::factory()->create(['team_id' => $team->id, 'board_id' => $boardB->id, 'name' => 'Automation', 'slug' => 'automation']);
+
+    Idea::factory()->count(2)->create(['team_id' => $team->id, 'board_id' => $boardA->id, 'category_id' => $automationA->id]);
+    Idea::factory()->count(5)->create(['team_id' => $team->id, 'board_id' => $boardB->id, 'category_id' => $automationB->id]);
+
+    $component = Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'categories')
+        ->assertSeeInOrder(['Accounting', 'Automation', 'Reporting', 'Operations', 'Automation'])
+        ->assertSeeHtml("wire:key=\"category-board-{$boardA->id}\"")
+        ->assertSeeHtml("wire:key=\"category-board-{$boardB->id}\"")
+        ->assertSeeHtml("wire:key=\"category-{$automationA->id}\"")
+        ->assertSeeHtml("wire:key=\"category-{$automationB->id}\"");
+
+    $html = $component->html();
+
+    $boardAPos = strpos($html, "wire:key=\"category-board-{$boardA->id}\"");
+    $boardBPos = strpos($html, "wire:key=\"category-board-{$boardB->id}\"");
+    $automationAPos = strpos($html, "wire:key=\"category-{$automationA->id}\"");
+    $automationBPos = strpos($html, "wire:key=\"category-{$automationB->id}\"");
+
+    // Same category name on two boards — each must sit inside its own board's
+    // section rather than being ambiguous about which board it belongs to.
+    expect($boardAPos)->not->toBeFalse()
+        ->and($boardBPos)->toBeGreaterThan($boardAPos)
+        ->and($automationAPos)->toBeGreaterThan($boardAPos)->toBeLessThan($boardBPos)
+        ->and($automationBPos)->toBeGreaterThan($boardBPos);
+
+    $snippet = function (int $categoryId) use ($html) {
+        $start = strpos($html, "wire:key=\"category-{$categoryId}\"");
+
+        return substr($html, $start, strpos($html, '</button>', $start) - $start);
+    };
+
+    expect($snippet($automationA->id))->toContain('2')
+        ->and($snippet($reportingA->id))->toContain('0')
+        ->and($snippet($automationB->id))->toContain('5');
+});
+
+test('a board with no categories shows the empty state without affecting other boards', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $stack = boardStack($team);
+
+    $emptyBoard = IdeaBoard::factory()->create([
+        'team_id' => $team->id,
+        'board_group_id' => $stack['group']->id,
+        'created_by_user_id' => $admin->id,
+        'name' => 'Empty Board',
+    ]);
+
+    $component = Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'categories')
+        ->assertSeeHtml("wire:key=\"category-board-{$emptyBoard->id}\"")
+        ->assertSeeHtml("wire:key=\"category-{$stack['category']->id}\"");
+
+    $html = $component->html();
+    $emptyBoardPos = strpos($html, "wire:key=\"category-board-{$emptyBoard->id}\"");
+    $nextSectionPos = strpos($html, 'wire:key="category-board-', $emptyBoardPos + 1) ?: strlen($html);
+
+    expect(substr($html, $emptyBoardPos, $nextSectionPos - $emptyBoardPos))
+        ->toContain('No categories yet.')
+        ->not->toContain("wire:key=\"category-{$stack['category']->id}\"");
+});
+
+test('quick-adding a category without selecting a board is rejected server-side', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    boardStack($team);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'categories')
+        ->set('quickCategoryBoardId', '')
+        ->set('quickCategoryName', 'Automation')
+        ->call('quickAddCategory')
+        ->assertHasErrors(['quickCategoryBoardId' => 'required']);
+
+    expect(IdeaCategory::where('team_id', $team->id)->where('name', 'Automation')->exists())->toBeFalse();
+});
+
+test('starting a quick add from a board section preselects and displays that board, and the saved category appears under it', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $stack = boardStack($team);
+    $board = $stack['board'];
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'categories')
+        ->call('startQuickAdd', $board->id)
+        ->assertSet('quickCategoryBoardId', (string) $board->id)
+        ->assertSet('quickAddBoardId', $board->id)
+        ->assertSeeHtml('data-test="quick-add-category-board"')
+        ->assertSee($board->name)
+        ->set('quickCategoryName', 'Automation')
+        ->call('quickAddCategory')
+        ->assertHasNoErrors()
+        ->assertSet('quickAddBoardId', null);
+
+    $category = IdeaCategory::where('team_id', $team->id)->where('name', 'Automation')->firstOrFail();
+
+    expect($category->board_id)->toBe($board->id);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'categories')
+        ->assertSeeHtml("wire:key=\"category-{$category->id}\"");
+});

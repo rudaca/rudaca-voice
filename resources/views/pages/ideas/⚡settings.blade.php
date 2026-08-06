@@ -85,6 +85,13 @@ new #[Title('Organization Settings')] class extends Component {
 
     public string $quickCategoryBoardId = '';
 
+    /**
+     * Which board section currently has its inline "Add category" row open.
+     * Purely a display concern — the source of truth for the category itself
+     * is still validated server-side in quickAddCategory().
+     */
+    public ?int $quickAddBoardId = null;
+
     // --- Organization settings form (Settings tab) ---
     public string $orgTeamName = '';
 
@@ -570,10 +577,28 @@ new #[Title('Organization Settings')] class extends Component {
             'sort_order' => (int) $this->team->categories()->max('sort_order') + 1,
         ]);
 
-        $this->quickCategoryName = '';
+        $this->reset('quickCategoryName', 'quickCategoryBoardId', 'quickAddBoardId');
 
         unset($this->categories);
         Flux::toast(variant: 'success', text: __('Category saved.'));
+    }
+
+    /**
+     * Open the inline "Add category" row under a specific board section,
+     * preselecting that board as the destination.
+     */
+    public function startQuickAdd(int $boardId): void
+    {
+        $this->quickAddBoardId = $boardId;
+        $this->quickCategoryBoardId = (string) $boardId;
+        $this->quickCategoryName = '';
+        $this->resetValidation(['quickCategoryName', 'quickCategoryBoardId']);
+    }
+
+    public function cancelQuickAdd(): void
+    {
+        $this->reset('quickCategoryName', 'quickCategoryBoardId', 'quickAddBoardId');
+        $this->resetValidation(['quickCategoryName', 'quickCategoryBoardId']);
     }
 
     // ----- Members -----
@@ -857,38 +882,103 @@ new #[Title('Organization Settings')] class extends Component {
     @if ($tab === 'categories')
         @php
             $__categoryDotColors = ['bg-indigo-500', 'bg-emerald-500', 'bg-teal-500', 'bg-violet-500', 'bg-pink-500', 'bg-amber-500'];
+            $__categoriesByBoard = $this->categories->groupBy('board_id');
         @endphp
-        <div class="mt-5">
-            <div class="flex flex-wrap gap-2">
-                @forelse ($this->categories as $category)
-                    <button
-                        type="button"
-                        wire:click="editCategory({{ $category->id }})"
-                        wire:key="category-{{ $category->id }}"
-                        data-test="category-row"
-                        @class([
-                            'flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm transition hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600',
-                            'opacity-50' => ! $category->is_active,
-                        ])
+        <div
+            class="mt-5 space-y-3"
+            x-data="{ sections: @js($this->boards->pluck('id')->mapWithKeys(fn ($id) => [$id => true])) }"
+        >
+            @if ($this->boards->isNotEmpty())
+                <div class="flex items-center justify-end gap-2">
+                    <flux:button
+                        x-on:click="
+                            const allOpen = Object.values(sections).every(open => open);
+                            Object.keys(sections).forEach(id => sections[id] = ! allOpen);
+                        "
+                        variant="ghost"
+                        size="sm"
+                        data-test="toggle-all-category-boards"
                     >
-                        <span class="size-2 rounded-full {{ $__categoryDotColors[$category->id % count($__categoryDotColors)] }}"></span>
-                        <span class="font-bold text-slate-900 dark:text-slate-200">{{ $category->name }}</span>
-                        <flux:badge color="zinc" size="sm" variant="outline">{{ $category->ideas_count }}</flux:badge>
-                    </button>
-                @empty
-                    <flux:text class="text-slate-600 dark:text-slate-500">{{ __('No categories yet.') }}</flux:text>
-                @endforelse
-            </div>
+                        <span x-text="Object.values(sections).every(open => open) ? @js(__('Collapse all')) : @js(__('Expand all'))"></span>
+                        <flux:icon.chevron-down class="size-3.5 shrink-0 transition-transform duration-200 ease-out" :class="{ 'rotate-180': Object.values(sections).every(open => open) }" />
+                    </flux:button>
+                </div>
+            @endif
 
-            <div class="mt-4 flex items-center gap-2">
-                <flux:select wire:model="quickCategoryBoardId" class="w-44" :placeholder="__('Board')" size="sm" data-test="quick-category-board">
-                    @foreach ($this->boards as $board)
-                        <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-                <flux:input wire:model="quickCategoryName" :placeholder="__('New category...')" class="max-w-xs" size="sm" data-test="quick-category-name" />
-                <flux:button wire:click="quickAddCategory" variant="primary" size="sm" data-test="quick-add-category">{{ __('Add') }}</flux:button>
-            </div>
+            @forelse ($this->boards as $board)
+                @php $__boardCategories = $__categoriesByBoard->get($board->id, collect()); @endphp
+                <div
+                    class="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                    wire:key="category-board-{{ $board->id }}"
+                    data-test="category-board-section"
+                >
+                    {{-- Deliberately a <div role="button">, not a <button>: Flux's ui-menu
+                    auto-wires every descendant <button>/<a> to close the popover on click
+                    (intended for menu-item selection), which would fight the "Add category"
+                    button nested inside this toggle. --}}
+                    <div
+                        role="button"
+                        tabindex="0"
+                        @click="sections[{{ $board->id }}] = ! sections[{{ $board->id }}]"
+                        @keydown.enter.prevent="sections[{{ $board->id }}] = ! sections[{{ $board->id }}]"
+                        @keydown.space.prevent="sections[{{ $board->id }}] = ! sections[{{ $board->id }}]"
+                        class="flex w-full cursor-pointer items-center gap-2 px-4 py-3"
+                        data-test="category-board-toggle"
+                    >
+                        <flux:icon.chevron-down class="size-3.5 shrink-0 text-slate-500 transition-transform duration-200 ease-out rtl:-scale-x-100" :class="{ '-rotate-90': ! sections[{{ $board->id }}] }" />
+                        <span class="font-bold text-slate-900 dark:text-slate-200" data-test="category-board-name">{{ $board->name }}</span>
+                        <flux:button
+                            wire:click.stop="startQuickAdd({{ $board->id }})"
+                            variant="ghost"
+                            size="sm"
+                            icon="plus"
+                            class="ms-auto"
+                            data-test="add-category-to-board"
+                        >
+                            {{ __('Add category') }}
+                        </flux:button>
+                    </div>
+
+                    <div class="grid transition-[grid-template-rows] duration-200 ease-out" :class="sections[{{ $board->id }}] ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
+                        <div class="overflow-hidden">
+                            <div class="flex flex-wrap gap-3 border-t border-zinc-100 px-5 py-5 dark:border-zinc-800">
+                                @forelse ($__boardCategories as $category)
+                                    <button
+                                        type="button"
+                                        wire:click="editCategory({{ $category->id }})"
+                                        wire:key="category-{{ $category->id }}"
+                                        data-test="category-row"
+                                        @class([
+                                            'flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm transition hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600',
+                                            'opacity-50' => ! $category->is_active,
+                                        ])
+                                    >
+                                        <span class="size-2 rounded-full {{ $__categoryDotColors[$category->id % count($__categoryDotColors)] }}"></span>
+                                        <span class="font-bold text-slate-900 dark:text-slate-200">{{ $category->name }}</span>
+                                        <flux:badge color="zinc" size="sm" variant="outline">{{ $category->ideas_count }}</flux:badge>
+                                    </button>
+                                @empty
+                                    <flux:text class="text-sm text-slate-600 dark:text-slate-500" data-test="category-board-empty">{{ __('No categories yet.') }}</flux:text>
+                                @endforelse
+                            </div>
+
+                            @if ($quickAddBoardId === $board->id)
+                                <div class="flex items-center gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800" data-test="quick-add-category-row">
+                                    <flux:badge color="zinc" size="sm" data-test="quick-add-category-board">{{ $board->name }}</flux:badge>
+                                    <flux:input wire:model="quickCategoryName" :placeholder="__('New category...')" class="max-w-xs" size="sm" data-test="quick-category-name" />
+                                    <flux:button wire:click="quickAddCategory" variant="primary" size="sm" data-test="quick-add-category">{{ __('Add') }}</flux:button>
+                                    <flux:button wire:click="cancelQuickAdd" variant="ghost" size="sm" data-test="cancel-quick-add-category">{{ __('Cancel') }}</flux:button>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @empty
+                <div class="rounded-lg border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
+                    <flux:icon.chalkboard class="mx-auto size-8 text-slate-400 dark:text-slate-700" />
+                    <flux:text class="mt-2 text-slate-600 dark:text-slate-500">{{ __('No boards yet.') }}</flux:text>
+                </div>
+            @endforelse
         </div>
     @endif
 
