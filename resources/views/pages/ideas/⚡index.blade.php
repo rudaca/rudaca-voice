@@ -568,7 +568,7 @@ new class extends Component {
                                 </flux:menu.item>
                                 <flux:menu.separator />
 
-                                <flux:menu.checkbox.group wire:model.live="board">
+                                <flux:menu.checkbox.group wire:model.live="board" wire:key="board-filter-group-{{ $group }}">
                                     @foreach ($this->boards as $boardOption)
                                         <flux:menu.checkbox value="{{ $boardOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-board-{{ $boardOption->id }}">{{ $boardOption->name }}</flux:menu.checkbox>
                                     @endforeach
