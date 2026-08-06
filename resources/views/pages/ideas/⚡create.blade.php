@@ -29,6 +29,63 @@ new #[Title('Submit idea')] class extends Component {
     public bool $is_private = false;
 
     /**
+     * Preselect the board group, board, and/or category when arriving from a scoped
+     * view, e.g. `ideas/create?board=5&category=Bug` (preselects the board, its group,
+     * and the matching category) or `ideas/create?group=3` (preselects the group only).
+     * Falls back to unset whenever the referenced board/group/category doesn't exist,
+     * is inactive, or belongs to another team/board. A valid `board` takes precedence
+     * over `group`; `category` only applies alongside a valid `board`, since category
+     * names aren't unique across boards.
+     */
+    public function mount(): void
+    {
+        $boardId = request()->query('board');
+
+        if (is_numeric($boardId)) {
+            $board = $this->team->boards()->where('is_active', true)->find((int) $boardId);
+
+            if ($board !== null) {
+                $this->board_group_id = (string) $board->board_group_id;
+                $this->board_id = (string) $board->id;
+
+                $this->preselectCategory($board->id, request()->query('category'));
+
+                return;
+            }
+        }
+
+        $groupId = request()->query('group');
+
+        if (is_numeric($groupId)) {
+            $group = $this->team->boardGroups()->where('is_active', true)->find((int) $groupId);
+
+            if ($group !== null) {
+                $this->board_group_id = (string) $group->id;
+            }
+        }
+    }
+
+    /**
+     * Preselect the category matching the given name within the given board.
+     */
+    private function preselectCategory(int $boardId, mixed $categoryName): void
+    {
+        if (! is_string($categoryName) || $categoryName === '') {
+            return;
+        }
+
+        $category = $this->team->categories()
+            ->where('is_active', true)
+            ->where('board_id', $boardId)
+            ->where('name', $categoryName)
+            ->first();
+
+        if ($category !== null) {
+            $this->category_id = (string) $category->id;
+        }
+    }
+
+    /**
      * Reset the chosen board and category when the group changes.
      */
     public function updatedBoardGroupId(): void

@@ -523,7 +523,7 @@ new #[Title('Idea')] class extends Component {
     <x-breadcrumbs :items="[
         ['label' => __('All Ideas'), 'href' => route('ideas.index')],
         ...($idea->boardGroup ? [['label' => $idea->boardGroup->name, 'href' => route('ideas.index', ['group' => $idea->board_group_id])]] : []),
-        ...($idea->board ? [['label' => $idea->board->name, 'href' => route('ideas.index', ['board' => [$idea->board_id]])]] : []),
+        ...($idea->board ? [['label' => $idea->board->name, 'href' => $idea->board->filterUrl()]] : []),
         ['label' => $idea->title, 'href' => null],
     ]" />
 @endpush

@@ -140,4 +140,16 @@ class IdeaBoard extends Model
     {
         return 'slug';
     }
+
+    /**
+     * Build a link to the given route filtered to this board.
+     *
+     * Bypasses `route()`'s array-parameter handling (which renders a single-element
+     * `board` filter as `board[0]=<id>`) in favor of the equivalent, cleaner `board[]=<id>`.
+     * Both parse into the same `['board' => ['<id>']]` query array server-side.
+     */
+    public function filterUrl(string $route = 'ideas.index'): string
+    {
+        return route($route).'?board[]='.$this->id;
+    }
 }

@@ -37,7 +37,7 @@
                 <div class="flex flex-col gap-0.5 overflow-hidden ps-2">
                     @foreach ($group->boards as $board)
                         <a
-                            href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
+                            href="{{ $board->filterUrl() }}"
                             wire:navigate
                             @class([
                                 'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition',
@@ -58,7 +58,7 @@
 
     @foreach ($ungrouped as $board)
         <a
-            href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
+            href="{{ $board->filterUrl() }}"
             wire:navigate
             @class([
                 'flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition',

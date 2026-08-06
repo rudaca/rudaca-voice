@@ -708,7 +708,7 @@ new #[Title('Review queue')] class extends Component {
                         @if ($idea->board)
                             <span aria-hidden="true" class="text-base leading-none">&middot;</span>
                             <flux:tooltip :content="__('The board where the idea was submitted')">
-                                <a href="{{ route('ideas.review', ['board' => [$idea->board_id]]) }}" wire:navigate class="hover:underline">
+                                <a href="{{ $idea->board->filterUrl('ideas.review') }}" wire:navigate class="hover:underline">
                                     <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $idea->board->name }}</flux:badge>
                                 </a>
                             </flux:tooltip>

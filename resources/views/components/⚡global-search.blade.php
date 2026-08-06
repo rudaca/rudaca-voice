@@ -229,7 +229,7 @@ new class extends Component {
                         <div class="px-4 pb-1 text-xs font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-600">{{ __('Boards') }}</div>
                         @foreach ($this->boards as $board)
                             <a
-                                href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
+                                href="{{ $board->filterUrl() }}"
                                 wire:navigate
                                 x-on:click="open = false"
                                 class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 hover:bg-zinc-50 dark:text-slate-300 dark:hover:bg-zinc-800/60"

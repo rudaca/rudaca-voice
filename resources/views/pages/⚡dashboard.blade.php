@@ -656,7 +656,7 @@ new #[Title('Dashboard')] class extends Component {
                                     @if ($idea->board)
                                         <span aria-hidden="true" class="text-base leading-none">·</span>
                                         <flux:tooltip :content="__('The board where the idea was submitted')">
-                                            <a href="{{ route('ideas.index', ['board' => [$idea->board_id]]) }}" wire:navigate class="hover:underline">
+                                            <a href="{{ $idea->board->filterUrl() }}" wire:navigate class="hover:underline">
                                                 <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $idea->board->name }}</flux:badge>
                                             </a>
                                         </flux:tooltip>
@@ -702,7 +702,7 @@ new #[Title('Dashboard')] class extends Component {
                     <div class="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs dark:border-zinc-700 dark:bg-zinc-900">
                         @forelse ($this->topBoards as $board)
                             <a
-                                href="{{ route('ideas.index', ['board' => [$board->id]]) }}"
+                                href="{{ $board->filterUrl() }}"
                                 wire:navigate
                                 class="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 transition last:border-b-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40"
                                 wire:key="board-{{ $board->id }}"

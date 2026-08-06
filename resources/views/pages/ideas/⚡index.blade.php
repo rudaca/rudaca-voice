@@ -102,6 +102,15 @@ new class extends Component {
             $this->board = [];
         }
 
+        // Selecting a single board directly, without narrowing by group first, infers its group.
+        if ($property === 'board' && $this->group === '' && count($this->board) === 1) {
+            $boardGroupId = $this->team->boards()->where('is_active', true)->find((int) $this->board[0])?->board_group_id;
+
+            if ($boardGroupId !== null) {
+                $this->group = (string) $boardGroupId;
+            }
+        }
+
         if (in_array($property, ['status', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo', 'hideDuplicates', 'onlyInternalComments'], true)) {
             $this->resetPage();
         }
@@ -337,6 +346,32 @@ new class extends Component {
         return null;
     }
 
+    /**
+     * The "New idea" destination, preselecting the current board (or, lacking a single
+     * board, the current board group) when the list is scoped to one. Mirrors the
+     * scoping condition used by activeFilterLabel(). The current category is included
+     * alongside a single board too, since category names aren't unique across boards.
+     */
+    #[Computed]
+    public function newIdeaUrl(): string
+    {
+        if (count($this->board) === 1) {
+            $params = ['board' => $this->board[0]];
+
+            if (count($this->category) === 1) {
+                $params['category'] = $this->category[0];
+            }
+
+            return route('ideas.create', $params);
+        }
+
+        if ($this->group !== '') {
+            return route('ideas.create', ['group' => $this->group]);
+        }
+
+        return route('ideas.create');
+    }
+
     public function render()
     {
         return $this->view()->title(
@@ -429,7 +464,7 @@ new class extends Component {
             </div>
 
             @if ($this->canParticipate)
-                <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" data-test="new-idea-button">
+                <flux:button :href="$this->newIdeaUrl" wire:navigate variant="primary" icon="plus" data-test="new-idea-button">
                     {{ __('New idea') }}
                 </flux:button>
             @endif
@@ -861,7 +896,7 @@ new class extends Component {
                             @if ($idea->board)
                                 <span aria-hidden="true" class="text-base leading-none">·</span>
                                 <flux:tooltip :content="__('The board where the idea was submitted')">
-                                    <a href="{{ route('ideas.index', ['board' => [$idea->board_id]]) }}" wire:navigate class="hover:underline">
+                                    <a href="{{ $idea->board->filterUrl() }}" wire:navigate class="hover:underline">
                                         <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard">{{ $idea->board->name }}</flux:badge>
                                     </a>
                                 </flux:tooltip>
@@ -891,7 +926,7 @@ new class extends Component {
                         {{ $this->canParticipate ? __('Try clearing the filters, or be the first to submit one.') : __('Try clearing the filters.') }}
                     </flux:text>
                     @if ($this->canParticipate)
-                        <flux:button :href="route('ideas.create')" wire:navigate variant="primary" icon="plus" size="sm" class="mt-4">{{ __('New idea') }}</flux:button>
+                        <flux:button :href="$this->newIdeaUrl" wire:navigate variant="primary" icon="plus" size="sm" class="mt-4">{{ __('New idea') }}</flux:button>
                     @endif
                 </div>
             @endforelse

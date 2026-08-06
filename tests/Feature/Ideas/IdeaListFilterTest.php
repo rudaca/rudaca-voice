@@ -46,6 +46,45 @@ test('board filter accepts multiple boards', function () {
         ->and($ids)->not->toContain($ideaThree->id);
 });
 
+test('selecting a single board directly narrows the board group filter to match it', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $stack = boardStack($team);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->set('board', [(string) $stack['board']->id]);
+
+    $component->assertSet('group', (string) $stack['group']->id);
+});
+
+test('selecting a board does not override an already-selected board group', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $stackA = boardStack($team);
+    $stackB = boardStack($team);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->set('group', (string) $stackA['group']->id)
+        ->set('board', [(string) $stackA['board']->id]);
+
+    $component->assertSet('group', (string) $stackA['group']->id);
+
+    // Sanity check the two stacks really do have distinct groups.
+    expect($stackA['group']->id)->not->toBe($stackB['group']->id);
+});
+
+test('selecting multiple boards directly does not narrow the board group filter', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $stackOne = boardStack($team);
+    $stackTwo = boardStack($team);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->set('board', [(string) $stackOne['board']->id, (string) $stackTwo['board']->id]);
+
+    $component->assertSet('group', '');
+});
+
 test('category filter dedupes same-named categories across boards and matches ideas tagged under any of them', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
 
