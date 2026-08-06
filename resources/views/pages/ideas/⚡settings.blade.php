@@ -885,11 +885,11 @@ new #[Title('Organization Settings')] class extends Component {
             $__categoriesByBoard = $this->categories->groupBy('board_id');
         @endphp
         <div
-            class="mt-5 space-y-3"
+            class="mt-4 space-y-2"
             x-data="{ sections: @js($this->boards->pluck('id')->mapWithKeys(fn ($id) => [$id => true])) }"
         >
             @if ($this->boards->isNotEmpty())
-                <div class="flex items-center justify-end gap-2">
+                <div class="flex items-center justify-end">
                     <flux:button
                         x-on:click="
                             const allOpen = Object.values(sections).every(open => open);
@@ -922,11 +922,11 @@ new #[Title('Organization Settings')] class extends Component {
                         @click="sections[{{ $board->id }}] = ! sections[{{ $board->id }}]"
                         @keydown.enter.prevent="sections[{{ $board->id }}] = ! sections[{{ $board->id }}]"
                         @keydown.space.prevent="sections[{{ $board->id }}] = ! sections[{{ $board->id }}]"
-                        class="flex w-full cursor-pointer items-center gap-2 px-4 py-3"
+                        class="flex w-full cursor-pointer items-center gap-2 px-3 py-2"
                         data-test="category-board-toggle"
                     >
                         <flux:icon.chevron-down class="size-3.5 shrink-0 text-slate-500 transition-transform duration-200 ease-out rtl:-scale-x-100" :class="{ '-rotate-90': ! sections[{{ $board->id }}] }" />
-                        <span class="font-bold text-slate-900 dark:text-slate-200" data-test="category-board-name">{{ $board->name }}</span>
+                        <span class="text-sm font-bold text-slate-900 dark:text-slate-200" data-test="category-board-name">{{ $board->name }}</span>
                         <flux:button
                             wire:click.stop="startQuickAdd({{ $board->id }})"
                             variant="ghost"
@@ -941,7 +941,7 @@ new #[Title('Organization Settings')] class extends Component {
 
                     <div class="grid transition-[grid-template-rows] duration-200 ease-out" :class="sections[{{ $board->id }}] ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
                         <div class="overflow-hidden">
-                            <div class="flex flex-wrap gap-3 border-t border-zinc-100 px-5 py-5 dark:border-zinc-800">
+                            <div class="flex flex-wrap gap-2 border-t border-zinc-100 px-3 py-3 dark:border-zinc-800">
                                 @forelse ($__boardCategories as $category)
                                     <button
                                         type="button"
@@ -949,7 +949,7 @@ new #[Title('Organization Settings')] class extends Component {
                                         wire:key="category-{{ $category->id }}"
                                         data-test="category-row"
                                         @class([
-                                            'flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm transition hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600',
+                                            'flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-sm transition hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600',
                                             'opacity-50' => ! $category->is_active,
                                         ])
                                     >
@@ -963,7 +963,7 @@ new #[Title('Organization Settings')] class extends Component {
                             </div>
 
                             @if ($quickAddBoardId === $board->id)
-                                <div class="flex items-center gap-2 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800" data-test="quick-add-category-row">
+                                <div class="flex items-center gap-2 border-t border-zinc-100 px-3 py-2 dark:border-zinc-800" data-test="quick-add-category-row">
                                     <flux:badge color="zinc" size="sm" data-test="quick-add-category-board">{{ $board->name }}</flux:badge>
                                     <flux:input wire:model="quickCategoryName" :placeholder="__('New category...')" class="max-w-xs" size="sm" data-test="quick-category-name" />
                                     <flux:button wire:click="quickAddCategory" variant="primary" size="sm" data-test="quick-add-category">{{ __('Add') }}</flux:button>
