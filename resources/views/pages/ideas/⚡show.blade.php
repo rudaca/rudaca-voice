@@ -661,16 +661,16 @@ new #[Title('Idea')] class extends Component {
                     </div>
 
                     <flux:heading size="xl" class="mt-0.5">{{ $idea->title }}</flux:heading>
-                </div>
-            </div>
 
-            <div class="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-500">
-                <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
-                <span>
-                    {{ __('Submitted by') }}
-                    <span class="font-medium text-slate-800 dark:text-slate-400">{{ $author }}</span>
-                    · {{ $idea->created_at->forUser()->format('M j, Y g:i A') }}
-                </span>
+                    <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-500">
+                        <flux:avatar size="xs" class="size-5" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
+                        <span>
+                            {{ __('Submitted by') }}
+                            <span class="font-medium text-slate-800 dark:text-slate-400">{{ $author }}</span>
+                            · {{ $idea->created_at->forUser()->format('M j, Y g:i A') }}
+                        </span>
+                    </div>
+                </div>
             </div>
 
             <div class="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
