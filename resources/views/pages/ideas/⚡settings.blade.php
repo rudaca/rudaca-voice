@@ -833,7 +833,7 @@ new #[Title('Organization Settings')] class extends Component {
                             >
                                 {{ $board->is_active ? __('Deactivate') : __('Activate') }}
                             </flux:button>
-                            <flux:button wire:click="editBoard({{ $board->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-board" />
+                            <flux:button wire:click="editBoard({{ $board->id }})" variant="ghost" size="sm" icon="pencil-line" data-test="edit-board" />
                         </div>
                     </div>
                 @empty
@@ -890,7 +890,7 @@ new #[Title('Organization Settings')] class extends Component {
                             >
                                 {{ $group->is_active ? __('Deactivate') : __('Activate') }}
                             </flux:button>
-                            <flux:button wire:click="editBoardGroup({{ $group->id }})" variant="ghost" size="sm" icon="pencil" data-test="edit-group" />
+                            <flux:button wire:click="editBoardGroup({{ $group->id }})" variant="ghost" size="sm" icon="pencil-line" data-test="edit-group" />
                         </div>
                     </div>
                 @empty
@@ -1126,7 +1126,7 @@ new #[Title('Organization Settings')] class extends Component {
 
     {{-- Authentication --}}
     @if ($tab === 'authentication' && $this->canManageAuthentication)
-        <div class="mt-5 max-w-lg">
+        <div class="mt-5 max-w-3xl">
             <livewire:pages::ideas.authentication-settings :team="$this->team" :key="'authentication-settings-'.$this->team->id" />
         </div>
     @endif

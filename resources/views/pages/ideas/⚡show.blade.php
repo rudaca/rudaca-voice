@@ -3,13 +3,19 @@
 use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaComment;
+use App\Models\IdeaOfficialResponse;
+use App\Models\IdeaOfficialResponseHistory;
 use App\Models\IdeaStatusHistory;
 use App\Models\IdeaVote;
 use App\Models\Team;
+use App\Models\User;
+use App\Notifications\Ideas\OfficialResponsePublished;
+use App\Notifications\Ideas\OfficialResponseUpdated;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -66,6 +72,8 @@ new #[Title('Idea')] class extends Component {
     public string $duplicateOfId = '';
 
     public string $duplicateNote = '';
+
+    public string $officialResponseBody = '';
 
     /**
      * @return array<string, string>
@@ -143,6 +151,16 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
+     * Whether the current user may publish, edit, or remove this idea's
+     * official response (admin and above — a step above routine triage).
+     */
+    #[Computed]
+    public function canRespondOfficially(): bool
+    {
+        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Admin) ?? false;
+    }
+
+    /**
      * Update the idea's triage fields. Records a status-history entry only when the status changes.
      */
     public function updateManagement(): void
@@ -186,6 +204,7 @@ new #[Title('Idea')] class extends Component {
         }
 
         $this->reset('statusNote');
+        $this->dispatch('modal-close', name: 'manage-idea');
 
         Flux::toast(variant: 'success', text: __('Idea updated.'));
     }
@@ -256,6 +275,125 @@ new #[Title('Idea')] class extends Component {
         $this->dispatch('modal-close', name: 'mark-duplicate');
 
         Flux::toast(variant: 'success', text: __('Marked as duplicate.'));
+    }
+
+    /**
+     * Open the official response form to add a new response.
+     */
+    public function openAddOfficialResponse(): void
+    {
+        abort_unless($this->canRespondOfficially, 403);
+
+        $this->reset('officialResponseBody');
+        $this->resetValidation();
+        $this->dispatch('modal-show', name: 'official-response-form');
+    }
+
+    /**
+     * Open the official response form pre-filled with the current response.
+     */
+    public function openEditOfficialResponse(): void
+    {
+        abort_unless($this->canRespondOfficially, 403);
+
+        $this->officialResponseBody = $this->officialResponse?->body ?? '';
+        $this->resetValidation();
+        $this->dispatch('modal-show', name: 'official-response-form');
+    }
+
+    /**
+     * Publish a new official response, or update the existing one if this
+     * idea already has one. Editing never creates a second row — the same
+     * response record is reused so there is only ever one active response
+     * per idea. Notifies the submitter and voters either way.
+     */
+    public function saveOfficialResponse(): void
+    {
+        abort_unless($this->canRespondOfficially, 403);
+
+        $validated = $this->validate([
+            'officialResponseBody' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $existing = $this->ideaModel->officialResponse()->first();
+        $isNewResponse = $existing === null;
+
+        if ($isNewResponse) {
+            $response = IdeaOfficialResponse::create([
+                'idea_id' => $this->ideaModel->id,
+                'responded_by_user_id' => Auth::id(),
+                'body' => $validated['officialResponseBody'],
+                'published_at' => now(),
+            ]);
+        } else {
+            $existing->update(['body' => $validated['officialResponseBody']]);
+            $response = $existing;
+        }
+
+        IdeaOfficialResponseHistory::create([
+            'idea_id' => $this->ideaModel->id,
+            'official_response_id' => $response->id,
+            'actor_user_id' => Auth::id(),
+            'action' => $isNewResponse ? IdeaOfficialResponseHistory::ACTION_PUBLISHED : IdeaOfficialResponseHistory::ACTION_UPDATED,
+        ]);
+
+        $recipients = $this->officialResponseRecipients();
+
+        if ($recipients->isNotEmpty()) {
+            Notification::send(
+                $recipients,
+                $isNewResponse ? new OfficialResponsePublished($response) : new OfficialResponseUpdated($response),
+            );
+        }
+
+        unset($this->officialResponse, $this->officialResponseHistory, $this->activityTimeline);
+        $this->reset('officialResponseBody');
+        $this->dispatch('modal-close', name: 'official-response-form');
+
+        Flux::toast(variant: 'success', text: $isNewResponse ? __('Official response published.') : __('Official response updated.'));
+    }
+
+    /**
+     * Remove the idea's official response (soft-delete) and hide the panel.
+     */
+    public function removeOfficialResponse(): void
+    {
+        abort_unless($this->canRespondOfficially, 403);
+
+        $response = $this->ideaModel->officialResponse()->first();
+
+        abort_if($response === null, 404);
+
+        $response->delete();
+
+        IdeaOfficialResponseHistory::create([
+            'idea_id' => $this->ideaModel->id,
+            'official_response_id' => $response->id,
+            'actor_user_id' => Auth::id(),
+            'action' => IdeaOfficialResponseHistory::ACTION_REMOVED,
+        ]);
+
+        unset($this->officialResponse, $this->officialResponseHistory, $this->activityTimeline);
+        $this->dispatch('modal-close', name: 'confirm-remove-official-response');
+
+        Flux::toast(variant: 'success', text: __('Official response removed.'));
+    }
+
+    /**
+     * The idea's submitter and distinct voters, excluding the current actor,
+     * to notify when the official response is published or updated.
+     *
+     * @return Collection<int, User>
+     */
+    private function officialResponseRecipients(): Collection
+    {
+        return User::query()
+            ->where('id', '!=', Auth::id())
+            ->where(function ($query) {
+                $query->where('id', $this->ideaModel->submitted_by_user_id)
+                    ->orWhereIn('id', $this->ideaModel->votes()->pluck('user_id'));
+            })
+            ->get();
     }
 
     /**
@@ -493,6 +631,87 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
+     * The idea's current official response, if one exists and hasn't been removed.
+     */
+    #[Computed]
+    public function officialResponse(): ?IdeaOfficialResponse
+    {
+        return $this->ideaModel->officialResponse()
+            ->with('respondedBy:id,name')
+            ->first();
+    }
+
+    /**
+     * Publish/update/remove audit trail for the idea's official response(s), newest first.
+     *
+     * @return Collection<int, IdeaOfficialResponseHistory>
+     */
+    #[Computed]
+    public function officialResponseHistory(): Collection
+    {
+        return $this->ideaModel->officialResponseHistory()
+            ->with('actor:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
+     * Merged, newest-first timeline combining status changes and official
+     * response events for the Activity panel. Kept as plain objects so the
+     * Blade template can render both entry types identically.
+     *
+     * @return SupportCollection<int, object{key: string, color: string, dotColor: string, badgeClass: string, label: string, note: ?string, actorName: string, createdAt: \Illuminate\Support\Carbon}>
+     */
+    #[Computed]
+    public function activityTimeline(): SupportCollection
+    {
+        $statusEntries = $this->statusHistory->map(function (IdeaStatusHistory $entry) {
+            $meta = $this->statusMeta($entry->new_status);
+
+            return (object) [
+                'key' => 'status-'.$entry->id,
+                'color' => $meta['color'],
+                'dotColor' => $meta['dotColor'] ?? $meta['color'],
+                'badgeClass' => $meta['class'] ?? '',
+                'icon' => null,
+                'iconClass' => '',
+                'label' => $meta['label'],
+                'note' => $entry->note,
+                'actorName' => $entry->changedBy?->name ?? __('Unknown'),
+                'createdAt' => $entry->created_at,
+            ];
+        });
+
+        $responseEntries = $this->officialResponseHistory->map(function (IdeaOfficialResponseHistory $entry) {
+            $isRemoved = $entry->action === IdeaOfficialResponseHistory::ACTION_REMOVED;
+            $color = $isRemoved ? 'red' : 'indigo';
+
+            return (object) [
+                'key' => 'official-response-'.$entry->id,
+                'color' => $color,
+                'dotColor' => $color,
+                'badgeClass' => '',
+                'icon' => $isRemoved ? 'x-circle' : null,
+                'iconClass' => $isRemoved ? 'text-red-500 dark:text-red-400' : '',
+                'label' => match ($entry->action) {
+                    IdeaOfficialResponseHistory::ACTION_PUBLISHED => __('Official response published'),
+                    IdeaOfficialResponseHistory::ACTION_UPDATED => __('Official response updated'),
+                    IdeaOfficialResponseHistory::ACTION_REMOVED => __('Official response removed'),
+                    default => __('Official response changed'),
+                },
+                'note' => null,
+                'actorName' => $entry->actor?->name ?? __('Unknown'),
+                'createdAt' => $entry->created_at,
+            ];
+        });
+
+        return $statusEntries->concat($responseEntries)
+            ->sortByDesc('createdAt')
+            ->values();
+    }
+
+    /**
      * Team roles (manager and above) keyed by user id, for the staff role
      * badge shown next to commenters who hold one of these roles.
      *
@@ -527,6 +746,19 @@ new #[Title('Idea')] class extends Component {
 
         return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
     }
+
+    /**
+     * Get the Flux badge color for a priority/impact/effort level.
+     */
+    public function levelColor(string $level): string
+    {
+        return match ($level) {
+            'low', 'small' => 'zinc',
+            'medium' => 'amber',
+            'high', 'large' => 'red',
+            default => 'zinc',
+        };
+    }
 }; ?>
 
 @php($idea = $this->ideaModel)
@@ -549,47 +781,104 @@ new #[Title('Idea')] class extends Component {
             {{ __('Back') }}
         </flux:link>
 
-        @if ($this->canParticipate)
-            <flux:dropdown position="bottom" align="end">
-                <flux:button
-                    variant="outline"
-                    size="sm"
-                    icon="hand-thumb-up"
-                    icon:trailing="chevron-down"
-                    class="border-slate-500! text-slate-700! hover:bg-slate-50! dark:border-slate-400! dark:text-slate-400! dark:hover:bg-slate-500/10!"
-                    data-test="who-voted-trigger"
-                >
-                    {{ __('Who voted') }}
-                </flux:button>
+        <div class="flex items-center gap-2">
+            @if ($this->canRespondOfficially || $this->canManage)
+                <flux:dropdown position="bottom" align="end">
+                    <flux:button
+                        size="sm"
+                        :square="false"
+                        icon="ellipsis-vertical"
+                        icon:trailing="chevron-down"
+                        icon-trailing:class="transition-transform duration-200 group-data-open:rotate-180"
+                        class="group bg-black! text-white! hover:bg-zinc-800! dark:bg-gray-500! dark:text-white! dark:hover:bg-gray-600!"
+                        aria-label="{{ __('Idea actions') }}"
+                        data-test="idea-actions-trigger"
+                    ></flux:button>
 
-                <flux:menu class="min-w-80">
-                    <div class="max-h-98 overflow-y-auto">
-                        @forelse ($this->voters as $vote)
-                            <flux:menu.item class="cursor-default" wire:key="voter-{{ $vote->id }}">
-                                <div class="flex items-center gap-2">
-                                    <flux:avatar size="xs" :name="$vote->user->name" />
-                                    <div class="min-w-0">
-                                        <div class="truncate">
-                                            {{ $vote->user->name }}
-                                            @if ($vote->user_id === Auth::id())
-                                                <span class="text-slate-700">({{ __('You') }})</span>
-                                            @endif
+                    <flux:menu>
+                        @if ($this->canRespondOfficially)
+                            <flux:menu.item
+                                icon="check-badge"
+                                wire:click="{{ $this->officialResponse ? 'openEditOfficialResponse' : 'openAddOfficialResponse' }}"
+                                data-test="official-response-menu-item"
+                            >
+                                {{ $this->officialResponse ? __('Edit Official Response') : __('Add Official Response') }}
+                            </flux:menu.item>
+                        @endif
+
+                        @if ($this->canManage)
+                            <flux:modal.trigger name="manage-idea">
+                                <flux:menu.item icon="light-bulb" data-test="manage-idea-status-menu-item">
+                                    {{ __('Manage Idea Status') }}
+                                </flux:menu.item>
+                            </flux:modal.trigger>
+
+                            <flux:menu.separator />
+
+                            <flux:menu.item icon="document-duplicate" wire:click="openMarkDuplicate" data-test="mark-duplicate-menu-item">
+                                {{ __('Mark as Duplicate') }}
+                            </flux:menu.item>
+
+                            @if ($this->canDelete)
+                                <flux:menu.separator />
+
+                                <flux:modal.trigger name="delete-idea">
+                                    <flux:menu.item
+                                        icon="trash"
+                                        class="text-red-500! data-active:bg-red-50! [&_[data-flux-menu-item-icon]]:text-red-500! dark:text-red-400! dark:data-active:bg-red-400/10! dark:[&_[data-flux-menu-item-icon]]:text-red-400!"
+                                        data-test="delete-idea-menu-item"
+                                    >
+                                        {{ __('Delete Idea') }}
+                                    </flux:menu.item>
+                                </flux:modal.trigger>
+                            @endif
+                        @endif
+                    </flux:menu>
+                </flux:dropdown>
+            @endif
+
+            @if ($this->canParticipate)
+                <flux:dropdown position="bottom" align="end">
+                    <flux:button
+                        variant="outline"
+                        size="sm"
+                        icon="hand-thumb-up"
+                        icon:trailing="chevron-down"
+                        class="border-slate-500! text-slate-700! hover:bg-slate-50! dark:border-slate-400! dark:text-slate-400! dark:hover:bg-slate-500/10!"
+                        data-test="who-voted-trigger"
+                    >
+                        {{ __('Who voted') }}
+                    </flux:button>
+
+                    <flux:menu class="min-w-80">
+                        <div class="max-h-98 overflow-y-auto">
+                            @forelse ($this->voters as $vote)
+                                <flux:menu.item class="cursor-default" wire:key="voter-{{ $vote->id }}">
+                                    <div class="flex items-center gap-2">
+                                        <flux:avatar size="xs" :name="$vote->user->name" />
+                                        <div class="min-w-0">
+                                            <div class="truncate">
+                                                {{ $vote->user->name }}
+                                                @if ($vote->user_id === Auth::id())
+                                                    <span class="text-slate-700">({{ __('You') }})</span>
+                                                @endif
+                                            </div>
+                                            <flux:tooltip content="{{ __('Date Voted') }}">
+                                                <div style="font-size:9px" class="truncate  text-slate-700">{{ $vote->created_at->forUser()->format('M j, Y g:i A') }}</div>
+                                            </flux:tooltip>
                                         </div>
-                                        <flux:tooltip content="{{ __('Date Voted') }}">
-                                            <div style="font-size:9px" class="truncate  text-slate-700">{{ $vote->created_at->forUser()->format('M j, Y g:i A') }}</div>
-                                        </flux:tooltip>
                                     </div>
-                                </div>
-                            </flux:menu.item>
-                        @empty
-                            <flux:menu.item class="cursor-default text-slate-700">
-                                {{ __('No votes yet') }}
-                            </flux:menu.item>
-                        @endforelse
-                    </div>
-                </flux:menu>
-            </flux:dropdown>
-        @endif
+                                </flux:menu.item>
+                            @empty
+                                <flux:menu.item class="cursor-default text-slate-700">
+                                    {{ __('No votes yet') }}
+                                </flux:menu.item>
+                            @endforelse
+                        </div>
+                    </flux:menu>
+                </flux:dropdown>
+            @endif
+        </div>
     </div>
 
     <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
@@ -687,6 +976,97 @@ new #[Title('Idea')] class extends Component {
             </div>
 
             <div class="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
+
+            {{-- Official response --}}
+            @if ($this->officialResponse)
+                <div class="mt-6 rounded-xl border-2 border-indigo-200 bg-indigo-50/60 p-5 dark:border-indigo-500/30 dark:bg-indigo-950/20" data-test="official-response-panel">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-1.5">
+                            <flux:icon.check-badge class="size-5 text-indigo-800 dark:text-indigo-400" />
+                            <flux:heading size="sm" class="font-bold! uppercase text-indigo-800! dark:text-indigo-300!">{{ __('Official response') }}</flux:heading>
+                        </div>
+
+                        @if ($this->canRespondOfficially)
+                            <div class="flex gap-2">
+                                <flux:button
+                                    size="sm"
+                                    icon="pencil-line"
+                                    wire:click="openEditOfficialResponse"
+                                    class="bg-indigo-800! text-white! hover:bg-indigo-900! dark:bg-indigo-500! dark:text-white! dark:hover:bg-indigo-400!"
+                                    data-test="edit-official-response-button"
+                                >
+                                    {{ __('Edit') }}
+                                </flux:button>
+                                <flux:button
+                                    size="sm"
+                                    variant="outline"
+                                    icon="x-circle"
+                                    x-on:click="$dispatch('modal-show', { name: 'confirm-remove-official-response' })"
+                                    class="border-red-500! text-red-500! hover:bg-red-50! dark:border-red-500! dark:text-red-400! dark:hover:bg-red-500/10!"
+                                    data-test="remove-official-response-trigger"
+                                >
+                                    {{ __('Remove') }}
+                                </flux:button>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-x-1 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
+                        <span class="font-medium text-slate-800 dark:text-slate-300">{{ $this->officialResponse->respondedBy?->name ?? __('Unknown') }}</span>
+                        <span>· {{ __('Published') }} {{ $this->officialResponse->published_at->forUser()->format('M j, Y g:i A') }}</span>
+                        @if ($this->officialResponse->wasEdited())
+                            <span>· {{ __('Updated') }} {{ $this->officialResponse->updated_at->forUser()->format('M j, Y g:i A') }}</span>
+                        @endif
+                    </div>
+
+                    <div class="mt-1 whitespace-pre-line text-sm leading-relaxed text-indigo-800 dark:text-indigo-300" data-test="official-response-body">
+                        {{ $this->officialResponse->body }}
+                    </div>
+                </div>
+
+                {{-- Confirm remove official response modal --}}
+                <flux:modal name="confirm-remove-official-response" class="max-w-lg" :dismissible="false" data-test="confirm-remove-official-response-modal">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">{{ __('Remove official response?') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('This will hide the official response from this idea. This action is recorded in the activity log.') }}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button wire:click="removeOfficialResponse" variant="danger" data-test="confirm-remove-official-response-yes">{{ __('Remove') }}</flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
+            @endif
+
+            @if ($this->canRespondOfficially)
+                {{-- Add/edit official response modal --}}
+                <flux:modal name="official-response-form" class="max-w-lg" data-test="official-response-form-modal">
+                    <form wire:submit="saveOfficialResponse" class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">{{ $this->officialResponse ? __('Edit official response') : __('Add official response') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('This is shown prominently on the idea, separate from comments.') }}
+                            </flux:text>
+                        </div>
+                        <flux:textarea
+                            wire:model="officialResponseBody"
+                            rows="5"
+                            :label="__('Response')"
+                            :placeholder="__('Share the organization\'s official position on this idea…')"
+                            data-test="official-response-textarea"
+                        />
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button variant="primary" type="submit" data-test="save-official-response">
+                                {{ $this->officialResponse ? __('Save changes') : __('Publish') }}
+                            </flux:button>
+                        </div>
+                    </form>
+                </flux:modal>
+            @endif
 
             <flux:separator class="my-6" />
 
@@ -841,73 +1221,56 @@ new #[Title('Idea')] class extends Component {
 
         {{-- Right rail --}}
         <aside class="space-y-4">
-            {{-- Manage panel (owner/admin/manager only) --}}
+            {{-- Manage idea status modal (owner/admin/manager only) --}}
             @if ($this->canManage)
-                <ui-disclosure class="group/disclosure block overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900" data-test="manage-panel">
-                    <button type="button" class="group/disclosure-button flex w-full items-center justify-between p-5" data-test="manage-panel-toggle">
-                        <flux:heading size="sm">{{ __('Manage idea') }}</flux:heading>
-                        <flux:icon.chevron-right class="size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:hidden rtl:rotate-180" />
-                        <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:block" />
-                    </button>
+                <flux:modal name="manage-idea" class="max-w-xl" data-test="manage-idea-modal">
+                    <div class="space-y-5">
+                        <flux:heading size="lg">{{ __('Manage idea') }}</flux:heading>
 
-                    <div class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out data-open:grid-rows-[1fr]">
-                        <div class="overflow-hidden">
-                            <div class="px-5 pb-5">
-                                <form wire:submit="updateManagement" class="space-y-4">
-                                    <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
-                                        @foreach (self::STATUS_META as $value => $statusMeta)
-                                            <flux:select.option value="{{ $value }}">{{ $statusMeta['label'] }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
+                        <form wire:submit="updateManagement" id="manage-idea-form" class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
+                                    @foreach (self::STATUS_META as $value => $statusMeta)
+                                        <flux:select.option value="{{ $value }}">{{ $statusMeta['label'] }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
 
-                                    <flux:select wire:model="priority" :label="__('Priority')" size="sm" data-test="manage-priority">
-                                        @foreach (self::PRIORITY_OPTIONS as $value => $label)
-                                            <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
+                                <flux:select wire:model="priority" :label="__('Priority')" size="sm" data-test="manage-priority">
+                                    @foreach (self::PRIORITY_OPTIONS as $value => $label)
+                                        <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
 
-                                    <flux:select wire:model="impact" :label="__('Impact')" size="sm" data-test="manage-impact">
-                                        @foreach (self::IMPACT_OPTIONS as $value => $label)
-                                            <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
+                                <flux:select wire:model="impact" :label="__('Impact')" size="sm" data-test="manage-impact">
+                                    @foreach (self::IMPACT_OPTIONS as $value => $label)
+                                        <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
 
-                                    <flux:select wire:model="effort" :label="__('Effort')" size="sm" data-test="manage-effort">
-                                        @foreach (self::EFFORT_OPTIONS as $value => $label)
-                                            <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
-
-                                    <flux:textarea
-                                        wire:model="statusNote"
-                                        :label="__('Status note (optional)')"
-                                        rows="2"
-                                        :placeholder="__('Added to the activity log when the status changes')"
-                                        data-test="manage-note"
-                                    />
-
-                                    <flux:button variant="primary" type="submit" size="sm" class="w-full" wire:loading.attr="disabled" data-test="manage-save">
-                                        {{ __('Save changes') }}
-                                    </flux:button>
-                                </form>
-
-                                <flux:separator class="my-4" variant="subtle" />
-
-                                <flux:button wire:click="openMarkDuplicate" variant="ghost" size="sm" class="w-full bg-slate-100!" icon="document-duplicate" data-test="open-mark-duplicate">
-                                    {{ __('Mark as duplicate') }}
-                                </flux:button>
-
-                                @if ($this->canDelete)
-                                    <flux:modal.trigger name="delete-idea">
-                                        <flux:button variant="danger" size="sm" class="mt-2 w-full" icon="trash" data-test="delete-idea-button">
-                                            {{ __('Delete idea') }}
-                                        </flux:button>
-                                    </flux:modal.trigger>
-                                @endif
+                                <flux:select wire:model="effort" :label="__('Effort')" size="sm" data-test="manage-effort">
+                                    @foreach (self::EFFORT_OPTIONS as $value => $label)
+                                        <flux:select.option value="{{ $value }}">{{ $label }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
                             </div>
+
+                            <flux:textarea
+                                wire:model="statusNote"
+                                :label="__('Status note (optional)')"
+                                rows="2"
+                                :placeholder="__('Added to the activity log when the status changes')"
+                                class="w-full"
+                                data-test="manage-note"
+                            />
+                        </form>
+
+                        <div class="flex justify-end border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                            <flux:button variant="primary" type="submit" form="manage-idea-form" size="sm" wire:loading.attr="disabled" data-test="manage-save">
+                                {{ __('Save changes') }}
+                            </flux:button>
                         </div>
                     </div>
-                </ui-disclosure>
+                </flux:modal>
 
                 @if ($this->canDelete)
                     {{-- Delete idea modal --}}
@@ -948,10 +1311,36 @@ new #[Title('Idea')] class extends Component {
                 </flux:modal>
             @endif
 
+            {{-- More details --}}
+            <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900" data-test="more-details-panel">
+                <div class="flex items-center gap-1.5">
+                    <flux:icon.information-circle class="size-4 shrink-0 text-slate-700" />
+                    <flux:heading size="sm">{{ __('More details') }}</flux:heading>
+                </div>
+
+                <dl class="mt-4 space-y-3 text-sm">
+                    <div class="flex items-center justify-between">
+                        <dt class="text-slate-600 dark:text-slate-500">{{ __('Priority') }}</dt>
+                        <dd><flux:badge size="sm" :color="$this->levelColor($idea->priority)" data-test="more-details-priority">{{ self::PRIORITY_OPTIONS[$idea->priority] ?? $idea->priority }}</flux:badge></dd>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <dt class="text-slate-600 dark:text-slate-500">{{ __('Impact') }}</dt>
+                        <dd><flux:badge size="sm" :color="$this->levelColor($idea->impact)" data-test="more-details-impact">{{ self::IMPACT_OPTIONS[$idea->impact] ?? $idea->impact }}</flux:badge></dd>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <dt class="text-slate-600 dark:text-slate-500">{{ __('Effort') }}</dt>
+                        <dd><flux:badge size="sm" :color="$this->levelColor($idea->effort)" data-test="more-details-effort">{{ self::EFFORT_OPTIONS[$idea->effort] ?? $idea->effort }}</flux:badge></dd>
+                    </div>
+                </dl>
+            </div>
+
             {{-- Activity timeline --}}
             <ui-disclosure open class="group/disclosure block overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
                 <button type="button" class="group/disclosure-button flex w-full items-center justify-between p-5" data-test="activity-panel-toggle">
-                    <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
+                    <div class="flex items-center gap-1.5">
+                        <flux:icon.timeline class="size-4 shrink-0 text-slate-700" />
+                        <flux:heading size="sm">{{ __('Activity') }}</flux:heading>
+                    </div>
                     <flux:icon.chevron-right class="size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:hidden rtl:rotate-180" />
                     <flux:icon.chevron-down class="hidden size-4 shrink-0 text-slate-700 group-data-open/disclosure-button:block" />
                 </button>
@@ -959,25 +1348,28 @@ new #[Title('Idea')] class extends Component {
                 <div class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out data-open:grid-rows-[1fr]" data-open>
                     <div class="overflow-hidden">
                         <div class="px-5 pb-5">
-                            @forelse ($this->statusHistory as $entry)
-                                @php($entryMeta = $this->statusMeta($entry->new_status))
-                                <div class="flex gap-3" wire:key="history-{{ $entry->id }}">
+                            @forelse ($this->activityTimeline as $entry)
+                                <div class="flex gap-3" wire:key="{{ $entry->key }}">
                                     <div class="flex flex-col items-center">
-                                        {{-- History is newest-first, so the first dot is the idea's current status: pulse it. --}}
-                                        <x-status-dot :color="$entryMeta['dotColor'] ?? $entryMeta['color']" size="size-2.5" class="mt-1.5" :pulse="$loop->first" />
+                                        @if ($entry->icon)
+                                            <flux:icon :icon="$entry->icon" class="size-4 shrink-0 {{ $entry->iconClass }}" />
+                                        @else
+                                            {{-- Timeline is newest-first, so the first dot is the most recent event: pulse it. --}}
+                                            <x-status-dot :color="$entry->dotColor" size="size-2.5" class="mt-1.5" :pulse="$loop->first" />
+                                        @endif
                                         @unless ($loop->last)
                                             <span class="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
                                         @endunless
                                     </div>
                                     <div class="min-w-0 flex-1 {{ $loop->last ? '' : 'pb-4' }}">
-                                        <flux:badge :color="$entryMeta['color']" size="sm" class="{{ $entryMeta['class'] ?? '' }}">{{ $entryMeta['label'] }}</flux:badge>
+                                        <flux:badge :color="$entry->color" size="sm" class="{{ $entry->badgeClass }}">{{ $entry->label }}</flux:badge>
                                         @if ($entry->note)
                                             <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{{ $entry->note }}</p>
                                         @endif
                                         <p class="mt-1 text-xs text-slate-700">
-                                            {{ $entry->changedBy?->name ?? __('Unknown') }}
-                                            @if ($entry->created_at)
-                                                · {{ $entry->created_at->diffForHumans() }}
+                                            {{ $entry->actorName }}
+                                            @if ($entry->createdAt)
+                                                · {{ $entry->createdAt->diffForHumans() }}
                                             @endif
                                         </p>
                                     </div>

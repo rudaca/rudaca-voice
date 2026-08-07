@@ -26,7 +26,7 @@ $classes = Flux::classes()
     })
     ;
 
-$iconVariant ??= 'mini';
+$iconVariant ??= 'outline';
 
 $iconClasses = Flux::classes('text-slate-600 dark:text-slate-500 [ui-radio[data-checked]_&]:text-slate-900 dark:[ui-radio[data-checked]_&]:text-white')
     // When using the outline icon variant, we need to size it down to match the default icon sizes...

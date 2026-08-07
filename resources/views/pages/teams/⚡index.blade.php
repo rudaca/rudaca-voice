@@ -128,7 +128,7 @@ new #[Title('Organizations')] class extends Component {
                             <flux:button
                                 variant="ghost"
                                 size="sm"
-                                :icon="$team->role === 'member' ? 'eye' : 'pencil'"
+                                :icon="$team->role === 'member' ? 'eye' : 'pencil-line'"
                                 :href="route('teams.edit', $team->slug)"
                                 wire:navigate
                                 :data-test="$team->role === 'member' ? 'team-view-button' : 'team-edit-button'"

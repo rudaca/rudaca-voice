@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -45,6 +46,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, IdeaComment> $comments
  * @property-read Collection<int, IdeaStatusHistory> $statusHistory
  * @property-read Collection<int, IdeaGithubLink> $githubLinks
+ * @property-read IdeaOfficialResponse|null $officialResponse
+ * @property-read Collection<int, IdeaOfficialResponseHistory> $officialResponseHistory
  */
 #[Fillable([
     'team_id',
@@ -176,6 +179,29 @@ class Idea extends Model
     public function githubLinks(): HasMany
     {
         return $this->hasMany(IdeaGithubLink::class);
+    }
+
+    /**
+     * Get the idea's current official response, if one has been published
+     * and not since removed. Soft-deleted responses are excluded
+     * automatically by Eloquent's soft-delete global scope.
+     *
+     * @return HasOne<IdeaOfficialResponse, $this>
+     */
+    public function officialResponse(): HasOne
+    {
+        return $this->hasOne(IdeaOfficialResponse::class)->latestOfMany();
+    }
+
+    /**
+     * Get the full publish/update/remove audit trail for the idea's
+     * official response(s), newest first.
+     *
+     * @return HasMany<IdeaOfficialResponseHistory, $this>
+     */
+    public function officialResponseHistory(): HasMany
+    {
+        return $this->hasMany(IdeaOfficialResponseHistory::class);
     }
 
     /**

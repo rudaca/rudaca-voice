@@ -76,7 +76,7 @@ test('a manager cannot delete an idea', function () {
     $this->assertDatabaseHas('ideas', ['id' => $idea->id, 'deleted_at' => null]);
 });
 
-test('the delete idea button is hidden from non owners', function () {
+test('the delete idea action is hidden from non owners', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $idea = makeIdea($team);
 
@@ -86,7 +86,7 @@ test('the delete idea button is hidden from non owners', function () {
 
     Livewire::actingAs($manager)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
-        ->assertDontSeeHtml('data-test="delete-idea-button"');
+        ->assertDontSeeHtml('data-test="delete-idea-menu-item"');
 });
 
 test('an owner can delete a comment', function () {

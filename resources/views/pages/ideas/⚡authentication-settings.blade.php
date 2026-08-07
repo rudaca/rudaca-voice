@@ -272,7 +272,7 @@ new class extends Component
             @endif
         </div>
 
-        <form wire:submit="save" class="mt-6 space-y-6">
+        <form wire:submit="save" class="mt-6 space-y-8">
             <flux:switch
                 wire:model="enabled"
                 :label="__('Enable Microsoft sign-in')"
@@ -280,78 +280,86 @@ new class extends Component
                 data-test="microsoft-enabled-toggle"
             />
 
-            <flux:input
-                wire:model="tenantId"
-                :label="__('Tenant ID')"
-                :description="__('Your Entra ID directory (tenant) GUID, or common / organizations / consumers.')"
-                :required="$enabled"
-                data-test="tenant-id-input"
-            />
+            <div class="grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2">
+                <div class="space-y-6">
+                    <flux:heading size="sm">{{ __('App registration') }}</flux:heading>
 
-            <flux:input
-                wire:model="clientId"
-                :label="__('Application (client) ID')"
-                :required="$enabled"
-                data-test="client-id-input"
-            />
+                    <flux:input
+                        wire:model="tenantId"
+                        :label="__('Tenant ID')"
+                        :description="__('Your Entra ID directory (tenant) GUID, or common / organizations / consumers.')"
+                        :required="$enabled"
+                        data-test="tenant-id-input"
+                    />
 
-            @if ($hasExistingSecret && ! $replacingSecret)
-                <div class="space-y-1">
-                    <flux:input value="••••••••••••••••" readonly :label="__('Client secret')" data-test="client-secret-masked" />
-                    <flux:button variant="ghost" size="sm" wire:click="$set('replacingSecret', true)" data-test="replace-secret-button">
-                        {{ __('Replace secret') }}
-                    </flux:button>
+                    <flux:input
+                        wire:model="clientId"
+                        :label="__('Application (client) ID')"
+                        :required="$enabled"
+                        data-test="client-id-input"
+                    />
+
+                    @if ($hasExistingSecret && ! $replacingSecret)
+                        <div class="space-y-1">
+                            <flux:input value="••••••••••••••••" readonly :label="__('Client secret')" data-test="client-secret-masked" />
+                            <flux:button variant="ghost" size="sm" wire:click="$set('replacingSecret', true)" data-test="replace-secret-button">
+                                {{ __('Replace secret') }}
+                            </flux:button>
+                        </div>
+                    @else
+                        <flux:input
+                            type="password"
+                            wire:model="newSecretInput"
+                            :label="__('Client secret')"
+                            :description="$hasExistingSecret ? __('Leave blank to keep the current secret.') : __('Required to enable Microsoft sign-in.')"
+                            :required="$enabled && ! $hasExistingSecret"
+                            data-test="client-secret-input"
+                        />
+                    @endif
+
+                    <flux:input :value="$this->redirectUrl" readonly :label="__('Redirect URL')" :description="__('Register this URL as the redirect URI in your Microsoft app registration.')" data-test="redirect-url-input" />
                 </div>
-            @else
-                <flux:input
-                    type="password"
-                    wire:model="newSecretInput"
-                    :label="__('Client secret')"
-                    :description="$hasExistingSecret ? __('Leave blank to keep the current secret.') : __('Required to enable Microsoft sign-in.')"
-                    :required="$enabled && ! $hasExistingSecret"
-                    data-test="client-secret-input"
-                />
-            @endif
 
-            <flux:input :value="$this->redirectUrl" readonly :label="__('Redirect URL')" :description="__('Register this URL as the redirect URI in your Microsoft app registration.')" data-test="redirect-url-input" />
+                <div class="space-y-6">
+                    <flux:heading size="sm">{{ __('Provisioning & access') }}</flux:heading>
 
-            <flux:separator />
+                    <flux:switch
+                        wire:model.live="autoProvisionUsers"
+                        :label="__('Automatically create users on first sign-in')"
+                        :description="__('New Microsoft accounts that sign in for the first time are added to this organization automatically.')"
+                        data-test="auto-provision-toggle"
+                    />
 
-            <flux:switch
-                wire:model.live="autoProvisionUsers"
-                :label="__('Automatically create users on first sign-in')"
-                :description="__('New Microsoft accounts that sign in for the first time are added to this organization automatically.')"
-                data-test="auto-provision-toggle"
-            />
+                    @if ($autoProvisionUsers)
+                        <flux:select
+                            wire:model="defaultRole"
+                            :label="__('Default role for provisioned users')"
+                            :placeholder="__('Select a role')"
+                            data-test="default-role-select"
+                        >
+                            @foreach ($this->availableRoles as $role)
+                                <flux:select.option value="{{ $role['value'] }}">{{ $role['label'] }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                    @endif
 
-            @if ($autoProvisionUsers)
-                <flux:select
-                    wire:model="defaultRole"
-                    :label="__('Default role for provisioned users')"
-                    :placeholder="__('Select a role')"
-                    data-test="default-role-select"
-                >
-                    @foreach ($this->availableRoles as $role)
-                        <flux:select.option value="{{ $role['value'] }}">{{ $role['label'] }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-            @endif
+                    <flux:input
+                        wire:model="allowedDomainsInput"
+                        :label="__('Allowed email domains')"
+                        :description="__('Comma-separated list, e.g. example.com, example.org. Leave blank to allow any domain.')"
+                        data-test="allowed-domains-input"
+                    />
 
-            <flux:input
-                wire:model="allowedDomainsInput"
-                :label="__('Allowed email domains')"
-                :description="__('Comma-separated list, e.g. example.com, example.org. Leave blank to allow any domain.')"
-                data-test="allowed-domains-input"
-            />
+                    <flux:switch
+                        wire:model="enforceSso"
+                        :label="__('Require Microsoft sign-in')"
+                        :description="__('Stores the preference only — password sign-in is not blocked yet.')"
+                        data-test="enforce-sso-toggle"
+                    />
+                </div>
+            </div>
 
-            <flux:switch
-                wire:model="enforceSso"
-                :label="__('Require Microsoft sign-in')"
-                :description="__('Stores the preference only — password sign-in is not blocked yet.')"
-                data-test="enforce-sso-toggle"
-            />
-
-            <div class="flex items-center justify-end gap-2">
+            <div class="flex items-center justify-end gap-2 border-t border-zinc-200 pt-6 dark:border-zinc-700">
                 @if ($this->identityProviderRecord)
                     <flux:button
                         variant="ghost"
