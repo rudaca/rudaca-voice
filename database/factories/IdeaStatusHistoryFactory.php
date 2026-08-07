@@ -24,7 +24,7 @@ class IdeaStatusHistoryFactory extends Factory
             'changed_by_user_id' => User::factory(),
             'old_status' => 'new',
             'new_status' => fake()->randomElement([
-                'under_review', 'planned', 'in_progress', 'released', 'not_doing',
+                'approved', 'planned', 'in_progress', 'released', 'not_doing',
             ]),
             'note' => fn (array $attributes) => $attributes['new_status'] === 'new'
                 ? null
@@ -42,7 +42,7 @@ class IdeaStatusHistoryFactory extends Factory
     private function notesFor(string $status): array
     {
         return match ($status) {
-            'under_review' => [
+            'approved' => [
                 "Added to the queue for next week's planning meeting.",
                 'Checking feasibility with IT before committing to this.',
                 'Reviewing alongside a couple of similar requests from other teams.',

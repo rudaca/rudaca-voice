@@ -32,7 +32,7 @@ test('a manager can update status and a history record is created', function () 
 test('a manager can update priority, impact and effort without a status change', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
     $idea = makeIdea($team, [
-        'status' => 'under_review',
+        'status' => 'approved',
         'priority' => 'low',
         'impact' => 'low',
         'effort' => 'small',
@@ -53,7 +53,7 @@ test('a manager can update priority, impact and effort without a status change',
     expect($idea->priority)->toBe('high')
         ->and($idea->impact)->toBe('high')
         ->and($idea->effort)->toBe('large')
-        ->and($idea->status)->toBe('under_review')
+        ->and($idea->status)->toBe('approved')
         // Status unchanged, so no new history entry is written.
         ->and(IdeaStatusHistory::where('idea_id', $idea->id)->count())->toBe($historyBefore);
 });

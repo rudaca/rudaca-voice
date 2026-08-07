@@ -17,7 +17,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-new #[Title('Review queue')] class extends Component {
+new #[Title('Review Queue')] class extends Component {
     use WithPagination;
 
     /**
@@ -25,13 +25,7 @@ new #[Title('Review queue')] class extends Component {
      *
      * @var array<int, string>
      */
-    public const QUEUE_STATUSES = ['new', 'under_review'];
-
-    /**
-     * Which queue status the table below is narrowed to; 'all' shows the full queue.
-     */
-    #[Url(as: 'status')]
-    public string $filter = 'all';
+    public const QUEUE_STATUSES = ['new'];
 
     #[Url(as: 'sort')]
     public string $sort = 'top';
@@ -73,7 +67,7 @@ new #[Title('Review queue')] class extends Component {
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
-        'under_review' => ['label' => 'Under Review', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
+        'approved' => ['label' => 'Approved', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
         'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
     ];
@@ -90,7 +84,7 @@ new #[Title('Review queue')] class extends Component {
             $this->board = [];
         }
 
-        if (in_array($property, ['filter', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo'], true)) {
+        if (in_array($property, ['group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo'], true)) {
             $this->resetPage();
         }
     }
@@ -239,8 +233,7 @@ new #[Title('Review queue')] class extends Component {
     #[Computed]
     public function hasActiveFilters(): bool
     {
-        return $this->filter !== 'all'
-            || $this->group !== ''
+        return $this->group !== ''
             || $this->board !== []
             || $this->search !== ''
             || $this->hasSecondRowFilters;
@@ -251,7 +244,7 @@ new #[Title('Review queue')] class extends Component {
      */
     public function clearFilters(): void
     {
-        $this->reset(['filter', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo']);
+        $this->reset(['group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo']);
         $this->resetPage();
     }
 
@@ -274,7 +267,6 @@ new #[Title('Review queue')] class extends Component {
     public function ideas(): LengthAwarePaginator
     {
         $query = $this->queueQuery()
-            ->when($this->filter !== 'all', fn (Builder $query) => $query->where('status', $this->filter))
             ->when($this->group !== '', fn (Builder $query) => $query->where('board_group_id', $this->group))
             ->when($this->board !== [], fn (Builder $query) => $query->whereIn('board_id', $this->board))
             ->when($this->category !== [], fn (Builder $query) => $query->whereHas('category', fn ($query) => $query->whereIn('name', $this->category)))
@@ -312,7 +304,10 @@ new #[Title('Review queue')] class extends Component {
     }
 
     /**
-     * Approve a queued idea: New moves to Under Review first; Under Review moves to Planned.
+     * Approve a queued idea: New moves to Approved. Only ideas currently in
+     * the queue (i.e. still New) can be approved; an idea that has already
+     * been decided is no longer matched by queueQuery() and 404s instead of
+     * silently no-opping or being re-approved.
      */
     public function approve(int $ideaId): void
     {
@@ -320,13 +315,14 @@ new #[Title('Review queue')] class extends Component {
 
         $idea = $this->queueQuery()->findOrFail($ideaId);
 
-        $this->decide($idea, $this->approveTargetStatus($idea->status));
+        $this->decide($idea, 'approved');
 
         Flux::toast(variant: 'success', text: __('Idea approved.'));
     }
 
     /**
-     * Decline a queued idea.
+     * Decline a queued idea. Only ideas currently in the queue (i.e. still
+     * New) can be declined; see approve() for the same not-New protection.
      */
     public function decline(int $ideaId): void
     {
@@ -337,14 +333,6 @@ new #[Title('Review queue')] class extends Component {
         $this->decide($idea, 'not_doing');
 
         Flux::toast(variant: 'success', text: __('Idea declined.'));
-    }
-
-    /**
-     * The status approving an idea currently at the given status would move it to.
-     */
-    public function approveTargetStatus(string $currentStatus): string
-    {
-        return $currentStatus === 'new' ? 'under_review' : 'planned';
     }
 
     /**
@@ -380,19 +368,6 @@ new #[Title('Review queue')] class extends Component {
     {
         return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
     }
-
-    /**
-     * Tailwind text-color classes matching a status badge's color, for inline status text.
-     */
-    public function statusTextClass(string $color): string
-    {
-        return match ($color) {
-            'amber' => 'text-amber-700 dark:text-amber-400',
-            'blue' => 'text-blue-700 dark:text-blue-400',
-            'red' => 'text-red-700 dark:text-red-400',
-            default => 'text-zinc-700 dark:text-zinc-300',
-        };
-    }
 }; ?>
 
 @push('breadcrumbs')
@@ -404,11 +379,40 @@ new #[Title('Review queue')] class extends Component {
 <section class="mx-auto container px-6 pb-7 lg:px-8">
     {{-- Header --}}
     <div class="flex flex-col gap-1">
-        <flux:heading size="xl">{{ __('Review queue') }}</flux:heading>
+        <div class="flex items-center gap-1.5">
+            <flux:heading size="xl">{{ __('Review Queue') }}</flux:heading>
+
+            <flux:modal.trigger name="workflow-help">
+                <flux:button
+                    variant="ghost"
+                    size="sm"
+                    icon="information-circle"
+                    tooltip="{{ __('How the workflow works') }}"
+                    tooltip:position="bottom"
+                    aria-label="{{ __('How the workflow works') }}"
+                    class="cursor-pointer"
+                    data-test="workflow-help-trigger"
+                />
+            </flux:modal.trigger>
+        </div>
         <flux:text class="text-slate-600 dark:text-slate-500">
-            {{ __('New and under-review ideas waiting on a decision. Triage the highest-voted first.') }}
+            {{ __('New ideas waiting on a decision. Triage the highest-voted first.') }}
         </flux:text>
     </div>
+
+    {{-- Workflow help modal --}}
+    <flux:modal name="workflow-help" class="max-w-lg" data-test="workflow-help-modal">
+        <div class="space-y-5">
+            <div>
+                <flux:heading size="lg">{{ __('How ideas move through the workflow') }}</flux:heading>
+                <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">
+                    {{ __('New ideas are approved or declined by a manager. Approved ideas then move through delivery.') }}
+                </flux:text>
+            </div>
+
+            <x-workflow-timeline />
+        </div>
+    </flux:modal>
 
     {{-- Stats --}}
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -533,12 +537,6 @@ new #[Title('Review queue')] class extends Component {
                             </flux:menu.checkbox.group>
                         </flux:menu>
                     </flux:dropdown>
-
-                    <flux:radio.group wire:model.live="filter" variant="segmented" size="sm">
-                        <flux:radio value="all">{{ __('All') }}</flux:radio>
-                        <flux:radio value="new">{{ __('New') }}</flux:radio>
-                        <flux:radio value="under_review">{{ __('Under Review') }}</flux:radio>
-                    </flux:radio.group>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
@@ -672,7 +670,6 @@ new #[Title('Review queue')] class extends Component {
     <div class="mt-4 space-y-3">
         @forelse ($this->ideas as $idea)
             @php($meta = $this->statusMeta($idea->status))
-            @php($approveTargetMeta = $this->statusMeta($this->approveTargetStatus($idea->status)))
             @php($authorName = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
             <div
                 class="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900 sm:flex-row sm:items-center"
@@ -700,11 +697,9 @@ new #[Title('Review queue')] class extends Component {
                         <span aria-hidden="true" class="text-base leading-none">&middot;</span>
 
                         <flux:tooltip :content="__('Current status')">
-                            <a href="{{ route('ideas.review', ['status' => $idea->status]) }}" wire:navigate class="hover:underline">
-                                <flux:badge :color="$meta['color']" size="sm">
-                                    <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
-                                </flux:badge>
-                            </a>
+                            <flux:badge :color="$meta['color']" size="sm">
+                                <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                            </flux:badge>
                         </flux:tooltip>
 
                         @if ($idea->board)
@@ -733,7 +728,7 @@ new #[Title('Review queue')] class extends Component {
                         <flux:button
                             variant="ghost"
                             size="sm"
-                            class="review-action-button border border-emerald-600 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                            class="review-action-button border border-teal-700 text-teal-700! hover:bg-teal-50 dark:text-teal-400! dark:hover:bg-teal-950"
                             data-test="approve-idea"
                         >
                             {{ __('Approve') }}
@@ -744,7 +739,7 @@ new #[Title('Review queue')] class extends Component {
                         <flux:button
                             variant="ghost"
                             size="sm"
-                            class="review-action-button border border-red-600 text-red-600 hover:bg-red-50 dark:border-red-400 dark:text-red-400 dark:hover:bg-red-950"
+                            class="review-action-button border border-red-600 text-red-600! hover:bg-red-50 dark:border-red-400 dark:text-red-400! dark:hover:bg-red-950"
                             data-test="decline-idea"
                         >
                             {{ __('Decline') }}
@@ -758,10 +753,7 @@ new #[Title('Review queue')] class extends Component {
                         <div>
                             <flux:heading size="lg">{{ __('Approve this idea?') }}</flux:heading>
                             <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
-                                {!! __('You are about to move this idea into :target from :current status.', [
-                                    'target' => '<span class="font-semibold '.$this->statusTextClass($approveTargetMeta['color']).'">'.e($approveTargetMeta['label']).'</span>',
-                                    'current' => '<span class="font-semibold '.$this->statusTextClass($meta['color']).'">'.e($meta['label']).'</span>',
-                                ]) !!}
+                                {{ __('You are about to move this idea to Approved status.') }}
                             </flux:text>
                         </div>
                         <div class="flex justify-end gap-2">

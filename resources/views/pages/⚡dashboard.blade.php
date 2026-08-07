@@ -29,10 +29,10 @@ new #[Title('Dashboard')] class extends Component {
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
-        'under_review' => ['label' => 'Under Review', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
+        'approved' => ['label' => 'Approved', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
         'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo', 'badge_dot' => 'bg-indigo-800 dark:bg-indigo-200'],
-        'released' => ['label' => 'Implemented', 'color' => 'green', 'badge_dot' => 'bg-green-800 dark:bg-green-200'],
+        'released' => ['label' => 'Completed', 'color' => 'green', 'badge_dot' => 'bg-green-800 dark:bg-green-200'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
         'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
     ];
@@ -171,7 +171,7 @@ new #[Title('Dashboard')] class extends Component {
                 'dot' => 'bg-violet-500',
             ],
             [
-                'label' => __('Implemented'),
+                'label' => __('Completed'),
                 'value' => $team->ideas()->visibleTo($this->role, $userId)->where('status', 'released')->count(),
                 'caption' => __('shipped org-wide'),
                 'dot' => 'bg-emerald-500',
@@ -192,7 +192,7 @@ new #[Title('Dashboard')] class extends Component {
         return [
             [
                 'label' => __('Awaiting review'),
-                'value' => $team->ideas()->whereIn('status', ['new', 'under_review'])->count(),
+                'value' => $team->ideas()->where('status', 'new')->count(),
                 'caption' => __('need a decision'),
                 'dot' => 'bg-amber-500',
             ],
@@ -203,7 +203,7 @@ new #[Title('Dashboard')] class extends Component {
                 'dot' => 'bg-violet-500',
             ],
             [
-                'label' => __('Implemented'),
+                'label' => __('Completed'),
                 'value' => IdeaStatusHistory::whereHas('idea', fn ($query) => $query->where('team_id', $team->id))
                     ->where('new_status', 'released')
                     ->where('created_at', '>=', now()->startOfQuarter())
@@ -245,12 +245,12 @@ new #[Title('Dashboard')] class extends Component {
             ],
             [
                 'label' => __('Awaiting review'),
-                'value' => $team->ideas()->whereIn('status', ['new', 'under_review'])->count(),
+                'value' => $team->ideas()->where('status', 'new')->count(),
                 'caption' => __('need a decision'),
                 'dot' => 'bg-amber-500',
             ],
             [
-                'label' => __('Implemented'),
+                'label' => __('Completed'),
                 'value' => $team->ideas()->where('status', 'released')->count(),
                 'caption' => __('shipped'),
                 'dot' => 'bg-emerald-500',
@@ -288,8 +288,8 @@ new #[Title('Dashboard')] class extends Component {
             ],
             [
                 'label' => __('In the pipeline'),
-                'value' => $groupTotal(['new', 'under_review', 'planned']),
-                'caption' => $groupBreakdown(['new', 'under_review', 'planned']),
+                'value' => $groupTotal(['new', 'approved', 'planned']),
+                'caption' => $groupBreakdown(['new', 'approved', 'planned']),
                 'caption_bold' => true,
                 'dot' => 'bg-indigo-500',
             ],
@@ -343,7 +343,7 @@ new #[Title('Dashboard')] class extends Component {
     public function queueTop(): Collection
     {
         return $this->team->ideas()
-            ->whereIn('status', ['new', 'under_review'])
+            ->where('status', 'new')
             ->with(['board:id,name', 'submittedBy:id,name'])
             ->withCount([
                 'votes',
@@ -483,7 +483,7 @@ new #[Title('Dashboard')] class extends Component {
      */
     public function statusMeta(string $status): array
     {
-        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
+        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
     }
 }; ?>
 

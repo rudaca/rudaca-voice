@@ -63,7 +63,7 @@ test('a viewer sees status-grouped stat cards instead of the participation cards
     ['team' => $team, 'user' => $viewer] = teamWithMember(TeamRole::Viewer);
 
     makeIdea($team, ['status' => 'new']);
-    makeIdea($team, ['status' => 'under_review']);
+    makeIdea($team, ['status' => 'approved']);
     makeIdea($team, ['status' => 'planned']);
     makeIdea($team, ['status' => 'in_progress']);
     makeIdea($team, ['status' => 'released']);
@@ -77,9 +77,9 @@ test('a viewer sees status-grouped stat cards instead of the participation cards
         ->assertSeeText('Active work')
         ->assertSeeText('Closed out')
         ->assertSeeText("Total for {$team->name}")
-        ->assertSeeText('New 1 · Under Review 1 · Planned 1')
+        ->assertSeeText('New 1 · Approved 1 · Planned 1')
         ->assertSeeText('In Progress 1')
-        ->assertSeeText('Implemented 1 · Declined 1 · Duplicate 1')
+        ->assertSeeText('Completed 1 · Declined 1 · Duplicate 1')
         ->assertDontSeeText('Your ideas')
         ->assertDontSeeText('Votes cast');
 });
@@ -104,7 +104,7 @@ test('a manager sees team-oriented For You cards instead of the personal partici
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
 
     makeIdea($team, ['status' => 'new']);
-    makeIdea($team, ['status' => 'under_review']);
+    makeIdea($team, ['status' => 'approved']);
     makeIdea($team, ['status' => 'in_progress']);
     $released = makeIdea($team, ['status' => 'released']);
 
@@ -131,7 +131,7 @@ test('a manager sees Top of the queue instead of Trending ideas, linking to the 
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
 
     $lowVotes = makeIdea($team, ['status' => 'new', 'title' => 'Low votes idea']);
-    $highVotes = makeIdea($team, ['status' => 'under_review', 'title' => 'High votes idea']);
+    $highVotes = makeIdea($team, ['status' => 'new', 'title' => 'High votes idea']);
     makeIdea($team, ['status' => 'planned', 'title' => 'Already decided idea']);
 
     IdeaVote::factory()->count(1)->for($lowVotes)->create();
@@ -143,6 +143,19 @@ test('a manager sees Top of the queue instead of Trending ideas, linking to the 
         ->assertDontSeeText('Trending ideas')
         ->assertSeeInOrder(['High votes idea', 'Low votes idea'])
         ->assertDontSeeText('Already decided idea');
+});
+
+test('a trending idea with a status not in STATUS_META renders without error', function () {
+    ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
+
+    // Simulates a legacy/unmapped status value (e.g. pre-migration data),
+    // which previously crashed with "Undefined array key badge_dot" because
+    // the statusMeta() fallback didn't include that key.
+    makeIdea($team, ['status' => 'legacy_status']);
+
+    Livewire::actingAs($employee)
+        ->test('pages::dashboard')
+        ->assertOk();
 });
 
 test('an employee still sees Trending ideas and personal For You cards', function () {
@@ -162,7 +175,7 @@ test('an admin/owner sees organization-wide For You cards instead of the persona
     $team->members()->attach(User::factory()->count(2)->create(), ['role' => TeamRole::Employee->value]);
 
     makeIdea($team, ['status' => 'new']);
-    makeIdea($team, ['status' => 'under_review']);
+    makeIdea($team, ['status' => 'approved']);
     makeIdea($team, ['status' => 'released']);
 
     Livewire::actingAs($admin)
@@ -173,7 +186,7 @@ test('an admin/owner sees organization-wide For You cards instead of the persona
         ->assertSeeText("in {$team->name}")
         ->assertSeeText('Awaiting review')
         ->assertSeeText('need a decision')
-        ->assertSeeText('Implemented')
+        ->assertSeeText('Completed')
         ->assertSeeText('shipped')
         ->assertDontSeeText('Your ideas')
         ->assertDontSeeText('Votes cast');

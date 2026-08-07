@@ -26,7 +26,7 @@ class IdeaPortalSeeder extends Seeder
      *
      * @var array<int, string>
      */
-    private const STATUS_FLOW = ['new', 'under_review', 'planned', 'in_progress', 'released'];
+    private const STATUS_FLOW = ['new', 'approved', 'planned', 'in_progress', 'released'];
 
     /**
      * Seed a realistic employee ideas / business-improvement portal for a sample team.
@@ -126,7 +126,7 @@ class IdeaPortalSeeder extends Seeder
 
         // --- Ideas: 20 curated templates (2 per category) repeated 5x each = 100 ideas ---
         $templates = $this->ideaTemplates();
-        $statusPool = ['new', 'under_review', 'planned', 'in_progress', 'released', 'not_doing'];
+        $statusPool = ['new', 'approved', 'planned', 'in_progress', 'released', 'not_doing'];
 
         /** @var Collection<int, Idea> $ideas */
         $ideas = new Collection;
@@ -221,7 +221,7 @@ class IdeaPortalSeeder extends Seeder
         }
 
         // --- Status history: every idea gets its full, ordered status-change
-        // trail starting with its "New" submission (e.g. New -> Under Review
+        // trail starting with its "New" submission (e.g. New -> Approved
         // -> Planned -> In Progress), backdated so the most recent change is
         // closest to now.
         $ideas->each(function (Idea $idea) use ($reviewers) {
@@ -313,7 +313,7 @@ class IdeaPortalSeeder extends Seeder
     /**
      * Build the ordered chain of statuses an idea passed through to reach its
      * final status, starting from "new" (e.g. "planned" becomes
-     * new -> under_review -> planned). Terminal decisions ("not_doing",
+     * new -> approved -> planned). Terminal decisions ("not_doing",
      * "duplicate") are reached after a single review step.
      *
      * @return array<int, string>
@@ -325,7 +325,7 @@ class IdeaPortalSeeder extends Seeder
         }
 
         if ($finalStatus === 'not_doing') {
-            return ['new', 'under_review', 'not_doing'];
+            return ['new', 'not_doing'];
         }
 
         $index = array_search($finalStatus, self::STATUS_FLOW, true);
@@ -349,7 +349,7 @@ class IdeaPortalSeeder extends Seeder
                 'title' => 'Reduce duplicate data entry between our booking system and accounting',
                 'board' => 'operations',
                 'category' => 'process-improvement',
-                'status' => 'under_review',
+                'status' => 'approved',
                 'priority' => 'high',
                 'impact' => 'medium',
                 'effort' => 'medium',
@@ -370,7 +370,7 @@ class IdeaPortalSeeder extends Seeder
                 'title' => 'Faster passport and visa document collection',
                 'board' => 'operations',
                 'category' => 'customer-service',
-                'status' => 'under_review',
+                'status' => 'approved',
                 'priority' => 'medium',
                 'impact' => 'medium',
                 'effort' => 'medium',
@@ -391,7 +391,7 @@ class IdeaPortalSeeder extends Seeder
                 'title' => 'Track and reduce refund processing time',
                 'board' => 'operations',
                 'category' => 'reporting',
-                'status' => 'under_review',
+                'status' => 'approved',
                 'priority' => 'high',
                 'impact' => 'medium',
                 'effort' => 'medium',
@@ -401,7 +401,7 @@ class IdeaPortalSeeder extends Seeder
                 'title' => 'Weekly operations KPI snapshot for leadership',
                 'board' => 'operations',
                 'category' => 'reporting',
-                'status' => 'under_review',
+                'status' => 'approved',
                 'priority' => 'medium',
                 'impact' => 'medium',
                 'effort' => 'medium',
@@ -433,7 +433,7 @@ class IdeaPortalSeeder extends Seeder
                 'title' => 'Central dashboard for trip profitability',
                 'board' => 'accounting',
                 'category' => 'reporting',
-                'status' => 'under_review',
+                'status' => 'approved',
                 'priority' => 'high',
                 'impact' => 'high',
                 'effort' => 'large',
@@ -454,7 +454,7 @@ class IdeaPortalSeeder extends Seeder
                 'title' => 'Renegotiate merchant processing fees across suppliers',
                 'board' => 'accounting',
                 'category' => 'cost-savings',
-                'status' => 'under_review',
+                'status' => 'approved',
                 'priority' => 'medium',
                 'impact' => 'high',
                 'effort' => 'medium',

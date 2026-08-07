@@ -15,6 +15,20 @@ test('the comment actions menu links to the idea', function () {
         ->assertSeeHtml(route('ideas.show', ['idea' => $idea->slug]));
 });
 
+test('a comment on an idea with a status not in STATUS_META renders without error', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    // Simulates a legacy/unmapped status value (e.g. pre-migration data),
+    // which previously crashed with "Undefined array key badge_dot" because
+    // the statusMeta() fallback didn't include that key.
+    $idea = makeIdea($team, ['status' => 'legacy_status']);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->assertOk();
+});
+
 test('an admin can hide a comment', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
     $idea = makeIdea($team);

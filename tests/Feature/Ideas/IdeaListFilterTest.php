@@ -24,6 +24,19 @@ test('status filter accepts multiple statuses', function () {
         ->and($ids)->not->toContain($released->id);
 });
 
+test('an idea with a status not in STATUS_META renders without error', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    // Simulates a legacy/unmapped status value (e.g. pre-migration data),
+    // which previously crashed with "Undefined array key badge_dot" because
+    // the statusMeta() fallback didn't include that key.
+    makeIdea($team, ['status' => 'legacy_status']);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->assertOk();
+});
+
 test('board filter accepts multiple boards', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
 

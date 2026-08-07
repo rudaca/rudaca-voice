@@ -25,10 +25,10 @@ new #[Title('Idea')] class extends Component {
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc'],
-        'under_review' => ['label' => 'Under Review', 'color' => 'amber'],
+        'approved' => ['label' => 'Approved', 'color' => 'amber'],
         'planned' => ['label' => 'Planned', 'color' => 'blue'],
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
-        'released' => ['label' => 'Implemented', 'color' => 'green'],
+        'released' => ['label' => 'Completed', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
         'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!'],
     ];

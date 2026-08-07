@@ -16,7 +16,7 @@
             $__isSuperAdmin = auth()->user()?->is_super_admin ?? false;
 
             $__reviewQueueCount = $__canReview
-                ? $__currentTeam->ideas()->whereIn('status', ['new', 'under_review'])->count()
+                ? $__currentTeam->ideas()->where('status', 'new')->count()
                 : 0;
 
             $__ideasCountScope = fn ($query) => $query->visibleTo($__currentRole, auth()->id());

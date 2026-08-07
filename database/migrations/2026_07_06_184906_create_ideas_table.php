@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('title');
             $table->string('slug');
             $table->text('description');
-            $table->string('status')->default('new'); // new, under_review, planned, in_progress, released, not_doing, duplicate
+            $table->string('status')->default('new'); // new, approved, planned, in_progress, released, not_doing, duplicate
             $table->string('priority')->default('medium'); // low, medium, high
             $table->string('impact')->default('medium'); // low, medium, high
             $table->string('effort')->default('medium'); // small, medium, large

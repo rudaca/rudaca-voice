@@ -25,10 +25,10 @@ new class extends Component {
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
-        'under_review' => ['label' => 'Under Review', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
+        'approved' => ['label' => 'Approved', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
         'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo', 'badge_dot' => 'bg-indigo-800 dark:bg-indigo-200'],
-        'released' => ['label' => 'Implemented', 'color' => 'green', 'badge_dot' => 'bg-green-800 dark:bg-green-200'],
+        'released' => ['label' => 'Completed', 'color' => 'green', 'badge_dot' => 'bg-green-800 dark:bg-green-200'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
         'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
     ];
@@ -427,7 +427,7 @@ new class extends Component {
      */
     public function statusMeta(string $status): array
     {
-        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
+        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
     }
 }; ?>
 
@@ -601,7 +601,7 @@ new class extends Component {
 
                                 <flux:menu.checkbox.group wire:model.live="status">
                                     @php($statusGroups = [
-                                        ['new', 'under_review', 'planned', 'in_progress', 'released'],
+                                        ['new', 'approved', 'planned', 'in_progress', 'released'],
                                         ['not_doing', 'duplicate'],
                                     ])
 

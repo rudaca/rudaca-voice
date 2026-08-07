@@ -6,23 +6,22 @@ use App\Models\IdeaVote;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Livewire\Livewire;
 
-test('the queue stats only count new and under-review ideas', function () {
+test('the queue stats only count new ideas', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
 
     $new = makeIdea($team, ['status' => 'new', 'created_at' => now()]);
-    $underReview = makeIdea($team, ['status' => 'under_review', 'created_at' => now()]);
+    makeIdea($team, ['status' => 'approved', 'created_at' => now()]);
     makeIdea($team, ['status' => 'planned']);
     makeIdea($team, ['status' => 'not_doing']);
 
     IdeaVote::factory()->count(3)->for($new)->create();
-    IdeaVote::factory()->count(2)->for($underReview)->create();
 
     Livewire::actingAs($manager)
         ->test('pages::ideas.review')
         ->assertSet('stats', [
-            'awaiting' => 2,
-            'newThisWeek' => 2,
-            'totalVotes' => 5,
+            'awaiting' => 1,
+            'newThisWeek' => 1,
+            'totalVotes' => 3,
         ]);
 });
 
@@ -30,7 +29,7 @@ test('the queue lists ideas highest-voted first', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
 
     $lowVotes = makeIdea($team, ['status' => 'new', 'title' => 'Low votes idea']);
-    $highVotes = makeIdea($team, ['status' => 'under_review', 'title' => 'High votes idea']);
+    $highVotes = makeIdea($team, ['status' => 'new', 'title' => 'High votes idea']);
 
     IdeaVote::factory()->count(1)->for($lowVotes)->create();
     IdeaVote::factory()->count(5)->for($highVotes)->create();
@@ -40,56 +39,22 @@ test('the queue lists ideas highest-voted first', function () {
         ->assertSeeInOrder(['High votes idea', 'Low votes idea']);
 });
 
-test('the status filter narrows the queue without changing the stats', function () {
+test('a manager can approve a new idea and a history record is created', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
-
-    makeIdea($team, ['status' => 'new', 'title' => 'A new idea']);
-    makeIdea($team, ['status' => 'under_review', 'title' => 'An under-review idea']);
-
-    $component = Livewire::actingAs($manager)
-        ->test('pages::ideas.review')
-        ->set('filter', 'new');
-
-    $component->assertSee('A new idea')
-        ->assertDontSee('An under-review idea')
-        ->assertSet('stats.awaiting', 2);
-});
-
-test('a manager can approve an under-review idea and a history record is created', function () {
-    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
-    $idea = makeIdea($team, ['status' => 'under_review']);
+    $idea = makeIdea($team, ['status' => 'new']);
 
     Livewire::actingAs($manager)
         ->test('pages::ideas.review')
         ->call('approve', $idea->id);
 
-    expect($idea->refresh()->status)->toBe('planned');
-
-    $history = IdeaStatusHistory::where('idea_id', $idea->id)->latest('id')->first();
-
-    expect($history)->not->toBeNull()
-        ->and($history->changed_by_user_id)->toBe($manager->id)
-        ->and($history->old_status)->toBe('under_review')
-        ->and($history->new_status)->toBe('planned');
-});
-
-test('approving a new idea moves it to under review first and it stays in the queue', function () {
-    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
-    $idea = makeIdea($team, ['status' => 'new', 'title' => 'Still awaiting a decision']);
-
-    $component = Livewire::actingAs($manager)->test('pages::ideas.review');
-
-    $component->call('approve', $idea->id)
-        ->assertSee('Still awaiting a decision');
-
-    expect($idea->refresh()->status)->toBe('under_review');
+    expect($idea->refresh()->status)->toBe('approved');
 
     $history = IdeaStatusHistory::where('idea_id', $idea->id)->latest('id')->first();
 
     expect($history)->not->toBeNull()
         ->and($history->changed_by_user_id)->toBe($manager->id)
         ->and($history->old_status)->toBe('new')
-        ->and($history->new_status)->toBe('under_review');
+        ->and($history->new_status)->toBe('approved');
 });
 
 test('a manager can decline a queued idea and a history record is created', function () {
@@ -111,7 +76,7 @@ test('a manager can decline a queued idea and a history record is created', func
 
 test('a decided idea drops out of the queue', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
-    $idea = makeIdea($team, ['status' => 'under_review', 'title' => 'About to be approved']);
+    $idea = makeIdea($team, ['status' => 'new', 'title' => 'About to be approved']);
 
     $component = Livewire::actingAs($manager)->test('pages::ideas.review');
 
@@ -119,6 +84,30 @@ test('a decided idea drops out of the queue', function () {
 
     $component->call('approve', $idea->id)
         ->assertDontSee('About to be approved');
+});
+
+test('approving an idea that is not New is rejected instead of silently no-oping', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team, ['status' => 'approved']);
+
+    expect(fn () => Livewire::actingAs($manager)
+        ->test('pages::ideas.review')
+        ->call('approve', $idea->id))
+        ->toThrow(ModelNotFoundException::class);
+
+    expect($idea->refresh()->status)->toBe('approved');
+});
+
+test('declining an idea that is not New is rejected instead of silently no-oping', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team, ['status' => 'planned']);
+
+    expect(fn () => Livewire::actingAs($manager)
+        ->test('pages::ideas.review')
+        ->call('decline', $idea->id))
+        ->toThrow(ModelNotFoundException::class);
+
+    expect($idea->refresh()->status)->toBe('planned');
 });
 
 test('employee and viewer cannot approve or decline queued ideas', function (TeamRole $role) {
@@ -154,8 +143,8 @@ test('a manager cannot decide on an idea from another team', function () {
 test('the sidebar shows an Administration section with the awaiting-review count for a manager', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
     makeIdea($team, ['status' => 'new']);
-    makeIdea($team, ['status' => 'under_review']);
-    makeIdea($team, ['status' => 'under_review']);
+    makeIdea($team, ['status' => 'new']);
+    makeIdea($team, ['status' => 'new']);
     makeIdea($team, ['status' => 'planned']);
 
     $content = $this->actingAs($manager)
@@ -165,20 +154,22 @@ test('the sidebar shows an Administration section with the awaiting-review count
         ->assertSee('Review Queue')
         ->getContent();
 
-    // The badge next to "Review Queue" should reflect only the new/under_review ideas (3), not the planned one.
-    preg_match('/Review Queue(.{0,400})/s', $content, $matches);
-    expect($matches[1] ?? '')->toContain('3');
+    // The badge next to "Review Queue" should reflect only the new ideas (3), not the planned one.
+    // Anchored on "Administration" rather than "Review Queue" itself, since the page's own
+    // <title> tag also contains "Review Queue" and would otherwise be matched first.
+    preg_match('/Administration(.{0,3000})/s', $content, $matches);
+    expect($matches[1] ?? '')
+        ->toContain('Review Queue')
+        ->toContain('3');
 });
 
-test('the approve confirmation shows the idea current and target status', function () {
+test('the approve confirmation shows the Approved target status', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
-    $newIdea = makeIdea($team, ['status' => 'new']);
-    $underReviewIdea = makeIdea($team, ['status' => 'under_review']);
+    makeIdea($team, ['status' => 'new']);
 
-    $component = Livewire::actingAs($manager)->test('pages::ideas.review');
-
-    $component->assertSeeHtml('You are about to move this idea into <span class="font-semibold text-amber-700 dark:text-amber-400">Under Review</span> from <span class="font-semibold text-zinc-700 dark:text-zinc-300">New</span> status.')
-        ->assertSeeHtml('You are about to move this idea into <span class="font-semibold text-blue-700 dark:text-blue-400">Planned</span> from <span class="font-semibold text-amber-700 dark:text-amber-400">Under Review</span> status.');
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.review')
+        ->assertSee('You are about to move this idea to Approved status.');
 });
 
 test('the decline confirmation shows a generic message', function () {
@@ -198,4 +189,15 @@ test('the sidebar has no Administration section for an employee', function () {
         ->assertOk()
         ->assertDontSee('Administration')
         ->assertDontSee('Review Queue');
+});
+
+test('Under Review does not appear anywhere in the review queue UI', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    makeIdea($team, ['status' => 'new']);
+    makeIdea($team, ['status' => 'approved']);
+    makeIdea($team, ['status' => 'planned']);
+
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.review')
+        ->assertDontSee('Under Review');
 });
