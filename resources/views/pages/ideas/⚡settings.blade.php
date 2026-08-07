@@ -1126,7 +1126,7 @@ new #[Title('Organization Settings')] class extends Component {
 
     {{-- Authentication --}}
     @if ($tab === 'authentication' && $this->canManageAuthentication)
-        <div class="mt-5 max-w-3xl">
+        <div class="mt-5">
             <livewire:pages::ideas.authentication-settings :team="$this->team" :key="'authentication-settings-'.$this->team->id" />
         </div>
     @endif

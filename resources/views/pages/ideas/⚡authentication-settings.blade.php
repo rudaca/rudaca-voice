@@ -279,6 +279,7 @@ new class extends Component
                 :description="__('Members will be able to sign in with their Microsoft account once tenant ID, client ID, and a client secret are saved.')"
                 data-test="microsoft-enabled-toggle"
             />
+            <flux:separator />
 
             <div class="grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2">
                 <div class="space-y-6">
