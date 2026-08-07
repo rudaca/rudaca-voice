@@ -2,6 +2,7 @@
 
 use App\Enums\TeamRole;
 use App\Models\Team;
+use App\Models\TeamIdentityProvider;
 use App\Models\User;
 use App\Rules\TeamName;
 use Flux\Flux;
@@ -208,6 +209,36 @@ new #[Title('Organization Settings')] class extends Component {
     public function canRemoveMember(): bool
     {
         return Gate::allows('removeMember', $this->team);
+    }
+
+    #[Computed]
+    public function canManageAuthentication(): bool
+    {
+        return Gate::allows('viewAny', [TeamIdentityProvider::class, $this->team]);
+    }
+
+    /**
+     * Tabs shown on this page — Authentication only appears for organization
+     * owners and admins with the "manage authentication settings" permission.
+     *
+     * @return array<string, string>
+     */
+    #[Computed]
+    public function tabs(): array
+    {
+        $tabs = [
+            'boards' => __('Boards'),
+            'groups' => __('Groups'),
+            'categories' => __('Categories'),
+            'members' => __('Contributors'),
+            'settings' => __('Settings'),
+        ];
+
+        if ($this->canManageAuthentication) {
+            $tabs['authentication'] = __('Authentication');
+        }
+
+        return $tabs;
     }
 
     /**
@@ -718,14 +749,7 @@ new #[Title('Organization Settings')] class extends Component {
                 :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
             ></div>
 
-            @foreach ([
-                'boards' => __('Boards'),
-                'groups' => __('Groups'),
-                'categories' => __('Categories'),
-                'members' => __('Contributors'),
-                // 'integrations' => __('Integrations'), // hidden — replaced by the Settings tab
-                'settings' => __('Settings'),
-            ] as $key => $label)
+            @foreach ($this->tabs as $key => $label)
                 <button
                     type="button"
                     x-ref="tab-{{ $key }}"
@@ -751,6 +775,7 @@ new #[Title('Organization Settings')] class extends Component {
             @case('members'){{ __('People with access to this organization.') }}@break
             {{-- @case('integrations'){{ __('Connect external tools to your idea workflow.') }}@break --}}
             @case('settings'){{ __('Manage your organization\'s name and idea submission preferences.') }}@break
+            @case('authentication'){{ __('Configure external sign-in providers for this organization.') }}@break
             @default{{ __('Boards are where employees submit ideas. Assign each board to a group.') }}
         @endswitch
     </flux:text>
@@ -1096,6 +1121,13 @@ new #[Title('Organization Settings')] class extends Component {
                     {{ __('Save') }}
                 </flux:button>
             </form>
+        </div>
+    @endif
+
+    {{-- Authentication --}}
+    @if ($tab === 'authentication' && $this->canManageAuthentication)
+        <div class="mt-5 max-w-lg">
+            <livewire:pages::ideas.authentication-settings :team="$this->team" :key="'authentication-settings-'.$this->team->id" />
         </div>
     @endif
 

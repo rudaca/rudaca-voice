@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\GeneratesUniqueTeamSlugs;
+use App\Enums\IdentityProvider;
 use App\Enums\TeamRole;
 use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -30,6 +31,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, IdeaBoard> $boards
  * @property-read Collection<int, IdeaCategory> $categories
  * @property-read Collection<int, Idea> $ideas
+ * @property-read Collection<int, TeamIdentityProvider> $identityProviders
  */
 #[Fillable(['name', 'slug', 'is_personal', 'allow_anonymous_ideas'])]
 class Team extends Model
@@ -151,6 +153,24 @@ class Team extends Model
     public function ideas(): HasMany
     {
         return $this->hasMany(Idea::class);
+    }
+
+    /**
+     * Get all external identity provider configurations for this team.
+     *
+     * @return HasMany<TeamIdentityProvider, $this>
+     */
+    public function identityProviders(): HasMany
+    {
+        return $this->hasMany(TeamIdentityProvider::class);
+    }
+
+    /**
+     * Get this team's configuration for the given provider, if it has one.
+     */
+    public function identityProviderFor(IdentityProvider $provider): ?TeamIdentityProvider
+    {
+        return $this->identityProviders()->provider($provider)->first();
     }
 
     /**

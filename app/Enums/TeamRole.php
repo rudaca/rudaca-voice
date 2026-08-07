@@ -73,6 +73,7 @@ enum TeamRole: string
                 __('Delete ideas/comments if needed'),
             ],
             self::Admin => [
+                __('Manage authentication settings'),
                 __('Manage boards'),
                 __('Manage categories'),
                 __('Review ideas'),
@@ -108,7 +109,10 @@ enum TeamRole: string
     {
         return match ($this) {
             self::Owner => TeamPermission::cases(),
-            self::Admin, self::Manager, self::Employee, self::Viewer, self::Member => [],
+            // Admins are trusted with the organization's operational settings, which
+            // includes its external sign-in configuration.
+            self::Admin => [TeamPermission::ManageAuthentication],
+            self::Manager, self::Employee, self::Viewer, self::Member => [],
         };
     }
 
@@ -141,6 +145,18 @@ enum TeamRole: string
     public function isAtLeast(TeamRole $role): bool
     {
         return $this->level() >= $role->level();
+    }
+
+    /**
+     * Whether this role sits at admin tier or above.
+     *
+     * Used to gate anything that can mint an admin-or-higher member — e.g.
+     * assigning it as the default role for auto-provisioned SSO users — behind
+     * the same authorization as changing an existing member's role.
+     */
+    public function isPrivileged(): bool
+    {
+        return $this->isAtLeast(self::Admin);
     }
 
     /**
