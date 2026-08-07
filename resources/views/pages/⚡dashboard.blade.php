@@ -25,16 +25,20 @@ new #[Title('Dashboard')] class extends Component {
     public string $boardsTab = 'boards';
 
     /**
-     * @var array<string, array{label: string, color: string, class?: string, badge_dot: string}>
+     * `dotColor` is only needed when `class` overrides the badge's rendered
+     * color, so that <x-status-dot> can follow what the badge actually looks
+     * like rather than the nominal `color`.
+     *
+     * @var array<string, array{label: string, color: string, class?: string, dotColor?: string}>
      */
     public const STATUS_META = [
-        'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
-        'approved' => ['label' => 'Approved', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
-        'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
-        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo', 'badge_dot' => 'bg-indigo-800 dark:bg-indigo-200'],
-        'released' => ['label' => 'Completed', 'color' => 'green', 'badge_dot' => 'bg-green-800 dark:bg-green-200'],
-        'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
+        'new' => ['label' => 'New', 'color' => 'zinc'],
+        'approved' => ['label' => 'Approved', 'color' => 'amber'],
+        'planned' => ['label' => 'Planned', 'color' => 'blue'],
+        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
+        'released' => ['label' => 'Completed', 'color' => 'green'],
+        'not_doing' => ['label' => 'Declined', 'color' => 'red'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'dotColor' => 'red'],
     ];
 
     #[Computed]
@@ -479,11 +483,11 @@ new #[Title('Dashboard')] class extends Component {
     }
 
     /**
-     * @return array{label: string, color: string, class?: string}
+     * @return array{label: string, color: string, class?: string, dotColor?: string}
      */
     public function statusMeta(string $status): array
     {
-        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
+        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
     }
 }; ?>
 
@@ -554,7 +558,7 @@ new #[Title('Dashboard')] class extends Component {
                     @forelse (($panelMode === 'admin' ? $this->highestVoted : ($panelMode === 'manager' ? $this->queueTop : $this->trending)) as $idea)
                         @php($meta = $this->statusMeta($idea->status))
                         <div
-                            class="flex cursor-pointer items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:border-indigo-200 hover:bg-gray-50 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60 dark:hover:bg-gray-800/40"
+                            class="flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs transition hover:border-indigo-200 hover:bg-gray-50 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60 dark:hover:bg-gray-800/40"
                             wire:key="trending-{{ $idea->id }}"
                         >
                             <flux:tooltip :content="$this->canParticipate ? ($idea->voted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
@@ -616,7 +620,7 @@ new #[Title('Dashboard')] class extends Component {
                                     <a
                                         href="{{ route('ideas.show', ['idea' => $idea->slug]) }}"
                                         wire:navigate
-                                        class="min-w-0"
+                                        class="min-w-0 cursor-pointer"
                                     >
                                         <div class="w-fit max-w-full truncate font-semibold text-slate-900 hover:underline dark:text-slate-200">{{ $idea->title }}</div>
                                     </a>
@@ -634,12 +638,12 @@ new #[Title('Dashboard')] class extends Component {
                                     <flux:tooltip :content="__('Idea submitted by :name', ['name' => $authorName])">
                                         @if ($idea->submitted_by_user_id)
                                             <a href="{{ route('ideas.index', ['author' => $idea->submitted_by_user_id]) }}" wire:navigate class="flex items-center gap-1.5 hover:underline">
-                                                <flux:avatar size="xs" :name="$authorName" color="auto" color:seed="{{ $idea->submitted_by_user_id }}" />
+                                                <flux:avatar size="xs" class="size-5" :name="$authorName" />
                                                 <span>{{ $authorName }}</span>
                                             </a>
                                         @else
                                             <div class="flex items-center gap-1.5">
-                                                <flux:avatar size="xs" :name="$authorName" color="auto" color:seed="{{ $authorName }}" />
+                                                <flux:avatar size="xs" class="size-5" :name="$authorName" />
                                                 <span>{{ $authorName }}</span>
                                             </div>
                                         @endif
@@ -650,7 +654,7 @@ new #[Title('Dashboard')] class extends Component {
                                     <flux:tooltip :content="__('Current status')">
                                         <a href="{{ route('ideas.index', ['status' => [$idea->status]]) }}" wire:navigate class="hover:underline">
                                             <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">
-                                                <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                                                <x-status-dot :color="$meta['dotColor'] ?? $meta['color']" class="me-1" />{{ $meta['label'] }}
                                             </flux:badge>
                                         </a>
                                     </flux:tooltip>
@@ -758,7 +762,7 @@ new #[Title('Dashboard')] class extends Component {
                                 class="flex items-center gap-3 border-b border-zinc-100 px-4 py-3 last:border-b-0 dark:border-zinc-800"
                                 wire:key="contributor-{{ $member->id }}"
                             >
-                                <flux:avatar size="sm" :name="$member->name" color="auto" color:seed="{{ $member->id }}" />
+                                <flux:avatar size="sm" :name="$member->name" />
                                 <div class="min-w-0 flex-1">
                                     <div class="flex min-w-0 items-center gap-1.5">
                                         <span class="truncate text-sm font-semibold text-slate-900 dark:text-slate-200">{{ $member->name }}</span>

@@ -15,7 +15,11 @@ new class extends Component {
     /**
      * Display metadata for each idea status (label + Flux badge color).
      *
-     * @var array<string, array{label: string, color: string, class?: string}>
+     * `dotColor` is only needed when `class` overrides the badge's rendered
+     * color, so that <x-status-dot> can follow what the badge actually looks
+     * like rather than the nominal `color`.
+     *
+     * @var array<string, array{label: string, color: string, class?: string, dotColor?: string}>
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc'],
@@ -24,7 +28,7 @@ new class extends Component {
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
         'released' => ['label' => 'Completed', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'dotColor' => 'red'],
     ];
 
     public string $query = '';
@@ -32,7 +36,7 @@ new class extends Component {
     /**
      * Get the display metadata for a status value.
      *
-     * @return array{label: string, color: string, class?: string}
+     * @return array{label: string, color: string, class?: string, dotColor?: string}
      */
     public function statusMeta(string $status): array
     {
@@ -207,7 +211,7 @@ new class extends Component {
                                     <div class="text-xs text-slate-600 dark:text-slate-500">{{ __('Idea') }} #{{ $idea->id }}</div>
                                     <span class="block truncate text-sm font-semibold">{{ $idea->title }}</span>
                                     <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
-                                        <flux:avatar size="xs" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
+                                        <flux:avatar size="xs" class="size-5" :name="$author" />
                                         <span>{{ $author }}</span>
                                         <span aria-hidden="true">·</span>
                                         <flux:badge :color="$meta['color']" size="sm" class="{{ $meta['class'] ?? '' }}">{{ $meta['label'] }}</flux:badge>
@@ -259,7 +263,7 @@ new class extends Component {
                         @foreach ($this->people as $person)
                             @php($stats = $this->personStats($person))
                             <div class="flex items-start gap-2 px-4 py-2 text-sm text-slate-800 dark:text-slate-300" data-test="global-search-person">
-                                <flux:avatar :name="$person->name" size="xs" color="auto" color:seed="{{ $person->id }}" />
+                                <flux:avatar :name="$person->name" size="xs" />
                                 <div class="min-w-0 flex-1">
                                     <span class="block truncate text-sm font-semibold">{{ $person->name }}</span>
                                     <div class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-600 dark:text-slate-500">

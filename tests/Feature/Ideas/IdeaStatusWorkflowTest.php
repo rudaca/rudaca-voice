@@ -29,6 +29,22 @@ test('a manager can update status and a history record is created', function () 
         ->and($history->created_at)->not->toBeNull();
 });
 
+test('a legacy Under Review history entry displays as Approved', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team, ['status' => 'approved']);
+
+    IdeaStatusHistory::factory()->for($idea)->create([
+        'changed_by_user_id' => $manager->id,
+        'old_status' => 'new',
+        'new_status' => 'under_review',
+    ]);
+
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertSee('Approved')
+        ->assertDontSee('Under Review');
+});
+
 test('a manager can update priority, impact and effort without a status change', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
     $idea = makeIdea($team, [

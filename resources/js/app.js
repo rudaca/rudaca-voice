@@ -15,6 +15,25 @@ document.addEventListener('livewire:navigating', (event) => {
     });
 });
 
+// Releases the <x-rolling-number> odometers (sidebar badge counts, stat card
+// figures) once the page has finished loading. Until this attribute lands, the
+// CSS parks every digit strip on its final face without an animation, so the
+// numbers are readable immediately and none of the rolling competes with
+// page-load work — see `.rolling-number-strip` in resources/css/app.css.
+//
+// It goes on <html>, which a wire:navigate swap leaves alone, so it's only ever
+// set once: after the first load, strips mount into a page that already has the
+// attribute and roll as soon as they render.
+function markRollingNumbersReady() {
+    document.documentElement.setAttribute('data-rolling-ready', '');
+}
+
+if (document.readyState === 'complete') {
+    markRollingNumbersReady();
+} else {
+    window.addEventListener('load', markRollingNumbersReady, {once: true});
+}
+
 // Drives the sliding active-pill indicator for Flux's segmented radio groups
 // (see resources/views/flux/radio, which override Flux's stock views to add
 // the `data-segmented-thumb` element and call this via x-init="initSegmentedThumb($el)").

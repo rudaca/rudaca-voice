@@ -21,7 +21,11 @@ new #[Title('Idea')] class extends Component {
     /**
      * Display metadata for each idea status (label + Flux badge color).
      *
-     * @var array<string, array{label: string, color: string, class?: string}>
+     * `dotColor` is only needed when `class` overrides the badge's rendered
+     * color, so that <x-status-dot> can follow what the badge actually looks
+     * like rather than the nominal `color`.
+     *
+     * @var array<string, array{label: string, color: string, class?: string, dotColor?: string}>
      */
     public const STATUS_META = [
         'new' => ['label' => 'New', 'color' => 'zinc'],
@@ -30,7 +34,7 @@ new #[Title('Idea')] class extends Component {
         'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
         'released' => ['label' => 'Completed', 'color' => 'green'],
         'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'dotColor' => 'red'],
     ];
 
     /** @var array<string, string> */
@@ -507,10 +511,20 @@ new #[Title('Idea')] class extends Component {
     /**
      * Get the display metadata for a status value.
      *
-     * @return array{label: string, color: string, class?: string}
+     * Older idea_status_history rows can still carry retired status values
+     * (e.g. "under_review", from before it was folded into the single-step
+     * Approve flow). The history log is append-only and never rewritten, so
+     * those values are aliased here for display only.
+     *
+     * @return array{label: string, color: string, class?: string, dotColor?: string}
      */
     public function statusMeta(string $status): array
     {
+        $status = match ($status) {
+            'under_review' => 'approved',
+            default => $status,
+        };
+
         return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
     }
 }; ?>
@@ -553,7 +567,7 @@ new #[Title('Idea')] class extends Component {
                         @forelse ($this->voters as $vote)
                             <flux:menu.item class="cursor-default" wire:key="voter-{{ $vote->id }}">
                                 <div class="flex items-center gap-2">
-                                    <flux:avatar size="xs" :name="$vote->user->name" color="auto" color:seed="{{ $vote->user_id }}" />
+                                    <flux:avatar size="xs" :name="$vote->user->name" />
                                     <div class="min-w-0">
                                         <div class="truncate">
                                             {{ $vote->user->name }}
@@ -663,7 +677,6 @@ new #[Title('Idea')] class extends Component {
                     <flux:heading size="xl" class="mt-0.5">{{ $idea->title }}</flux:heading>
 
                     <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-500">
-                        <flux:avatar size="xs" class="size-5" :name="$author" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $author }}" />
                         <span>
                             {{ __('Submitted by') }}
                             <span class="font-medium text-slate-800 dark:text-slate-400">{{ $author }}</span>
@@ -685,7 +698,7 @@ new #[Title('Idea')] class extends Component {
             {{-- Composer --}}
             @if ($this->canParticipate)
                 <form wire:submit="addComment" class="mt-4 flex gap-3">
-                    <flux:avatar size="sm" :name="auth()->user()->name" color="auto" color:seed="{{ auth()->id() }}" />
+                    <flux:avatar size="sm" :name="auth()->user()->name" />
                     <div class="min-w-0 flex-1 space-y-2">
                         <flux:textarea
                             wire:model="commentBody"
@@ -732,7 +745,7 @@ new #[Title('Idea')] class extends Component {
                         ])
                         wire:key="comment-{{ $comment->id }}"
                     >
-                        <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" color="auto" color:seed="{{ $comment->user_id ?? $comment->user?->name ?? __('Unknown') }}" />
+                        <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" />
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-sm font-medium text-slate-900 dark:text-slate-200">{{ $comment->user?->name ?? __('Unknown') }}</span>
@@ -950,7 +963,8 @@ new #[Title('Idea')] class extends Component {
                                 @php($entryMeta = $this->statusMeta($entry->new_status))
                                 <div class="flex gap-3" wire:key="history-{{ $entry->id }}">
                                     <div class="flex flex-col items-center">
-                                        <span class="mt-1.5 size-2.5 shrink-0 rounded-full {{ $loop->first ? 'bg-indigo-500' : 'bg-zinc-300 dark:bg-zinc-600' }}"></span>
+                                        {{-- History is newest-first, so the first dot is the idea's current status: pulse it. --}}
+                                        <x-status-dot :color="$entryMeta['dotColor'] ?? $entryMeta['color']" size="size-2.5" class="mt-1.5" :pulse="$loop->first" />
                                         @unless ($loop->last)
                                             <span class="w-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
                                         @endunless

@@ -6,6 +6,7 @@ use App\Models\Team;
 use App\Models\User;
 use Flux\Flux;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\Auth;
@@ -21,16 +22,34 @@ new #[Title('Moderate comments')] class extends Component {
     /**
      * Display metadata for each idea status (label + Flux badge color).
      *
-     * @var array<string, array{label: string, color: string, class?: string, badge_dot: string}>
+     * `dotColor` is only needed when `class` overrides the badge's rendered
+     * color, so that <x-status-dot> can follow what the badge actually looks
+     * like rather than the nominal `color`.
+     *
+     * @var array<string, array{label: string, color: string, class?: string, dotColor?: string}>
      */
     public const STATUS_META = [
-        'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
-        'approved' => ['label' => 'Approved', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
-        'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
-        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo', 'badge_dot' => 'bg-indigo-800 dark:bg-indigo-200'],
-        'released' => ['label' => 'Completed', 'color' => 'green', 'badge_dot' => 'bg-green-800 dark:bg-green-200'],
-        'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
+        'new' => ['label' => 'New', 'color' => 'zinc'],
+        'approved' => ['label' => 'Approved', 'color' => 'amber'],
+        'planned' => ['label' => 'Planned', 'color' => 'blue'],
+        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
+        'released' => ['label' => 'Completed', 'color' => 'green'],
+        'not_doing' => ['label' => 'Declined', 'color' => 'red'],
+        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'dotColor' => 'red'],
+    ];
+
+    /**
+     * The moderation-state tabs, mapped to the stats() key each one mirrors.
+     * Drives both the segmented control and the stat cards, so the two can't
+     * drift out of step.
+     *
+     * @var array<string, string>
+     */
+    public const FILTER_TABS = [
+        'all' => 'total',
+        'visible' => 'underReview',
+        'hidden' => 'flagged',
+        'deleted' => 'deleted',
     ];
 
     #[Url(as: 'filter')]
@@ -87,6 +106,16 @@ new #[Title('Moderate comments')] class extends Component {
         if (in_array($property, ['filter', 'group', 'board', 'status', 'search', 'category', 'author', 'dateFrom', 'dateTo'], true)) {
             $this->resetPage();
         }
+    }
+
+    /**
+     * Switch to a moderation-state tab. Backs the stat cards, which double as
+     * a second way into the same tabs; the segmented control uses wire:model.
+     */
+    public function selectFilter(string $filter): void
+    {
+        $this->filter = array_key_exists($filter, self::FILTER_TABS) ? $filter : 'all';
+        $this->resetPage();
     }
 
     /**
@@ -260,6 +289,29 @@ new #[Title('Moderate comments')] class extends Component {
     }
 
     /**
+     * Narrow a comment query down to the team and to what the toolbar filters
+     * currently select. Shared by the listing and the stat cards so both always
+     * agree. The moderation-state tabs are deliberately left out: the stat cards
+     * are the per-state breakdown, so narrowing them by the active tab would
+     * zero out the other three.
+     */
+    protected function applyFilters(Builder $query): Builder
+    {
+        return $query
+            ->whereHas('idea', function ($query) {
+                $query->where('team_id', $this->team->id)
+                    ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
+                    ->when($this->board !== [], fn ($query) => $query->whereIn('board_id', $this->board))
+                    ->when($this->status !== [], fn ($query) => $query->whereIn('status', $this->status))
+                    ->when($this->category !== [], fn ($query) => $query->whereHas('category', fn ($query) => $query->whereIn('name', $this->category)));
+            })
+            ->when($this->author !== [], fn (Builder $query) => $query->whereIn('user_id', $this->author))
+            ->when(trim($this->search) !== '', fn (Builder $query) => $query->where('body', 'like', $this->likeTerm()))
+            ->when($this->dateFrom !== '', fn (Builder $query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo !== '', fn (Builder $query) => $query->whereDate('created_at', '<=', $this->dateTo));
+    }
+
+    /**
      * Comments across the team's ideas, newest first. The "deleted" filter shows only
      * soft-deleted comments; "visible" shows only unflagged ones; "hidden" shows only
      * flagged ones; the other filters exclude soft-deleted comments, as normal.
@@ -269,21 +321,12 @@ new #[Title('Moderate comments')] class extends Component {
     #[Computed]
     public function comments(): LengthAwarePaginator
     {
-        return IdeaComment::query()
-            ->when($this->filter === 'deleted', fn ($query) => $query->onlyTrashed())
-            ->whereHas('idea', function ($query) {
-                $query->where('team_id', $this->team->id)
-                    ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
-                    ->when($this->board !== [], fn ($query) => $query->whereIn('board_id', $this->board))
-                    ->when($this->status !== [], fn ($query) => $query->whereIn('status', $this->status))
-                    ->when($this->category !== [], fn ($query) => $query->whereHas('category', fn ($query) => $query->whereIn('name', $this->category)));
-            })
+        $query = IdeaComment::query()
+            ->when($this->filter === 'deleted', fn ($query) => $query->onlyTrashed());
+
+        return $this->applyFilters($query)
             ->when($this->filter === 'visible', fn ($query) => $query->whereNull('hidden_at'))
             ->when($this->filter === 'hidden', fn ($query) => $query->whereNotNull('hidden_at'))
-            ->when($this->author !== [], fn ($query) => $query->whereIn('user_id', $this->author))
-            ->when(trim($this->search) !== '', fn ($query) => $query->where('body', 'like', $this->likeTerm()))
-            ->when($this->dateFrom !== '', fn ($query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo !== '', fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->with(['user:id,name', 'hiddenBy:id,name', 'idea:id,title,slug,status,board_id', 'idea.board:id,name'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -291,33 +334,33 @@ new #[Title('Moderate comments')] class extends Component {
     }
 
     /**
-     * Summary stats shown above the comments table: counts by moderation state,
-     * scoped to the team but ignoring the toolbar filters.
+     * Summary stats shown above the comments table: counts by moderation state.
+     * Every figure reflects the current filter selection, so narrowing the
+     * toolbar narrows the cards too.
      *
      * @return array{total: int, underReview: int, flagged: int, deleted: int}
      */
     #[Computed]
     public function stats(): array
     {
-        $teamComments = fn () => IdeaComment::query()
-            ->whereHas('idea', fn ($query) => $query->where('team_id', $this->team->id));
+        $filtered = fn () => $this->applyFilters(IdeaComment::query());
 
         return [
-            'total' => $teamComments()->withTrashed()->count(),
-            'underReview' => $teamComments()->whereNull('hidden_at')->count(),
-            'flagged' => $teamComments()->whereNotNull('hidden_at')->count(),
-            'deleted' => $teamComments()->onlyTrashed()->count(),
+            'total' => $filtered()->withTrashed()->count(),
+            'underReview' => $filtered()->whereNull('hidden_at')->count(),
+            'flagged' => $filtered()->whereNotNull('hidden_at')->count(),
+            'deleted' => $filtered()->onlyTrashed()->count(),
         ];
     }
 
     /**
      * Get the display metadata for a status value.
      *
-     * @return array{label: string, color: string, class?: string}
+     * @return array{label: string, color: string, class?: string, dotColor?: string}
      */
     public function statusMeta(string $status): array
     {
-        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
+        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
     }
 
     /**
@@ -420,26 +463,69 @@ new #[Title('Moderate comments')] class extends Component {
         </flux:text>
     </div>
 
+    {{--
+        Stats. Every figure tracks the toolbar filters, and the numbers are
+        <x-rolling-number> odometers so a changed figure rolls into place rather
+        than snapping to the new value.
+
+        Each card mirrors one moderation-state tab, so the card for the active
+        tab is highlighted and the whole card is a second way to select that
+        tab. The click target is a stretched overlay button rather than the card
+        itself: it keeps the card's <div> content valid inside a button and
+        gives the tab a real focusable control.
+
+        The active tab deliberately does not narrow these figures -- the cards
+        are the per-state breakdown, so filtering them by the selected state
+        would zero out the other three. See applyFilters().
+    --}}
+    @php($statCards = [
+        'all' => ['label' => __('All comments'), 'key' => 'total', 'name' => 'total', 'test' => 'stat-total', 'figureClass' => 'text-slate-900 dark:text-white'],
+        'visible' => ['label' => __('Visible'), 'key' => 'underReview', 'name' => 'under-review', 'test' => 'stat-under-review', 'figureClass' => 'text-slate-900 dark:text-white'],
+        'hidden' => ['label' => __('Flagged'), 'key' => 'flagged', 'name' => 'flagged', 'test' => 'stat-flagged', 'figureClass' => 'text-red-600 dark:text-red-400'],
+        'deleted' => ['label' => __('Deleted'), 'key' => 'deleted', 'name' => 'deleted', 'test' => 'stat-deleted', 'figureClass' => 'text-slate-900 dark:text-white'],
+    ])
+
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-total">
-            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('All comments') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['total'] }}</div>
-        </div>
+        @foreach ($statCards as $tab => $card)
+            @php($isActiveTab = $filter === $tab)
 
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-under-review">
-            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Under review') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['underReview'] }}</div>
-        </div>
+            <div
+                @class([
+                    'relative rounded-xl border bg-white p-4 transition-colors dark:bg-zinc-900',
+                    'border-indigo-500 dark:border-indigo-400' => $isActiveTab,
+                    'border-zinc-200 hover:border-indigo-200 dark:border-zinc-700 dark:hover:border-indigo-500/40' => ! $isActiveTab,
+                ])
+                data-test="{{ $card['test'] }}"
+                @if ($isActiveTab) data-active-tab @endif
+            >
+                @if ($isActiveTab)
+                    {{--
+                        The highlight is its own element, keyed by tab, so switching tabs
+                        removes one and inserts another instead of morphing classes onto a
+                        surviving node -- which is what lets its CSS animation replay on
+                        every selection. Same trick as <x-rolling-number>'s digit columns.
+                    --}}
+                    <span
+                        class="stat-card-active-ring pointer-events-none absolute -inset-px rounded-xl ring-1 ring-indigo-500 dark:ring-indigo-400"
+                        wire:key="stat-active-ring-{{ $tab }}"
+                        aria-hidden="true"
+                    ></span>
+                @endif
 
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-flagged">
-            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Flagged') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-red-600 dark:text-red-400">{{ $this->stats['flagged'] }}</div>
-        </div>
+                <button
+                    type="button"
+                    wire:click="selectFilter('{{ $tab }}')"
+                    aria-pressed="{{ $isActiveTab ? 'true' : 'false' }}"
+                    class="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+                    data-test="{{ $card['test'] }}-select"
+                >
+                    <span class="sr-only">{{ __('Show :label', ['label' => $card['label']]) }}</span>
+                </button>
 
-        <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-deleted">
-            <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Deleted') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['deleted'] }}</div>
-        </div>
+                <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ $card['label'] }}</flux:text>
+                <x-rolling-number :name="$card['name']" :value="$this->stats[$card['key']]" class="mt-1 text-3xl font-bold {{ $card['figureClass'] }}" />
+            </div>
+        @endforeach
     </div>
 
     {{--
@@ -472,7 +558,7 @@ new #[Title('Moderate comments')] class extends Component {
                         ])
                     />
 
-                    @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-green-500!')
+                    @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-indigo-500!')
 
                     <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
                         'w-auto min-w-32',
@@ -561,7 +647,7 @@ new #[Title('Moderate comments')] class extends Component {
                                             class="{{ $selectedItemClasses }} {{ $isDanger ? 'text-red-600! dark:text-red-400!' : '' }}"
                                             data-test="filter-status-{{ $value }}"
                                         >
-                                            <span class="me-2 inline-block size-2 shrink-0 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                                            <x-status-dot :color="$meta['dotColor'] ?? $meta['color']" class="me-2" />{{ $meta['label'] }}
                                         </flux:menu.checkbox>
                                     @endforeach
                                 @endforeach
@@ -733,7 +819,7 @@ new #[Title('Moderate comments')] class extends Component {
                             @php($ideaMeta = $this->statusMeta($comment->idea->status))
                             <div class="mt-1 flex flex-wrap items-center gap-1">
                                 <flux:badge :color="$ideaMeta['color']" size="sm" class="{{ $ideaMeta['class'] ?? '' }}">
-                                    <span class="me-1 inline-block size-1.5 rounded-full {{ $ideaMeta['badge_dot'] }}"></span>{{ $ideaMeta['label'] }}
+                                    <x-status-dot :color="$ideaMeta['dotColor'] ?? $ideaMeta['color']" size="size-1.5" class="me-1" />{{ $ideaMeta['label'] }}
                                 </flux:badge>
                                 @if ($comment->idea->board)
                                     <flux:badge color="zinc" size="sm" variant="outline" icon="chalkboard" icon:variant="outline">{{ $comment->idea->board->name }}</flux:badge>

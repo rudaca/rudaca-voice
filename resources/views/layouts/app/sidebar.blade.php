@@ -80,16 +80,36 @@
 
                     <div class="grid">
                         @if ($__canReview)
-                            <flux:sidebar.item
-                                icon="clipboard-document-check"
-                                :href="route('ideas.review')"
-                                :current="request()->routeIs('ideas.review')"
-                                :badge="$__reviewQueueCount > 0 ? (string) $__reviewQueueCount : null"
-                                badge:color="amber"
-                                wire:navigate
-                            >
-                                {{ __('Review Queue') }}
-                            </flux:sidebar.item>
+                            {{-- The count goes in as a slot rather than the string `badge` prop so
+                            it can render as a <x-rolling-number> odometer. The whole item is
+                            duplicated across the count check on purpose: Blaze hoists a named
+                            slot's capture out of any @if wrapping it inside the component tag, so
+                            an inner conditional would leave an empty badge pill behind. --}}
+                            @if ($__reviewQueueCount > 0)
+                                <flux:sidebar.item
+                                    icon="clipboard-document-check"
+                                    :href="route('ideas.review')"
+                                    :current="request()->routeIs('ideas.review')"
+                                    badge:color="indigo"
+                                    badge:class="inline-flex h-5 items-center justify-center"
+                                    wire:navigate
+                                >
+                                    <x-slot:badge>
+                                        <x-rolling-number name="review-queue" :value="$__reviewQueueCount" />
+                                    </x-slot:badge>
+
+                                    {{ __('Review Queue') }}
+                                </flux:sidebar.item>
+                            @else
+                                <flux:sidebar.item
+                                    icon="clipboard-document-check"
+                                    :href="route('ideas.review')"
+                                    :current="request()->routeIs('ideas.review')"
+                                    wire:navigate
+                                >
+                                    {{ __('Review Queue') }}
+                                </flux:sidebar.item>
+                            @endif
                         @endif
 
                         @if ($__canManageBoards)
@@ -119,13 +139,13 @@
             @if ($__boardGroups->isNotEmpty() || $__ungroupedBoards->isNotEmpty())
                 <flux:separator variant="subtle" class="sidebar-divider" />
 
-                <div class="in-data-flux-sidebar-collapsed-desktop:hidden mt-2 px-3">
+                <div class="in-data-flux-sidebar-collapsed-desktop:hidden mt-2 pl-2">
                     <div class="flex items-center gap-1.5 px-1 py-2 text-xs font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-600">
                         <flux:icon.chalkboard class="size-3.5" />
                         {{ __('Boards') }}
                     </div>
 
-                    <x-boards-nav-list :groups="$__boardGroups" :ungrouped="$__ungroupedBoards" />
+                    <x-boards-nav-list :groups="$__boardGroups" :ungrouped="$__ungroupedBoards" scope="sidebar" />
                 </div>
 
                 <div class="hidden in-data-flux-sidebar-collapsed-desktop:flex justify-center px-3">
@@ -144,7 +164,7 @@
                                 <flux:menu.heading>{{ __('Boards') }}</flux:menu.heading>
 
                                 <div class="mt-1 p-1">
-                                    <x-boards-nav-list :groups="$__boardGroups" :ungrouped="$__ungroupedBoards" />
+                                    <x-boards-nav-list :groups="$__boardGroups" :ungrouped="$__ungroupedBoards" scope="dropdown" />
                                 </div>
                             </flux:menu>
                         </flux:dropdown>

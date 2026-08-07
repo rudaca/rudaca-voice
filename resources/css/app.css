@@ -188,6 +188,22 @@ revealing it again on hover/focus. We want it always visible instead.
 }
 
 /*
+Flux buttons (including link-styled ones rendered as <a>) don't get a
+pointer cursor by default. Force it everywhere, unless explicitly disabled.
+*/
+[data-flux-button]:not(:disabled):not([disabled]) {
+    cursor: pointer !important;
+}
+
+/*
+Buttons that render as an <a> (e.g. flux:button href="...") read as links,
+so underline them on hover like any other link.
+*/
+a[data-flux-button]:hover {
+    text-decoration: underline !important;
+}
+
+/*
 Rotate a dropdown trigger's trailing chevron smoothly to mirror the open state...
 */
 [data-flux-dropdown] > [aria-expanded] svg[data-flux-icon]:last-of-type {
@@ -243,6 +259,116 @@ directly instead.
 */
 .review-action-button {
     font-weight: 600;
+}
+
+/*
+The digit strips behind <x-rolling-number>. Each face is exactly 1em tall, so
+the strip is parked at -1em per face and the face for digit N lives at index
+N + 3 (the strip leads with 7-8-9 as run-up). The keyframe only names `from`,
+one em per face earlier, and lets the implicit `to` resolve to that parked
+transform -- so every strip rolls up through three faces and lands on its
+digit. Livewire remounts a column only when its digit actually changed (the
+digit is part of its wire:key), which is what re-triggers the animation.
+
+The roll is gated behind `data-rolling-ready` on <html>, which app.js sets once
+the page has finished loading. Before that the strips just sit parked on the
+right face, so the numbers are readable from the first paint and none of the
+rolling competes with page-load work. Adding the attribute makes every strip
+already on the page newly match a rule carrying an animation-name, which is
+what starts them all rolling together. The attribute lives on <html> rather
+than <body> so it survives a wire:navigate swap -- after the first load, strips
+mount already matching and roll immediately.
+*/
+.rolling-number-strip {
+    transform: translateY(calc(-1em * (var(--rolling-digit) + 3)));
+}
+
+[data-rolling-ready] .rolling-number-strip {
+    animation: rolling-number-roll 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rolling-number-roll {
+    from {
+        transform: translateY(calc(-1em * var(--rolling-digit)));
+    }
+}
+
+/*
+Selecting a stat card rolls its figure even though the figure itself didn't
+change. `data-active-tab` lands on the card through Livewire's morph, and an
+element that newly matches a rule carrying an animation-name it didn't have
+before restarts that animation -- so the roll replays on selection with no
+extra wire:key churn.
+
+The keyframe is a duplicate of rolling-number-roll under a different name on
+purpose: reusing the same name would leave the animation-name list unchanged
+and the browser would not restart it. Losing the attribute just drops the
+animation and reverts to the parked transform, so deselecting a card doesn't
+roll it back.
+*/
+[data-rolling-ready] [data-active-tab] .rolling-number-strip {
+    animation: rolling-number-roll-active 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rolling-number-roll-active {
+    from {
+        transform: translateY(calc(-1em * var(--rolling-digit)));
+    }
+}
+
+/*
+The highlight on the selected stat card. It fades in from slightly oversized so
+the selection reads as snapping onto the card rather than blinking on. Only
+`from` is named; the implicit `to` resolves to the element's own resting state,
+which keeps the ring itself out of the animation -- deliberately, since Tailwind
+draws its ring with box-shadow and an animated box-shadow here would outrank it
+and paint the ring away.
+*/
+.stat-card-active-ring {
+    animation: stat-card-active-ring 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes stat-card-active-ring {
+    from {
+        opacity: 0;
+        transform: scale(1.04);
+    }
+}
+
+/*
+The halo behind the current status dot in the idea Activity timeline. It's a
+second copy of the dot sitting under the solid one, expanding and fading out on
+a loop so the newest entry reads as where the idea is *right now* rather than
+another step it passed through.
+
+Not Tailwind's `animate-ping`: that holds full opacity for the first frame and
+then drops to 0 near-instantly, which reads as a blink at this size. Here the
+fade runs across the whole growth so the halo stays visible the entire time,
+and it starts partly transparent so it never competes with the dot itself.
+*/
+.status-dot-pulse {
+    animation: status-dot-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes status-dot-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.55;
+    }
+    75%,
+    100% {
+        transform: scale(2.6);
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-rolling-ready] .rolling-number-strip,
+    [data-rolling-ready] [data-active-tab] .rolling-number-strip,
+    .stat-card-active-ring,
+    .status-dot-pulse {
+        animation: none;
+    }
 }
 
 [data-flux-field]:not(ui-radio, ui-checkbox) {

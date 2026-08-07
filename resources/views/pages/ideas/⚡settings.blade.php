@@ -955,7 +955,9 @@ new #[Title('Organization Settings')] class extends Component {
                                     >
                                         <span class="size-2 rounded-full {{ $__categoryDotColors[$category->id % count($__categoryDotColors)] }}"></span>
                                         <span class="font-bold text-slate-900 dark:text-slate-200">{{ $category->name }}</span>
-                                        <flux:badge color="zinc" size="sm" variant="outline">{{ $category->ideas_count }}</flux:badge>
+                                        @if ($category->ideas_count > 0)
+                                            <flux:badge color="zinc" size="sm" variant="outline">{{ $category->ideas_count }}</flux:badge>
+                                        @endif
                                     </button>
                                 @empty
                                     <flux:text class="text-sm text-slate-600 dark:text-slate-500" data-test="category-board-empty">{{ __('No categories yet.') }}</flux:text>
@@ -1007,7 +1009,7 @@ new #[Title('Organization Settings')] class extends Component {
                         <tr wire:key="member-{{ $member->id }}" data-test="member-row">
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
-                                    <flux:avatar :name="$member->name" size="xs" color="auto" color:seed="{{ $member->id }}" />
+                                    <flux:avatar :name="$member->name" size="xs" />
                                     <span class="font-bold text-slate-900 dark:text-slate-200">{{ $member->name }}</span>
                                 </div>
                             </td>
@@ -1171,7 +1173,7 @@ new #[Title('Organization Settings')] class extends Component {
                 @if ($memberUserId)
                     <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
                         <div class="flex items-center gap-3">
-                            <flux:avatar :name="$memberUserName" size="xs" color="auto" color:seed="{{ $memberUserId }}" />
+                            <flux:avatar :name="$memberUserName" size="xs" />
                             <span class="font-medium text-slate-900 dark:text-slate-200">{{ $memberUserName }}</span>
                         </div>
                         <flux:button wire:click="clearSelectedMember" variant="ghost" size="sm" data-test="change-member">{{ __('Change') }}</flux:button>
@@ -1196,7 +1198,7 @@ new #[Title('Organization Settings')] class extends Component {
                                         class="flex w-full items-center gap-3 rounded-md p-2 text-start hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                         data-test="searchable-user-option"
                                     >
-                                        <flux:avatar :name="$user->name" size="xs" color="auto" color:seed="{{ $user->id }}" />
+                                        <flux:avatar :name="$user->name" size="xs" />
                                         <div class="min-w-0">
                                             <div class="truncate font-medium text-slate-900 dark:text-slate-200">{{ $user->name }}</div>
                                             <div class="truncate text-sm text-slate-600 dark:text-slate-500">{{ $user->email }}</div>

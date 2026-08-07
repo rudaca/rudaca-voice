@@ -6,7 +6,7 @@
 
 <flux:dropdown position="bottom" align="start">
     <button type="button" class="group flex w-full items-center rounded-lg p-1 hover:bg-zinc-800/5 dark:hover:bg-white/10" data-test="sidebar-menu-button">
-        <flux:avatar :initials="auth()->user()->initials()" :size="$isSuperAdmin ? 'sm' : 'base'" color="auto" color:seed="{{ auth()->id() }}" />
+        <flux:avatar :initials="auth()->user()->initials()" :size="$isSuperAdmin ? 'sm' : 'base'" />
         <div class="in-data-flux-sidebar-collapsed-desktop:hidden mx-2 grid flex-1 text-start leading-tight {{ $isSuperAdmin ? 'text-sm' : 'text-base' }}">
             <span class="truncate font-medium text-slate-600 group-hover:text-slate-900 dark:text-white/80 dark:group-hover:text-white">{{ auth()->user()->name }}</span>
             @if($isSuperAdmin)

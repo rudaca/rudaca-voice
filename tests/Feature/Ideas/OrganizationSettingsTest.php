@@ -516,7 +516,7 @@ test('the Categories tab groups categories under their board, disambiguates same
     };
 
     expect($snippet($automationA->id))->toContain('2')
-        ->and($snippet($reportingA->id))->toContain('0')
+        ->and($snippet($reportingA->id))->not->toContain('data-flux-badge')
         ->and($snippet($automationB->id))->toContain('5');
 });
 

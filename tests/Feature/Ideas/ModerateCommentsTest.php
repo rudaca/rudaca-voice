@@ -273,6 +273,126 @@ test('the stats reflect total, under-review, flagged, and deleted comment counts
     ]);
 });
 
+test('narrowing the board filter narrows every stat card', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    $stackA = boardStack($team);
+    $stackB = boardStack($team);
+
+    $ideaA = makeIdea($team, [
+        'board_id' => $stackA['board']->id,
+        'board_group_id' => $stackA['group']->id,
+        'category_id' => $stackA['category']->id,
+    ]);
+    $ideaB = makeIdea($team, [
+        'board_id' => $stackB['board']->id,
+        'board_group_id' => $stackB['group']->id,
+        'category_id' => $stackB['category']->id,
+    ]);
+
+    IdeaComment::factory()->create(['idea_id' => $ideaA->id, 'user_id' => $admin->id]);
+    IdeaComment::factory()->create(['idea_id' => $ideaA->id, 'user_id' => $admin->id])->hide($admin->id);
+    IdeaComment::factory()->create(['idea_id' => $ideaB->id, 'user_id' => $admin->id]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->assertSet('stats.total', 3)
+        ->set('board', [(string) $stackA['board']->id])
+        ->assertSet('stats.total', 2)
+        ->assertSet('stats.underReview', 1)
+        ->assertSet('stats.flagged', 1)
+        ->assertSet('stats.deleted', 0);
+});
+
+test('the moderation state tabs leave the stat cards alone', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id]);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id])->hide($admin->id);
+
+    // The cards are the per-state breakdown, so the active tab must not narrow them.
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->set('filter', 'hidden')
+        ->assertSet('stats.total', 2)
+        ->assertSet('stats.underReview', 1)
+        ->assertSet('stats.flagged', 1);
+});
+
+test('a stat card selects the moderation state tab it mirrors', function (string $tab) {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id]);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id])->hide($admin->id);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id])->delete();
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->call('selectFilter', $tab)
+        ->assertSet('filter', $tab)
+        // Selecting a tab from a card still leaves the breakdown intact.
+        ->assertSet('stats.total', 3)
+        ->assertSet('stats.underReview', 1)
+        ->assertSet('stats.flagged', 1)
+        ->assertSet('stats.deleted', 1);
+})->with(['all', 'visible', 'hidden', 'deleted']);
+
+test('an unknown tab value falls back to all rather than filtering to nothing', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    makeIdea($team);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->set('filter', 'hidden')
+        ->call('selectFilter', 'bogus')
+        ->assertSet('filter', 'all');
+});
+
+test('only the stat card mirroring the active tab is marked active', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    makeIdea($team);
+
+    $html = Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->set('filter', 'hidden')
+        ->html();
+
+    expect(substr_count($html, 'data-active-tab'))->toBe(1)
+        ->and($html)->toContain('aria-pressed="true"')
+        // The highlight is keyed by tab so it remounts (and replays its animation) on each selection.
+        ->and(substr_count($html, 'stat-card-active-ring'))->toBe(1)
+        ->and($html)->toContain('wire:key="stat-active-ring-hidden"');
+
+    // The Flagged card carries the marker, and only it.
+    preg_match('/data-test="stat-flagged"[^>]*/', $html, $matches);
+    expect($matches[0] ?? '')->toContain('data-active-tab');
+});
+
+test('the visible stat card is labelled Visible, matching its tab', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    makeIdea($team);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->assertSee('Visible')
+        ->assertDontSee('Under review');
+});
+
+test('the stat figures render as rolling-number odometers', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $idea = makeIdea($team);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $admin->id]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.moderate-comments')
+        ->assertSeeHtml('rolling-total-label')
+        ->assertSeeHtml('rolling-under-review-label')
+        ->assertSeeHtml('rolling-flagged-label')
+        ->assertSeeHtml('rolling-deleted-label');
+});
+
 test('an owner can permanently delete a soft-deleted comment', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $idea = makeIdea($team);

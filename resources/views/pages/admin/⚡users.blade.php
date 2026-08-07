@@ -398,7 +398,7 @@ new #[Title('System Users')] class extends Component {
                     <flux:table.row :key="'user-'.$user->id" data-test="user-row">
                         <flux:table.cell>
                             <div class="flex items-center gap-3">
-                                <flux:avatar :name="$user->name" size="lg" color="auto" color:seed="{{ $user->id }}" />
+                                <flux:avatar :name="$user->name" size="lg" />
                                 <div>
                                     <span class="font-bold text-slate-900 dark:text-slate-200">{{ $user->name }}</span>
                                     <flux:tooltip content="{{ __('Last Login') }}">

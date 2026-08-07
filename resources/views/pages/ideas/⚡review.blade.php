@@ -63,13 +63,13 @@ new #[Title('Review Queue')] class extends Component {
     /**
      * Display metadata for each queue status (label + Flux badge color).
      *
-     * @var array<string, array{label: string, color: string, badge_dot: string}>
+     * @var array<string, array{label: string, color: string}>
      */
     public const STATUS_META = [
-        'new' => ['label' => 'New', 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'],
-        'approved' => ['label' => 'Approved', 'color' => 'amber', 'badge_dot' => 'bg-amber-800 dark:bg-amber-200'],
-        'planned' => ['label' => 'Planned', 'color' => 'blue', 'badge_dot' => 'bg-blue-800 dark:bg-blue-200'],
-        'not_doing' => ['label' => 'Declined', 'color' => 'red', 'badge_dot' => 'bg-red-800 dark:bg-red-200'],
+        'new' => ['label' => 'New', 'color' => 'zinc'],
+        'approved' => ['label' => 'Approved', 'color' => 'amber'],
+        'planned' => ['label' => 'Planned', 'color' => 'blue'],
+        'not_doing' => ['label' => 'Declined', 'color' => 'red'],
     ];
 
     /**
@@ -259,6 +259,22 @@ new #[Title('Review Queue')] class extends Component {
     }
 
     /**
+     * Narrow an idea query down to what the toolbar filters currently select.
+     * Shared by the listing and the stat cards so both always agree.
+     */
+    protected function applyFilters(Builder $query): Builder
+    {
+        return $query
+            ->when($this->group !== '', fn (Builder $query) => $query->where('board_group_id', $this->group))
+            ->when($this->board !== [], fn (Builder $query) => $query->whereIn('board_id', $this->board))
+            ->when($this->category !== [], fn (Builder $query) => $query->whereHas('category', fn ($query) => $query->whereIn('name', $this->category)))
+            ->when($this->author !== [], fn (Builder $query) => $query->whereIn('submitted_by_user_id', $this->author))
+            ->when(trim($this->search) !== '', fn (Builder $query) => $query->where('title', 'like', $this->likeTerm()))
+            ->when($this->dateFrom !== '', fn (Builder $query) => $query->whereDate('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo !== '', fn (Builder $query) => $query->whereDate('created_at', '<=', $this->dateTo));
+    }
+
+    /**
      * The review queue, filtered and sorted per the toolbar controls.
      *
      * @return LengthAwarePaginator<int, Idea>
@@ -266,16 +282,10 @@ new #[Title('Review Queue')] class extends Component {
     #[Computed]
     public function ideas(): LengthAwarePaginator
     {
-        $query = $this->queueQuery()
-            ->when($this->group !== '', fn (Builder $query) => $query->where('board_group_id', $this->group))
-            ->when($this->board !== [], fn (Builder $query) => $query->whereIn('board_id', $this->board))
-            ->when($this->category !== [], fn (Builder $query) => $query->whereHas('category', fn ($query) => $query->whereIn('name', $this->category)))
-            ->when($this->author !== [], fn (Builder $query) => $query->whereIn('submitted_by_user_id', $this->author))
-            ->when(trim($this->search) !== '', fn (Builder $query) => $query->where('title', 'like', $this->likeTerm()))
-            ->when($this->dateFrom !== '', fn (Builder $query) => $query->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo !== '', fn (Builder $query) => $query->whereDate('created_at', '<=', $this->dateTo))
+        $query = $this->applyFilters($this->queueQuery())
             ->with(['board:id,name', 'submittedBy:id,name'])
-            ->withCount(['votes', 'comments']);
+            ->withCount(['votes', 'comments'])
+            ->withExists(['votes as voted' => fn (Builder $query) => $query->where('user_id', Auth::id())]);
 
         match ($this->sort) {
             'newest' => $query->orderByDesc('created_at')->orderByDesc('id'),
@@ -287,16 +297,31 @@ new #[Title('Review Queue')] class extends Component {
     }
 
     /**
-     * Summary stats shown above the queue table.
+     * Summary stats shown above the queue table. Every figure reflects the
+     * current filter selection, so narrowing the toolbar narrows the cards too.
      *
-     * @return array{awaiting: int, newThisWeek: int, totalVotes: int}
+     * The board figures follow the two filters that are actually about boards
+     * (group and board); the rest of the toolbar has no bearing on how the
+     * organization's boards are arranged. Boards left out of a group aren't
+     * counted towards the group total, so "2 boards in 1 group" can legitimately
+     * mean one grouped board and one ungrouped one.
+     *
+     * @return array{boards: int, boardGroups: int, awaiting: int, newThisWeek: int, totalVotes: int}
      */
     #[Computed]
     public function stats(): array
     {
-        $queue = $this->queueQuery()->withCount('votes')->get(['id', 'created_at']);
+        $queue = $this->applyFilters($this->queueQuery())->withCount('votes')->get(['id', 'created_at']);
+
+        $boards = $this->team->boards()
+            ->where('is_active', true)
+            ->when($this->group !== '', fn ($query) => $query->where('board_group_id', $this->group))
+            ->when($this->board !== [], fn ($query) => $query->whereIn('id', $this->board))
+            ->get(['id', 'board_group_id']);
 
         return [
+            'boards' => $boards->count(),
+            'boardGroups' => $boards->pluck('board_group_id')->filter()->unique()->count(),
             'awaiting' => $queue->count(),
             'newThisWeek' => $queue->where('created_at', '>=', now()->startOfWeek())->count(),
             'totalVotes' => (int) $queue->sum('votes_count'),
@@ -362,11 +387,11 @@ new #[Title('Review Queue')] class extends Component {
     /**
      * Get the display metadata for a queue status value.
      *
-     * @return array{label: string, color: string, badge_dot: string}
+     * @return array{label: string, color: string}
      */
     public function statusMeta(string $status): array
     {
-        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc', 'badge_dot' => 'bg-zinc-800 dark:bg-zinc-200'];
+        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
     }
 }; ?>
 
@@ -414,21 +439,33 @@ new #[Title('Review Queue')] class extends Component {
         </div>
     </flux:modal>
 
-    {{-- Stats --}}
-    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    {{--
+        Stats. Every figure tracks the toolbar filters, and the numbers are
+        <x-rolling-number> odometers so a changed figure rolls into place rather
+        than snapping to the new value.
+    --}}
+    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-boards">
+            <flux:text class="text-sm text-slate-600 dark:text-slate-500">
+                {{ __('Total Board in') }}
+                {{ trans_choice(':count group|:count groups', $this->stats['boardGroups'], ['count' => $this->stats['boardGroups']]) }}
+            </flux:text>
+            <x-rolling-number name="boards" :value="$this->stats['boards']" class="mt-1 text-3xl font-bold text-slate-900 dark:text-white" />
+        </div>
+
         <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-awaiting">
             <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Awaiting review') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['awaiting'] }}</div>
+            <x-rolling-number name="awaiting" :value="$this->stats['awaiting']" class="mt-1 text-3xl font-bold text-slate-900 dark:text-white" />
         </div>
 
         <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-new-this-week">
             <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('New this week') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['newThisWeek'] }}</div>
+            <x-rolling-number name="new-this-week" :value="$this->stats['newThisWeek']" class="mt-1 text-3xl font-bold text-slate-900 dark:text-white" />
         </div>
 
         <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="stat-total-votes">
             <flux:text class="text-sm text-slate-600 dark:text-slate-500">{{ __('Total votes in queue') }}</flux:text>
-            <div class="mt-1 text-3xl font-bold text-slate-900 dark:text-white">{{ $this->stats['totalVotes'] }}</div>
+            <x-rolling-number name="total-votes" :value="$this->stats['totalVotes']" class="mt-1 text-3xl font-bold text-slate-900 dark:text-white" />
         </div>
     </div>
 
@@ -495,7 +532,7 @@ new #[Title('Review Queue')] class extends Component {
                         ])
                     />
 
-                    @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-green-500!')
+                    @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-indigo-500!')
 
                     <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
                         'w-auto min-w-32',
@@ -676,21 +713,44 @@ new #[Title('Review Queue')] class extends Component {
                 wire:key="queue-{{ $idea->id }}"
                 data-test="queue-row"
             >
-                <div class="flex w-14 shrink-0 flex-col items-center gap-0.5 self-start rounded-lg border border-zinc-200 py-1.5 dark:border-zinc-700 sm:self-center">
-                    <span class="text-base font-extrabold text-slate-900 dark:text-slate-200">{{ $idea->votes_count }}</span>
-                    <flux:icon.chevron-up class="size-3 text-slate-700" />
-                </div>
+                {{--
+                    Vote count. Read-only here (the queue is for deciding, not voting),
+                    but it's tinted indigo when the reviewer is one of the voters so
+                    their own backing is obvious while triaging.
+                --}}
+                <flux:tooltip :content="$idea->voted ? __('You voted for this idea.') : trans_choice(':count vote|:count votes', $idea->votes_count, ['count' => $idea->votes_count])">
+                    <div
+                        @class([
+                            'flex w-14 shrink-0 flex-col items-center gap-0.5 self-start rounded-lg border py-1.5 sm:self-center',
+                            'border-indigo-200 bg-indigo-50 dark:border-indigo-500/40 dark:bg-indigo-500/10' => $idea->voted,
+                            'border-zinc-200 dark:border-zinc-700' => ! $idea->voted,
+                        ])
+                        data-test="vote-count"
+                        @if ($idea->voted) data-voted="true" @endif
+                    >
+                        <span @class([
+                            'text-base font-extrabold',
+                            'text-indigo-600 dark:text-indigo-300' => $idea->voted,
+                            'text-slate-900 dark:text-slate-200' => ! $idea->voted,
+                        ])>{{ $idea->votes_count }}</span>
+                        <flux:icon.chevron-up @class([
+                            'size-3',
+                            'text-indigo-600 dark:text-indigo-300' => $idea->voted,
+                            'text-slate-700' => ! $idea->voted,
+                        ]) />
+                    </div>
+                </flux:tooltip>
 
                 <div class="min-w-0 flex-1">
                     <div class="text-xs text-slate-600 dark:text-slate-500">{{ __('Idea') }} #{{ $idea->id }}</div>
 
-                    <a href="{{ route('ideas.show', ['idea' => $idea->slug]) }}" wire:navigate class="hover:underline">
+                    <a href="{{ route('ideas.show', ['idea' => $idea->slug]) }}" wire:navigate class="cursor-pointer hover:underline">
                         <flux:heading size="lg" class="w-fit max-w-full truncate">{{ $idea->title }}</flux:heading>
                     </a>
 
                     <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                         <div class="flex items-center gap-1.5">
-                            <flux:avatar size="xs" :name="$authorName" color="auto" color:seed="{{ $idea->submitted_by_user_id ?? $authorName }}" />
+                            <flux:avatar size="xs" class="size-5" :name="$authorName" />
                             <span>{{ $authorName }}</span>
                         </div>
 
@@ -698,7 +758,7 @@ new #[Title('Review Queue')] class extends Component {
 
                         <flux:tooltip :content="__('Current status')">
                             <flux:badge :color="$meta['color']" size="sm">
-                                <span class="me-1 inline-block size-2 rounded-full {{ $meta['badge_dot'] }}"></span>{{ $meta['label'] }}
+                                <x-status-dot :color="$meta['color']" class="me-1" />{{ $meta['label'] }}
                             </flux:badge>
                         </flux:tooltip>
 
@@ -728,7 +788,8 @@ new #[Title('Review Queue')] class extends Component {
                         <flux:button
                             variant="ghost"
                             size="sm"
-                            class="review-action-button border border-teal-700 text-teal-700! hover:bg-teal-50 dark:text-teal-400! dark:hover:bg-teal-950"
+                            icon="circle-check-big"
+                            class="review-action-button border border-gray-950 bg-gray-950! text-white! hover:bg-gray-800! dark:border-white dark:bg-white! dark:text-gray-950! dark:hover:bg-gray-200!"
                             data-test="approve-idea"
                         >
                             {{ __('Approve') }}
@@ -739,6 +800,7 @@ new #[Title('Review Queue')] class extends Component {
                         <flux:button
                             variant="ghost"
                             size="sm"
+                            icon="circle-x"
                             class="review-action-button border border-red-600 text-red-600! hover:bg-red-50 dark:border-red-400 dark:text-red-400! dark:hover:bg-red-950"
                             data-test="decline-idea"
                         >
