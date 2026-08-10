@@ -98,6 +98,8 @@ new #[Title('Organization Settings')] class extends Component {
 
     public bool $orgAllowAnonymousIdeas = true;
 
+    public bool $orgLimitOneActiveVotePerBoard = false;
+
     // --- New member form (Members tab) ---
     public string $memberSearch = '';
 
@@ -116,6 +118,7 @@ new #[Title('Organization Settings')] class extends Component {
     {
         $this->orgTeamName = $this->team->name;
         $this->orgAllowAnonymousIdeas = $this->team->allowsAnonymousIdeas();
+        $this->orgLimitOneActiveVotePerBoard = $this->team->limitsOneActiveVotePerBoard();
 
         match ($this->new) {
             'board' => $this->newBoard(),
@@ -328,6 +331,7 @@ new #[Title('Organization Settings')] class extends Component {
         $validated = $this->validate([
             'orgTeamName' => ['required', 'string', 'max:255', new TeamName],
             'orgAllowAnonymousIdeas' => ['boolean'],
+            'orgLimitOneActiveVotePerBoard' => ['boolean'],
         ]);
 
         $team = $this->team;
@@ -335,6 +339,7 @@ new #[Title('Organization Settings')] class extends Component {
         $team->update([
             'name' => $validated['orgTeamName'],
             'allow_anonymous_ideas' => $this->orgAllowAnonymousIdeas,
+            'limit_one_active_vote_per_board' => $this->orgLimitOneActiveVotePerBoard,
         ]);
 
         Flux::toast(variant: 'success', text: __('Organization settings saved.'));
@@ -1124,6 +1129,13 @@ new #[Title('Organization Settings')] class extends Component {
                     :label="__('Allow anonymous posting of ideas')"
                     :description="__('When disabled, employees won\'t see the option to submit ideas anonymously.')"
                     data-test="org-allow-anonymous-ideas"
+                />
+
+                <flux:checkbox
+                    wire:model="orgLimitOneActiveVotePerBoard"
+                    :label="__('Limit users to one active vote per board')"
+                    :description="__('When enabled, voting for a new idea while a user already has an active vote elsewhere on the same board offers to move it instead of adding a second vote.')"
+                    data-test="org-limit-one-active-vote-per-board"
                 />
 
                 <flux:button variant="primary" type="submit" data-test="org-settings-save-button">

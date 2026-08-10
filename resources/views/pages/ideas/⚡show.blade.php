@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\IdeaStatus;
 use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaComment;
@@ -24,25 +25,6 @@ use Livewire\Attributes\Validate;
 use Livewire\Component;
 
 new #[Title('Idea')] class extends Component {
-    /**
-     * Display metadata for each idea status (label + Flux badge color).
-     *
-     * `dotColor` is only needed when `class` overrides the badge's rendered
-     * color, so that <x-status-dot> can follow what the badge actually looks
-     * like rather than the nominal `color`.
-     *
-     * @var array<string, array{label: string, color: string, class?: string, dotColor?: string}>
-     */
-    public const STATUS_META = [
-        'new' => ['label' => 'New', 'color' => 'zinc'],
-        'approved' => ['label' => 'Approved', 'color' => 'amber'],
-        'planned' => ['label' => 'Planned', 'color' => 'blue'],
-        'in_progress' => ['label' => 'In Progress', 'color' => 'indigo'],
-        'released' => ['label' => 'Completed', 'color' => 'green'],
-        'not_doing' => ['label' => 'Declined', 'color' => 'red'],
-        'duplicate' => ['label' => 'Duplicate', 'color' => 'rose', 'class' => 'bg-red-100! text-red-700! dark:bg-red-900/40! dark:text-red-300!', 'dotColor' => 'red'],
-    ];
-
     /** @var array<string, string> */
     public const PRIORITY_OPTIONS = ['low' => 'Low', 'medium' => 'Medium', 'high' => 'High'];
 
@@ -72,6 +54,13 @@ new #[Title('Idea')] class extends Component {
     public string $duplicateOfId = '';
 
     public string $duplicateNote = '';
+
+    /**
+     * The idea id a pending vote move would come from, set by toggleVote()
+     * when the team limits members to one active vote per board and the
+     * user already has one elsewhere on this idea's board.
+     */
+    public ?int $pendingMoveFromIdeaId = null;
 
     public string $officialResponseBody = '';
 
@@ -168,7 +157,7 @@ new #[Title('Idea')] class extends Component {
         abort_unless($this->canManage, 403);
 
         $validated = $this->validate([
-            'status' => ['required', Rule::in(array_keys(self::STATUS_META))],
+            'status' => ['required', Rule::in(array_keys(IdeaStatus::meta()))],
             'priority' => ['required', Rule::in(array_keys(self::PRIORITY_OPTIONS))],
             'impact' => ['required', Rule::in(array_keys(self::IMPACT_OPTIONS))],
             'effort' => ['required', Rule::in(array_keys(self::EFFORT_OPTIONS))],
@@ -455,16 +444,87 @@ new #[Title('Idea')] class extends Component {
             $existingVote->delete();
 
             $this->dispatch('modal-close', name: 'confirm-unvote');
-        } else {
-            IdeaVote::firstOrCreate([
-                'idea_id' => $this->ideaModel->id,
-                'user_id' => Auth::id(),
-            ]);
 
-            $this->dispatch('idea-voted');
-
-            Flux::toast(variant: 'success', text: __('You have successfully casted your vote.'));
+            return;
         }
+
+        if ($this->team->limitsOneActiveVotePerBoard()) {
+            $activeVotes = IdeaVote::activeVotesForUserOnBoard(Auth::id(), $this->ideaModel->board_id);
+
+            if ($activeVotes->count() > 1) {
+                $this->dispatch('modal-show', name: 'blocked-multiple-votes');
+
+                return;
+            }
+
+            if ($activeVotes->count() === 1) {
+                $this->pendingMoveFromIdeaId = $activeVotes->first()->idea_id;
+
+                $this->dispatch('modal-show', name: 'confirm-move-vote');
+
+                return;
+            }
+        }
+
+        IdeaVote::firstOrCreate([
+            'idea_id' => $this->ideaModel->id,
+            'user_id' => Auth::id(),
+        ]);
+
+        $this->dispatch('idea-voted');
+
+        Flux::toast(variant: 'success', text: __('You have successfully casted your vote.'));
+    }
+
+    /**
+     * Confirm moving the current user's active vote from another idea on
+     * this board to this idea, per the team's one-active-vote-per-board setting.
+     */
+    public function confirmMoveVote(): void
+    {
+        abort_unless($this->canParticipate, 403);
+        abort_unless($this->team->limitsOneActiveVotePerBoard(), 403);
+
+        $existingVote = IdeaVote::where('idea_id', $this->pendingMoveFromIdeaId)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        abort_if($existingVote === null, 404);
+
+        IdeaVote::moveVote($existingVote, $this->ideaModel, Auth::id());
+
+        $this->reset('pendingMoveFromIdeaId');
+        $this->dispatch('modal-close', name: 'confirm-move-vote');
+        $this->dispatch('idea-voted');
+
+        Flux::toast(variant: 'success', text: __('Your vote has been moved to this idea.'));
+    }
+
+    /**
+     * The current user's one-active-vote-per-board status on this idea's
+     * board, for the board-vote-status header. Null when the team doesn't
+     * limit votes this way, or the user isn't eligible to vote at all.
+     *
+     * @return array{state: string, idea?: Idea}|null
+     */
+    #[Computed]
+    public function boardVoteStatus(): ?array
+    {
+        if (! $this->team->limitsOneActiveVotePerBoard() || ! $this->canParticipate) {
+            return null;
+        }
+
+        $activeVotes = IdeaVote::activeVotesForUserOnBoard(Auth::id(), $this->ideaModel->board_id);
+
+        if ($activeVotes->count() > 1) {
+            return ['state' => 'blocked'];
+        }
+
+        if ($activeVotes->count() === 1) {
+            return ['state' => 'assigned', 'idea' => $activeVotes->first()->idea];
+        }
+
+        return ['state' => 'available'];
     }
 
     /**
@@ -744,7 +804,7 @@ new #[Title('Idea')] class extends Component {
             default => $status,
         };
 
-        return self::STATUS_META[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
+        return IdeaStatus::meta()[$status] ?? ['label' => str($status)->headline()->value(), 'color' => 'zinc'];
     }
 
     /**
@@ -891,6 +951,28 @@ new #[Title('Idea')] class extends Component {
                 </div>
             @endif
 
+            @if ($this->boardVoteStatus)
+                <div
+                    @class([
+                        'mb-4 rounded-lg border p-3 text-sm',
+                        'border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-500/30 dark:bg-indigo-950/20 dark:text-indigo-200' => $this->boardVoteStatus['state'] !== 'blocked',
+                        'border-red-200 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-950/20 dark:text-red-200' => $this->boardVoteStatus['state'] === 'blocked',
+                    ])
+                    data-test="board-vote-status"
+                >
+                    @if ($this->boardVoteStatus['state'] === 'available')
+                        {{ __('You have 1 vote available on this board.') }}
+                    @elseif ($this->boardVoteStatus['state'] === 'assigned')
+                        {{ __('Your vote is currently assigned to') }}
+                        <a href="{{ route('ideas.show', ['idea' => $this->boardVoteStatus['idea']->slug]) }}" wire:navigate class="font-semibold underline">
+                            {{ __('Idea') }} #{{ $this->boardVoteStatus['idea']->id }}: {{ $this->boardVoteStatus['idea']->title }}
+                        </a>.
+                    @else
+                        {{ __('You can only cast one vote on this board.') }}
+                    @endif
+                </div>
+            @endif
+
             <div class="flex gap-3">
                 {{-- Vote toggle --}}
                 <flux:tooltip :content="$this->canParticipate ? ($this->hasVoted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
@@ -941,6 +1023,42 @@ new #[Title('Idea')] class extends Component {
                         <div class="flex justify-end gap-2">
                             <flux:modal.close><flux:button variant="ghost" data-test="confirm-unvote-cancel">{{ __('Cancel') }}</flux:button></flux:modal.close>
                             <flux:button wire:click="toggleVote" variant="danger" data-test="confirm-unvote-yes">{{ __('Yes') }}</flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
+
+                {{-- Confirm move vote modal --}}
+                <flux:modal name="confirm-move-vote" class="max-w-lg" :dismissible="false" data-test="confirm-move-vote-modal">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">{{ __('Move your vote?') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('You have one active vote per board. Voting for this idea will move your vote from Idea #:id.', ['id' => $this->pendingMoveFromIdeaId]) }}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost" data-test="confirm-move-vote-cancel">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button wire:click="confirmMoveVote" variant="primary" data-test="confirm-move-vote-yes">{{ __('Move vote') }}</flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
+
+                {{-- Blocked: multiple pre-existing active votes on this board --}}
+                <flux:modal name="blocked-multiple-votes" class="max-w-lg" data-test="blocked-multiple-votes-modal">
+                    <div class="space-y-4 text-center">
+                        <div class="mx-auto flex size-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/10">
+                            <flux:icon.exclamation-triangle class="size-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                            <flux:heading size="lg">{{ __('Active Vote in Effect') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('You can only cast one vote on this board.') }}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-center">
+                            <flux:modal.close>
+                                <flux:button variant="primary" data-test="blocked-multiple-votes-ok">{{ __('OK') }}</flux:button>
+                            </flux:modal.close>
                         </div>
                     </div>
                 </flux:modal>
@@ -1230,7 +1348,7 @@ new #[Title('Idea')] class extends Component {
                         <form wire:submit="updateManagement" id="manage-idea-form" class="space-y-4">
                             <div class="grid grid-cols-2 gap-4">
                                 <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
-                                    @foreach (self::STATUS_META as $value => $statusMeta)
+                                    @foreach (IdeaStatus::meta() as $value => $statusMeta)
                                         <flux:select.option value="{{ $value }}">{{ $statusMeta['label'] }}</flux:select.option>
                                     @endforeach
                                 </flux:select>

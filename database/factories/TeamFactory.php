@@ -25,6 +25,7 @@ class TeamFactory extends Factory
             'slug' => Str::slug($name),
             'is_personal' => false,
             'allow_anonymous_ideas' => true,
+            'limit_one_active_vote_per_board' => false,
         ];
     }
 
@@ -45,6 +46,16 @@ class TeamFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'allow_anonymous_ideas' => false,
+        ]);
+    }
+
+    /**
+     * Indicate that the team limits members to one active vote per board.
+     */
+    public function limitingOneActiveVotePerBoard(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'limit_one_active_vote_per_board' => true,
         ]);
     }
 

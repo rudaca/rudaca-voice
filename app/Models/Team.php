@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $slug
  * @property bool $is_personal
  * @property bool $allow_anonymous_ideas
+ * @property bool $limit_one_active_vote_per_board
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -33,7 +34,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Idea> $ideas
  * @property-read Collection<int, TeamIdentityProvider> $identityProviders
  */
-#[Fillable(['name', 'slug', 'is_personal', 'allow_anonymous_ideas'])]
+#[Fillable(['name', 'slug', 'is_personal', 'allow_anonymous_ideas', 'limit_one_active_vote_per_board'])]
 class Team extends Model
 {
     /** @use HasFactory<TeamFactory> */
@@ -182,6 +183,14 @@ class Team extends Model
     }
 
     /**
+     * Whether members of this team are limited to one active vote per board.
+     */
+    public function limitsOneActiveVotePerBoard(): bool
+    {
+        return $this->limit_one_active_vote_per_board;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -191,6 +200,7 @@ class Team extends Model
         return [
             'is_personal' => 'boolean',
             'allow_anonymous_ideas' => 'boolean',
+            'limit_one_active_vote_per_board' => 'boolean',
         ];
     }
 
