@@ -47,6 +47,30 @@ test('system owners can create a team', function () {
     ]);
 });
 
+test('super admins can create a team even without the system owner flag', function () {
+    $user = User::factory()->create(['is_super_admin' => true]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Super Admin Team')
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('teams', ['name' => 'Super Admin Team']);
+    expect($user->fresh()->is_system_owner)->toBeFalse();
+});
+
+test('the new team button and modal are visible for super admins', function () {
+    $user = User::factory()->create(['is_super_admin' => true]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->assertSeeHtml('data-test="teams-new-team-button"')
+        ->assertSeeHtml('data-test="create-team-submit"');
+});
+
 test('users without the system owner permission cannot create a team, regardless of their organization role', function (TeamRole $role) {
     ['user' => $user] = teamWithMember($role);
 

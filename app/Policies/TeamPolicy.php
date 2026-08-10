@@ -29,12 +29,13 @@ class TeamPolicy
      *
      * This is a system-level capability, entirely separate from organization
      * roles — being an Owner or Admin of an existing organization grants no
-     * say here. Only users explicitly flagged as a system owner may create
-     * new organizations.
+     * say here. Users explicitly flagged as a system owner may create new
+     * organizations; Super Admins inherit this permission too, since they
+     * already outrank system owners in every other respect.
      */
     public function create(User $user): bool
     {
-        return (bool) $user->is_system_owner;
+        return (bool) $user->is_system_owner || (bool) $user->is_super_admin;
     }
 
     /**

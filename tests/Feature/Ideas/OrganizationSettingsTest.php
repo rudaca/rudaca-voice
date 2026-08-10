@@ -89,6 +89,56 @@ test('the Members tab lists team members with their role', function () {
         ->assertSee('Manager');
 });
 
+test('the Members tab shows a System Owner or Super Admin badge below the name for those users', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $systemOwner = User::factory()->systemOwner()->create();
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $team->members()->attach($systemOwner, ['role' => TeamRole::Manager->value]);
+    $team->members()->attach($superAdmin, ['role' => TeamRole::Employee->value]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->assertSee('System Owner')
+        ->assertSee('Super Admin');
+});
+
+test('the Members tab shows a plain user\'s org role below the name', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $manager = User::factory()->create();
+    $team->members()->attach($manager, ['role' => TeamRole::Manager->value]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->assertSee('Manager')
+        ->assertDontSee('System Owner')
+        ->assertDontSee('Super Admin');
+});
+
+test('a user who is both a system owner and an organization owner keeps both sets of permissions, and the badge shows the global role', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $owner->is_system_owner = true;
+    $owner->save();
+
+    // Org-level Owner permission: can still add/remove members on their own organization.
+    // The badge shows the global "System Owner" role rather than the org-level "Owner" role.
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'members')
+        ->assertSeeHtml('data-test="new-member"')
+        ->assertSee('System Owner');
+
+    // System-level permission: can still create additional organizations.
+    Livewire::actingAs($owner)
+        ->test('pages::teams.index')
+        ->set('name', 'Another Org')
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('teams', ['name' => 'Another Org']);
+});
+
 test('the owner sees a New member button on the Members tab but an admin does not', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $admin = User::factory()->create();

@@ -1035,7 +1035,16 @@ new #[Title('Organization Settings')] class extends Component {
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
                                     <flux:avatar :name="$member->name" size="xs" />
-                                    <span class="font-bold text-slate-900 dark:text-slate-200">{{ $member->name }}</span>
+                                    <div class="min-w-0">
+                                        <div class="font-bold text-slate-900 dark:text-slate-200">{{ $member->name }}</div>
+                                        @if ($member->is_super_admin || $member->is_system_owner)
+                                            <x-system-role-badge :is-super-admin="$member->is_super_admin" :is-system-owner="$member->is_system_owner" class="text-2xs" />
+                                        @else
+                                            <flux:badge size="sm" :color="$member->pivot->role->badgeColor()" class="text-2xs">
+                                                {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Owner') : $member->pivot->role->label() }}
+                                            </flux:badge>
+                                        @endif
+                                    </div>
                                 </div>
                             </td>
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-500">{{ $member->email }}</td>

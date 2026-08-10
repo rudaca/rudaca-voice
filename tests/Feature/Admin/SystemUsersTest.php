@@ -125,15 +125,83 @@ test('a super admin can assign and revoke super admin access', function () {
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
-        ->call('assignRole', $user->id, true);
+        ->call('assignRole', $user->id, 'super_admin');
 
     expect($user->fresh()->is_super_admin)->toBeTrue();
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
-        ->call('assignRole', $user->id, false);
+        ->call('assignRole', $user->id, 'user');
 
     expect($user->fresh()->is_super_admin)->toBeFalse();
+});
+
+test('a super admin can assign and revoke system owner access', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('assignRole', $user->id, 'system_owner')
+        ->assertSeeHtml('data-test="assign-role-system-owner"');
+
+    expect($user->fresh()->is_system_owner)->toBeTrue();
+    expect($user->fresh()->is_super_admin)->toBeFalse();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('assignRole', $user->id, 'user');
+
+    expect($user->fresh()->is_system_owner)->toBeFalse();
+});
+
+test('assigning super admin clears system owner and vice versa', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->systemOwner()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('assignRole', $user->id, 'super_admin');
+
+    expect($user->fresh())
+        ->is_super_admin->toBeTrue()
+        ->is_system_owner->toBeFalse();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('assignRole', $user->id, 'system_owner');
+
+    expect($user->fresh())
+        ->is_super_admin->toBeFalse()
+        ->is_system_owner->toBeTrue();
+});
+
+test('in hosted mode, assigning system owner to a second user via the role menu is rejected', function () {
+    config(['organizations.hosting_mode' => 'hosted']);
+
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $existingOwner = User::factory()->systemOwner()->create();
+    $other = User::factory()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('assignRole', $other->id, 'system_owner');
+
+    expect($other->fresh()->is_system_owner)->toBeFalse();
+    expect($existingOwner->fresh()->is_system_owner)->toBeTrue();
+});
+
+test('the user list can be filtered by system owner', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true, 'name' => 'Super One']);
+    $systemOwner = User::factory()->systemOwner()->create(['name' => 'Owner One']);
+    $regular = User::factory()->create(['name' => 'Regular One']);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->set('role', 'system_owner')
+        ->assertSee('Owner One')
+        ->assertDontSee('Super One')
+        ->assertDontSee('Regular One');
 });
 
 test('a super admin cannot change their own role', function () {
@@ -141,7 +209,46 @@ test('a super admin cannot change their own role', function () {
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
-        ->call('assignRole', $superAdmin->id, false);
+        ->call('assignRole', $superAdmin->id, 'user');
+
+    expect($superAdmin->fresh()->is_super_admin)->toBeTrue();
+});
+
+test('picking a role from the menu stages it and opens a confirmation modal instead of applying it immediately', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('confirmAssignRole', $user->id, 'system_owner')
+        ->assertDispatched('modal-show', name: 'confirm-role-change')
+        ->assertSet('pendingRoleUserId', $user->id)
+        ->assertSet('pendingRoleUserName', $user->name)
+        ->assertSet('pendingRole', 'system_owner');
+
+    expect($user->fresh()->is_system_owner)->toBeFalse();
+});
+
+test('confirming the staged role change with Yes applies it and closes the modal', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('confirmAssignRole', $user->id, 'system_owner')
+        ->call('assignRole', $user->id, 'system_owner')
+        ->assertDispatched('modal-close', name: 'confirm-role-change');
+
+    expect($user->fresh()->is_system_owner)->toBeTrue();
+});
+
+test('confirmAssignRole on your own row is rejected without opening the modal', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('confirmAssignRole', $superAdmin->id, 'user')
+        ->assertNotDispatched('modal-show', name: 'confirm-role-change');
 
     expect($superAdmin->fresh()->is_super_admin)->toBeTrue();
 });

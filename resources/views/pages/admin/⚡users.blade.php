@@ -51,6 +51,13 @@ new #[Title('System Users')] class extends Component {
 
     public bool $isActive = true;
 
+    // --- Role change confirmation ---
+    public ?int $pendingRoleUserId = null;
+
+    public string $pendingRoleUserName = '';
+
+    public string $pendingRole = 'user';
+
     public function updatingSearch(): void
     {
         $this->resetPage();
@@ -121,7 +128,11 @@ new #[Title('System Users')] class extends Component {
                 ->where(fn ($query) => $query
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")))
-            ->when($this->role !== '', fn ($query) => $query->where('is_super_admin', $this->role === 'super_admin'))
+            ->when($this->role !== '', fn ($query) => match ($this->role) {
+                'super_admin' => $query->where('is_super_admin', true),
+                'system_owner' => $query->where('is_super_admin', false)->where('is_system_owner', true),
+                default => $query->where('is_super_admin', false)->where('is_system_owner', false),
+            })
             ->when($this->status !== [], fn ($query) => $query->whereIn('is_active', $statusValues))
             ->when($this->organization !== [], fn ($query) => $query->whereHas('teams', fn ($query) => $query->whereIn('teams.id', $this->organization)))
             ->orderBy('name')
@@ -204,7 +215,37 @@ new #[Title('System Users')] class extends Component {
         Flux::toast(variant: 'success', text: __('User saved.'));
     }
 
-    public function assignRole(int $id, bool $isSuperAdmin): void
+    /**
+     * Stage a role change and ask the admin to confirm it before it takes effect.
+     */
+    public function confirmAssignRole(int $id, string $role): void
+    {
+        if ($id === Auth::id()) {
+            Flux::toast(variant: 'danger', text: __('You cannot change your own role.'));
+
+            return;
+        }
+
+        $this->pendingRoleUserId = $id;
+        $this->pendingRoleUserName = User::findOrFail($id)->name;
+        $this->pendingRole = $role;
+
+        $this->dispatch('modal-show', name: 'confirm-role-change');
+    }
+
+    /**
+     * Label shown for the role currently staged for confirmation.
+     */
+    public function pendingRoleLabel(): string
+    {
+        return match ($this->pendingRole) {
+            'super_admin' => __('Super Admin'),
+            'system_owner' => __('System Owner'),
+            default => __('User'),
+        };
+    }
+
+    public function assignRole(int $id, string $role): void
     {
         if ($id === Auth::id()) {
             Flux::toast(variant: 'danger', text: __('You cannot change your own role.'));
@@ -213,10 +254,23 @@ new #[Title('System Users')] class extends Component {
         }
 
         $user = User::findOrFail($id);
-        $user->is_super_admin = $isSuperAdmin;
+
+        if ($role === 'system_owner' && config('organizations.hosting_mode') === 'hosted') {
+            $existing = User::where('is_system_owner', true)->where('id', '!=', $user->id)->first();
+
+            if ($existing) {
+                Flux::toast(variant: 'danger', text: __('Hosting mode is "hosted", which allows only one system owner. :email already holds this permission.', ['email' => $existing->email]));
+
+                return;
+            }
+        }
+
+        $user->is_super_admin = $role === 'super_admin';
+        $user->is_system_owner = $role === 'system_owner';
         $user->save();
 
         unset($this->users);
+        $this->dispatch('modal-close', name: 'confirm-role-change');
         Flux::toast(variant: 'success', text: __('Role updated.'));
     }
 
@@ -278,7 +332,7 @@ new #[Title('System Users')] class extends Component {
                         :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
                     ></div>
 
-                    @foreach (['' => __('All'), 'super_admin' => __('Super Admin'), 'user' => __('User')] as $value => $label)
+                    @foreach (['' => __('All'), 'super_admin' => __('Super Admin'), 'system_owner' => __('System Owner'), 'user' => __('User')] as $value => $label)
                         <button
                             type="button"
                             x-ref="role-{{ $value === '' ? 'all' : $value }}"
@@ -415,19 +469,25 @@ new #[Title('System Users')] class extends Component {
 
                         <flux:table.cell>
                             @if ($user->id === auth()->id())
-                                <flux:badge size="sm" :color="$user->is_super_admin ? 'pink' : 'zinc'">
-                                    {{ $user->is_super_admin ? __('Super Admin') : __('User') }}
-                                </flux:badge>
+                                @if ($user->is_super_admin || $user->is_system_owner)
+                                    <x-system-role-badge :is-super-admin="$user->is_super_admin" :is-system-owner="$user->is_system_owner" />
+                                @else
+                                    <flux:badge size="sm" color="zinc">{{ __('User') }}</flux:badge>
+                                @endif
                             @else
                                 <flux:dropdown position="bottom" align="start">
                                     <flux:button variant="outline" size="sm" icon:trailing="chevron-down" data-test="user-role-trigger">
-                                        {{ $user->is_super_admin ? __('Super Admin') : __('User') }}
+                                        {{ $user->is_super_admin ? __('Super Admin') : ($user->is_system_owner ? __('System Owner') : __('User')) }}
                                     </flux:button>
                                     <flux:menu>
-                                        <flux:menu.item as="button" type="button" wire:click="assignRole({{ $user->id }}, true)" data-test="assign-role-super-admin">
+                                        <flux:menu.item as="button" type="button" wire:click="confirmAssignRole({{ $user->id }}, 'super_admin')" data-test="assign-role-super-admin">
                                             {{ __('Super Admin') }}
                                         </flux:menu.item>
-                                        <flux:menu.item as="button" type="button" wire:click="assignRole({{ $user->id }}, false)" data-test="assign-role-user">
+                                        <flux:menu.separator />
+                                        <flux:menu.item as="button" type="button" wire:click="confirmAssignRole({{ $user->id }}, 'system_owner')" data-test="assign-role-system-owner">
+                                            {{ __('System Owner') }}
+                                        </flux:menu.item>
+                                        <flux:menu.item as="button" type="button" wire:click="confirmAssignRole({{ $user->id }}, 'user')" data-test="assign-role-user">
                                             {{ __('User') }}
                                         </flux:menu.item>
                                     </flux:menu>
@@ -537,5 +597,28 @@ new #[Title('System Users')] class extends Component {
                 <flux:button variant="primary" type="submit" data-test="save-user">{{ __('Save') }}</flux:button>
             </div>
         </form>
+    </flux:modal>
+
+    {{-- Confirm role change modal --}}
+    <flux:modal name="confirm-role-change" :dismissible="false" class="max-w-lg" data-test="confirm-role-change-modal">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Change role') }}</flux:heading>
+                <flux:subheading>
+                    {{ __('Are you sure you want to assign :role to :name?', ['role' => $this->pendingRoleLabel(), 'name' => $pendingRoleUserName]) }}
+                </flux:subheading>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close><flux:button variant="ghost" data-test="confirm-role-change-no">{{ __('No') }}</flux:button></flux:modal.close>
+                <flux:button
+                    variant="primary"
+                    wire:click="assignRole({{ $pendingRoleUserId ?? 0 }}, '{{ $pendingRole }}')"
+                    data-test="confirm-role-change-yes"
+                >
+                    {{ __('Yes') }}
+                </flux:button>
+            </div>
+        </div>
     </flux:modal>
 </section>

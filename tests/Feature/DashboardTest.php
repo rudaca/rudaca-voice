@@ -26,6 +26,35 @@ test('authenticated users can visit the dashboard', function () {
     $response->assertOk();
 });
 
+test('the sidebar user menu shows a Super Admin badge for super admins', function () {
+    $user = User::factory()->create(['is_super_admin' => true]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Super Admin');
+});
+
+test('the sidebar user menu shows a System Owner badge for system owners', function () {
+    $user = User::factory()->systemOwner()->create();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('System Owner');
+});
+
+test('the sidebar user menu shows the org role for a plain contributor', function () {
+    ['user' => $manager] = teamWithMember(TeamRole::Manager);
+
+    $this->actingAs($manager)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Manager')
+        ->assertDontSee('Super Admin')
+        ->assertDontSee('System Owner');
+});
+
 test('voting on a trending idea from the dashboard updates the count without redirecting', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
     $idea = makeIdea($team);

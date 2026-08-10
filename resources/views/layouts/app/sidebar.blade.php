@@ -180,7 +180,7 @@
 
             <flux:separator variant="subtle" class="sidebar-divider" />
 
-            <x-desktop-user-menu class="hidden lg:block" :is-super-admin="$__isSuperAdmin" />
+            <x-desktop-user-menu class="hidden lg:block" />
         </flux:sidebar>
 
         <!-- Header -->

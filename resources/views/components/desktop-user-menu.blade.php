@@ -1,16 +1,25 @@
-@props(['showTeam' => true, 'subtitle' => null, 'isSuperAdmin' => false])
+@props(['showTeam' => true, 'subtitle' => null])
 
 @php
-    $menuSubtitle = $subtitle ?? ($showTeam ? auth()->user()->currentTeam?->name : null);
+    $user = auth()->user();
+    $isSuperAdmin = (bool) $user->is_super_admin;
+    $isSystemOwner = (bool) $user->is_system_owner;
+    $orgRole = $showTeam && $user->currentTeam ? $user->teamRole($user->currentTeam) : null;
+
+    $menuSubtitle = $subtitle ?? ($showTeam ? $user->currentTeam?->name : null);
 @endphp
 
 <flux:dropdown position="bottom" align="start">
     <button type="button" class="group flex w-full items-center rounded-lg p-1 hover:bg-zinc-800/5 dark:hover:bg-white/10" data-test="sidebar-menu-button">
-        <flux:avatar :initials="auth()->user()->initials()" :size="$isSuperAdmin ? 'sm' : 'base'" />
+        <flux:avatar :initials="$user->initials()" :size="$isSuperAdmin ? 'sm' : 'base'" />
         <div class="in-data-flux-sidebar-collapsed-desktop:hidden mx-2 grid flex-1 text-start leading-tight {{ $isSuperAdmin ? 'text-sm' : 'text-base' }}">
-            <span class="truncate font-medium text-slate-600 group-hover:text-slate-900 dark:text-white/80 dark:group-hover:text-white">{{ auth()->user()->name }}</span>
-            @if($isSuperAdmin)
-                <flux:badge size="sm" color="red" class="mt-0.5 w-fit">{{ __('Super Admin') }}</flux:badge>
+            <span class="truncate font-medium text-slate-600 group-hover:text-slate-900 dark:text-white/80 dark:group-hover:text-white">{{ $user->name }}</span>
+            @if ($isSuperAdmin || $isSystemOwner)
+                <x-system-role-badge :is-super-admin="$isSuperAdmin" :is-system-owner="$isSystemOwner" class="mt-0.5 w-fit text-2xs" />
+            @elseif ($orgRole !== null)
+                <flux:badge size="sm" class="mt-0.5 w-fit text-2xs bg-gray-200! text-gray-700! dark:bg-zinc-700! dark:text-zinc-300!">
+                    {{ $orgRole === \App\Enums\TeamRole::Owner ? __('Owner') : $orgRole->label() }}
+                </flux:badge>
             @elseif($menuSubtitle)
                 <span class="truncate text-xs text-slate-700 dark:text-slate-600">{{ $menuSubtitle }}</span>
             @endif
