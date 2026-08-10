@@ -27,8 +27,8 @@ test('teams index page can be rendered', function () {
     $response->assertOk();
 });
 
-test('teams can be created', function () {
-    $user = User::factory()->create();
+test('system owners can create a team', function () {
+    $user = User::factory()->systemOwner()->create();
 
     $this->actingAs($user);
 
@@ -47,7 +47,7 @@ test('teams can be created', function () {
     ]);
 });
 
-test('viewers, employees and managers cannot create a team', function (TeamRole $role) {
+test('users without the system owner permission cannot create a team, regardless of their organization role', function (TeamRole $role) {
     ['user' => $user] = teamWithMember($role);
 
     $this->actingAs($user);
@@ -61,30 +61,31 @@ test('viewers, employees and managers cannot create a team', function (TeamRole 
         'name' => 'Should Not Exist',
     ]);
 })->with([
-    'viewer' => TeamRole::Viewer,
-    'employee' => TeamRole::Employee,
+    'owner' => TeamRole::Owner,
+    'admin' => TeamRole::Admin,
     'manager' => TeamRole::Manager,
+    'employee' => TeamRole::Employee,
+    'viewer' => TeamRole::Viewer,
+    'member' => TeamRole::Member,
 ]);
 
-test('owners and admins can create a team', function (TeamRole $role) {
-    ['user' => $user] = teamWithMember($role);
+test('a plain user with no system owner permission cannot create a team even without a current organization', function () {
+    $user = User::factory()->create();
+    $user->update(['current_team_id' => null]);
 
     $this->actingAs($user);
 
     Livewire::test('pages::teams.index')
-        ->set('name', 'New Team by '.$role->value)
+        ->set('name', 'Should Not Exist')
         ->call('createTeam')
-        ->assertHasNoErrors();
+        ->assertForbidden();
 
-    $this->assertDatabaseHas('teams', [
-        'name' => 'New Team by '.$role->value,
+    $this->assertDatabaseMissing('teams', [
+        'name' => 'Should Not Exist',
     ]);
-})->with([
-    'owner' => TeamRole::Owner,
-    'admin' => TeamRole::Admin,
-]);
+});
 
-test('the new team button and modal are hidden for viewers, employees and managers', function (TeamRole $role) {
+test('the new team button and modal are hidden for users without the system owner permission', function (TeamRole $role) {
     ['user' => $user] = teamWithMember($role);
 
     $this->actingAs($user);
@@ -93,13 +94,25 @@ test('the new team button and modal are hidden for viewers, employees and manage
         ->assertDontSeeHtml('data-test="teams-new-team-button"')
         ->assertDontSeeHtml('data-test="create-team-submit"');
 })->with([
-    'viewer' => TeamRole::Viewer,
-    'employee' => TeamRole::Employee,
+    'owner' => TeamRole::Owner,
+    'admin' => TeamRole::Admin,
     'manager' => TeamRole::Manager,
+    'employee' => TeamRole::Employee,
+    'viewer' => TeamRole::Viewer,
 ]);
 
+test('the new team button and modal are visible for system owners', function () {
+    $user = User::factory()->systemOwner()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->assertSeeHtml('data-test="teams-new-team-button"')
+        ->assertSeeHtml('data-test="create-team-submit"');
+});
+
 test('teams created via the create team modal disallow anonymous ideas by default', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->systemOwner()->create();
 
     $this->actingAs($user);
 
@@ -114,7 +127,7 @@ test('teams created via the create team modal disallow anonymous ideas by defaul
 });
 
 test('anonymous ideas can be allowed when creating a team', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->systemOwner()->create();
 
     $this->actingAs($user);
 
@@ -130,7 +143,7 @@ test('anonymous ideas can be allowed when creating a team', function () {
 });
 
 test('team slug uses next available suffix', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->systemOwner()->create();
 
     Team::factory()->create(['name' => 'Acme', 'slug' => 'acme']);
     Team::factory()->create(['name' => 'Acme One', 'slug' => 'acme-1']);
@@ -147,6 +160,75 @@ test('team slug uses next available suffix', function () {
         'name' => 'Acme',
         'slug' => 'acme-11',
     ]);
+});
+
+test('hosting mode does not change who can create an organization', function (string $mode) {
+    config(['organizations.hosting_mode' => $mode]);
+
+    $systemOwner = User::factory()->systemOwner()->create();
+    ['user' => $orgOwner] = teamWithMember(TeamRole::Owner);
+    ['user' => $orgAdmin] = teamWithMember(TeamRole::Admin);
+    $regularUser = User::factory()->create();
+
+    $this->actingAs($systemOwner);
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Owner Team '.$mode)
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $this->actingAs($orgOwner);
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Org Owner Team '.$mode)
+        ->call('createTeam')
+        ->assertForbidden();
+
+    $this->actingAs($orgAdmin);
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Org Admin Team '.$mode)
+        ->call('createTeam')
+        ->assertForbidden();
+
+    $this->actingAs($regularUser);
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Regular User Team '.$mode)
+        ->call('createTeam')
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('teams', ['name' => 'Owner Team '.$mode]);
+    $this->assertDatabaseMissing('teams', ['name' => 'Org Owner Team '.$mode]);
+    $this->assertDatabaseMissing('teams', ['name' => 'Org Admin Team '.$mode]);
+    $this->assertDatabaseMissing('teams', ['name' => 'Regular User Team '.$mode]);
+})->with([
+    'hosted' => 'hosted',
+    'self-hosted' => 'self-hosted',
+]);
+
+test('the edit action is only available for organizations the user is authorized to update', function (TeamRole $role) {
+    ['team' => $team, 'user' => $user] = teamWithMember($role);
+
+    expect($user->toUserTeam($team)->canManage)->toBeFalse();
+})->with([
+    'admin' => TeamRole::Admin,
+    'manager' => TeamRole::Manager,
+    'employee' => TeamRole::Employee,
+    'viewer' => TeamRole::Viewer,
+]);
+
+test('the edit action is available for organizations the user owns', function () {
+    $owner = User::factory()->create();
+    $team = Team::factory()->create();
+    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
+
+    expect($owner->toUserTeam($team)->canManage)->toBeTrue();
+});
+
+test('a member with a non owned organization row sees the view icon rather than edit', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    $this->actingAs($admin);
+
+    Livewire::test('pages::teams.index')
+        ->assertSeeHtml('data-test="team-view-button"');
 });
 
 test('team edit page can be rendered', function () {

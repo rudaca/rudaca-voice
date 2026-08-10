@@ -79,6 +79,16 @@ class UserFactory extends Factory
     }
 
     /**
+     * Indicate that the model has the system-owner permission (may create organizations).
+     */
+    public function systemOwner(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_system_owner' => true,
+        ]);
+    }
+
+    /**
      * Indicate that the model has two-factor authentication configured.
      */
     public function withTwoFactor(): static

@@ -3,7 +3,6 @@
 namespace App\Policies;
 
 use App\Enums\TeamPermission;
-use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
 
@@ -26,17 +25,16 @@ class TeamPolicy
     }
 
     /**
-     * Determine whether the user can create models.
+     * Determine whether the user can create new organizations.
      *
-     * Viewers, employees, and managers are restricted to the team(s) they're
-     * added to and may not create their own; owners, admins, and users with
-     * no current team yet may.
+     * This is a system-level capability, entirely separate from organization
+     * roles — being an Owner or Admin of an existing organization grants no
+     * say here. Only users explicitly flagged as a system owner may create
+     * new organizations.
      */
     public function create(User $user): bool
     {
-        $role = $user->currentTeam ? $user->teamRole($user->currentTeam) : null;
-
-        return $role === null || $role->isAtLeast(TeamRole::Admin);
+        return (bool) $user->is_system_owner;
     }
 
     /**

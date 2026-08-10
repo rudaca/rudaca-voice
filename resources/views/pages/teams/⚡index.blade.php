@@ -111,7 +111,7 @@ new #[Title('Organizations')] class extends Component {
                     </div>
 
                     <div class="flex items-center gap-1">
-                        @if (! $team->isPersonal && $team->role !== 'owner')
+                        @if ($team->canLeave)
                             <flux:modal.trigger :name="'leave-team-'.$team->id">
                                 <flux:tooltip :content="__('Leave organization')">
                                     <flux:button
@@ -124,20 +124,20 @@ new #[Title('Organizations')] class extends Component {
                             </flux:modal.trigger>
                         @endif
 
-                        <flux:tooltip :content="$team->role === 'member' ? __('View organization') : __('Edit organization')">
+                        <flux:tooltip :content="$team->canManage ? __('Edit organization') : __('View organization')">
                             <flux:button
                                 variant="ghost"
                                 size="sm"
-                                :icon="$team->role === 'member' ? 'eye' : 'pencil-line'"
+                                :icon="$team->canManage ? 'pencil-line' : 'eye'"
                                 :href="route('teams.edit', $team->slug)"
                                 wire:navigate
-                                :data-test="$team->role === 'member' ? 'team-view-button' : 'team-edit-button'"
+                                :data-test="$team->canManage ? 'team-edit-button' : 'team-view-button'"
                             />
                         </flux:tooltip>
                     </div>
                 </div>
 
-                @if (! $team->isPersonal && $team->role !== 'owner')
+                @if ($team->canLeave)
                     <flux:modal :name="'leave-team-'.$team->id" focusable :dismissible="false" class="max-w-lg">
                         <form wire:submit="leaveTeam({{ $team->id }})" class="space-y-6">
                             <div>

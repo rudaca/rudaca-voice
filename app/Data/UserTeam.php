@@ -11,6 +11,8 @@ readonly class UserTeam
         public bool $isPersonal,
         public ?string $role,
         public ?string $roleLabel,
+        public bool $canManage = false,
+        public bool $canLeave = false,
         public ?bool $isCurrent = null,
     ) {
         //
