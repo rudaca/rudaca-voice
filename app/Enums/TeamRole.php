@@ -40,6 +40,20 @@ enum TeamRole: string
     }
 
     /**
+     * Get the icon used to mark this role on an avatar overlay. Only
+     * privileged roles (Manager and above) get one; everyone else returns
+     * null and shows no overlay.
+     */
+    public function avatarIcon(): ?string
+    {
+        return match ($this) {
+            self::Owner, self::Manager => 'user-shield',
+            self::Admin => 'user-round-cog',
+            self::Employee, self::Viewer, self::Member => null,
+        };
+    }
+
+    /**
      * Get a short summary of what the role can do, for display alongside
      * the role picker when inviting or changing a member's role.
      */

@@ -592,7 +592,7 @@ new #[Title('Dashboard')] class extends Component {
                                         x-transition:leave-end="opacity-0 translate-y-2"
                                         class="size-4"
                                     />
-                                    <span class="text-sm font-extrabold">{{ $idea->votes_count }}</span>
+                                    <x-vote-count :count="$idea->votes_count" class="text-sm font-extrabold" />
                                     <span class="text-[9px] font-medium uppercase tracking-wide {{ $idea->voted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-700' }}">{{ trans_choice('vote|votes', $idea->votes_count) }}</span>
                                 </button>
                             </flux:tooltip>

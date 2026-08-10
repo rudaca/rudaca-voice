@@ -1039,15 +1039,23 @@ new #[Title('Organization Settings')] class extends Component {
                         <tr wire:key="member-{{ $member->id }}" data-test="member-row">
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
-                                    <flux:avatar :name="$member->name" size="xs" />
+                                    <x-role-tooltip :role="$member->pivot->role === \App\Enums\TeamRole::Owner ? __('Owner') : $member->pivot->role->label()">
+                                        <flux:avatar :name="$member->name" size="xs" badge:circle badge:color="{{ $member->pivot->role->badgeColor() }}">
+                                            @if ($member->pivot->role->avatarIcon())
+                                                <x-slot:badge class="h-3.5! min-w-3.5!">
+                                                    @if ($member->pivot->role->avatarIcon() === 'user-shield')
+                                                        <flux:icon.user-shield variant="micro" class="size-2.5 text-white" />
+                                                    @else
+                                                        <flux:icon.user-round-cog variant="micro" class="size-2.5 text-white" />
+                                                    @endif
+                                                </x-slot:badge>
+                                            @endif
+                                        </flux:avatar>
+                                    </x-role-tooltip>
                                     <div class="min-w-0">
                                         <div class="font-bold text-slate-900 dark:text-slate-200">{{ $member->name }}</div>
                                         @if ($member->is_super_admin || $member->is_system_owner)
                                             <x-system-role-badge :is-super-admin="$member->is_super_admin" :is-system-owner="$member->is_system_owner" class="text-2xs" />
-                                        @else
-                                            <flux:badge size="sm" :color="$member->pivot->role->badgeColor()" class="text-2xs">
-                                                {{ $member->pivot->role === \App\Enums\TeamRole::Owner ? __('Owner') : $member->pivot->role->label() }}
-                                            </flux:badge>
                                         @endif
                                     </div>
                                 </div>

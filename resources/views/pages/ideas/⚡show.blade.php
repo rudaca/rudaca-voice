@@ -953,23 +953,62 @@ new #[Title('Idea')] class extends Component {
 
             @if ($this->boardVoteStatus)
                 <div
+                    x-data="{
+                        dismissed: false,
+                        doNotShowAgain: false,
+                        storageKey: 'board-vote-status-dismissed-{{ $this->ideaModel->board_id }}',
+                        init() {
+                            this.dismissed = localStorage.getItem(this.storageKey) === '1';
+                        },
+                        dismiss() {
+                            this.dismissed = true;
+
+                            if (this.doNotShowAgain) {
+                                localStorage.setItem(this.storageKey, '1');
+                            }
+                        },
+                    }"
+                    x-cloak
+                    x-show="! dismissed"
                     @class([
-                        'mb-4 rounded-lg border p-3 text-sm',
+                        'mb-4 flex items-start gap-3 rounded-lg border p-3 text-sm',
                         'border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-500/30 dark:bg-indigo-950/20 dark:text-indigo-200' => $this->boardVoteStatus['state'] !== 'blocked',
                         'border-red-200 bg-red-50 text-red-900 dark:border-red-500/30 dark:bg-red-950/20 dark:text-red-200' => $this->boardVoteStatus['state'] === 'blocked',
                     ])
                     data-test="board-vote-status"
                 >
-                    @if ($this->boardVoteStatus['state'] === 'available')
-                        {{ __('You have 1 vote available on this board.') }}
-                    @elseif ($this->boardVoteStatus['state'] === 'assigned')
-                        {{ __('Your vote is currently assigned to') }}
-                        <a href="{{ route('ideas.show', ['idea' => $this->boardVoteStatus['idea']->slug]) }}" wire:navigate class="font-semibold underline">
-                            {{ __('Idea') }} #{{ $this->boardVoteStatus['idea']->id }}: {{ $this->boardVoteStatus['idea']->title }}
-                        </a>.
-                    @else
-                        {{ __('You can only cast one vote on this board.') }}
-                    @endif
+                    <div class="flex-1">
+                        @if ($this->boardVoteStatus['state'] === 'available')
+                            {{ __('You have 1 vote available on this board.') }}
+                        @elseif ($this->boardVoteStatus['state'] === 'assigned')
+                            {{ __('Your vote is currently assigned to') }}
+                            <a href="{{ route('ideas.show', ['idea' => $this->boardVoteStatus['idea']->slug]) }}" wire:navigate class="font-semibold underline">
+                                {{ __('Idea') }} #{{ $this->boardVoteStatus['idea']->id }}: {{ $this->boardVoteStatus['idea']->title }}
+                            </a>.
+                        @else
+                            {{ __('You can only cast one vote on this board.') }}
+                        @endif
+                    </div>
+
+                    <label class="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs opacity-80">
+                        <input
+                            type="checkbox"
+                            x-model="doNotShowAgain"
+                            class="size-3.5 rounded border-current/40 bg-transparent accent-current"
+                            data-test="board-vote-status-dont-show-again"
+                        >
+                        {{ __('Do not show again') }}
+                    </label>
+
+                    <button
+                        type="button"
+                        x-on:click="dismiss()"
+                        class="-m-1 shrink-0 rounded p-1 opacity-60 hover:opacity-100"
+                        aria-label="{{ __('Dismiss') }}"
+                        data-test="board-vote-status-dismiss"
+                    >
+                        <flux:icon.x-mark class="size-4" />
+                    </button>
                 </div>
             @endif
 
@@ -1006,7 +1045,7 @@ new #[Title('Idea')] class extends Component {
                             x-transition:leave-end="opacity-0 translate-y-2"
                             class="size-5"
                         />
-                        <span class="text-lg font-extrabold">{{ $this->voteCount }}</span>
+                        <x-vote-count :count="$this->voteCount" class="text-lg font-extrabold" />
                         <span class="text-[11px] font-medium {{ $this->hasVoted ? 'text-indigo-500/80 dark:text-indigo-300/80' : 'text-slate-700' }}">{{ trans_choice('vote|votes', $this->voteCount) }}</span>
                     </button>
                 </flux:tooltip>
@@ -1243,13 +1282,26 @@ new #[Title('Idea')] class extends Component {
                         ])
                         wire:key="comment-{{ $comment->id }}"
                     >
-                        <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" />
+                        @if ($staffRole = $this->staffRoles[$comment->user_id] ?? null)
+                            <x-role-tooltip :role="$staffRole->label()">
+                                <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" badge:circle badge:color="{{ $staffRole->badgeColor() }}">
+                                    @if ($staffRole->avatarIcon())
+                                        <x-slot:badge class="h-3.5! min-w-3.5!">
+                                            @if ($staffRole->avatarIcon() === 'user-shield')
+                                                <flux:icon.user-shield variant="micro" class="size-2.5 text-white" />
+                                            @else
+                                                <flux:icon.user-round-cog variant="micro" class="size-2.5 text-white" />
+                                            @endif
+                                        </x-slot:badge>
+                                    @endif
+                                </flux:avatar>
+                            </x-role-tooltip>
+                        @else
+                            <flux:avatar size="sm" :name="$comment->user?->name ?? __('Unknown')" />
+                        @endif
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-sm font-medium text-slate-900 dark:text-slate-200">{{ $comment->user?->name ?? __('Unknown') }}</span>
-                                @if ($staffRole = $this->staffRoles[$comment->user_id] ?? null)
-                                    <flux:badge size="sm" :color="$staffRole->badgeColor()">{{ $staffRole->label() }}</flux:badge>
-                                @endif
                                 @if ($comment->is_internal)
                                     <flux:badge color="amber" size="sm">{{ __('Internal') }}</flux:badge>
                                 @endif

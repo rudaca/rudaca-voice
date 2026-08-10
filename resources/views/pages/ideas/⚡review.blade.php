@@ -728,11 +728,14 @@ new #[Title('Review Queue')] class extends Component {
                         data-test="vote-count"
                         @if ($idea->voted) data-voted="true" @endif
                     >
-                        <span @class([
-                            'text-base font-extrabold',
-                            'text-indigo-600 dark:text-indigo-300' => $idea->voted,
-                            'text-slate-900 dark:text-slate-200' => ! $idea->voted,
-                        ])>{{ $idea->votes_count }}</span>
+                        <x-vote-count
+                            :count="$idea->votes_count"
+                            @class([
+                                'text-base font-extrabold',
+                                'text-indigo-600 dark:text-indigo-300' => $idea->voted,
+                                'text-slate-900 dark:text-slate-200' => ! $idea->voted,
+                            ])
+                        />
                         <flux:icon.chevron-up @class([
                             'size-3',
                             'text-indigo-600 dark:text-indigo-300' => $idea->voted,
