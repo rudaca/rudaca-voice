@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AccessLevel;
 use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaBoard;
@@ -204,7 +205,7 @@ class IdeaPortalSeeder extends Seeder
 
             for ($i = 0; $i < $threadSize; $i++) {
                 if (fake()->boolean(20)) {
-                    IdeaComment::factory()->internal()->create([
+                    IdeaComment::factory()->privateNote()->create([
                         'idea_id' => $idea->id,
                         'user_id' => $reviewers->random()->id,
                     ]);
@@ -258,7 +259,7 @@ class IdeaPortalSeeder extends Seeder
                 ]);
             });
 
-        // --- Optional Phase 2 board-access sample rows (not enforced anywhere yet) ---
+        // --- Sample per-board access grants ---
         IdeaBoardRoleAccess::factory()->create([
             'board_id' => $boards['website']->id,
             'role' => TeamRole::Viewer,
@@ -267,7 +268,7 @@ class IdeaPortalSeeder extends Seeder
         IdeaBoardUserAccess::factory()->create([
             'board_id' => $boards['technology']->id,
             'user_id' => $employees->first()->id,
-            'access_level' => 'contribute',
+            'access_level' => AccessLevel::Contribute,
         ]);
 
         $this->command?->info("Seeded '{$team->name}' with {$ideas->count()} ideas across {$boards->count()} boards.");

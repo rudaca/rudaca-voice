@@ -39,7 +39,7 @@ new #[Title('Idea')] class extends Component {
     #[Validate('required|string|max:2000')]
     public string $commentBody = '';
 
-    public bool $isInternal = false;
+    public bool $isPrivateNote = false;
 
     public string $status = '';
 
@@ -85,7 +85,7 @@ new #[Title('Idea')] class extends Component {
             ->where('team_id', $team->id)
             ->where('slug', $idea)
             ->visibleTo(Auth::user()->teamRole($team), Auth::id())
-            ->with(['boardGroup:id,name', 'board:id,name', 'category:id,name', 'submittedBy:id,name'])
+            ->with(['boardGroup:id,name', 'board:id,name,team_id', 'category:id,name', 'submittedBy:id,name'])
             ->firstOrFail();
 
         $this->status = $this->ideaModel->status;
@@ -122,12 +122,12 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
-     * Whether the current user may post internal (manager-only) comments.
+     * Whether the current user may post private management notes on this idea's board.
      */
     #[Computed]
-    public function canPostInternal(): bool
+    public function canPostPrivateNote(): bool
     {
-        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Manager) ?? false;
+        return Auth::user()->can('managePrivateNotes', $this->ideaModel->board);
     }
 
     /**
@@ -543,10 +543,10 @@ new #[Title('Idea')] class extends Component {
             'idea_id' => $this->ideaModel->id,
             'user_id' => Auth::id(),
             'body' => $validated['commentBody'],
-            'is_internal' => $this->canPostInternal && $this->isInternal,
+            'is_internal' => $this->canPostPrivateNote && $this->isPrivateNote,
         ]);
 
-        $this->reset('commentBody', 'isInternal');
+        $this->reset('commentBody', 'isPrivateNote');
 
         unset($this->comments);
 
@@ -638,12 +638,12 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
-     * Whether the current user may see internal (manager-only) comments.
+     * Whether the current user may see private management notes on this idea's board.
      */
     #[Computed]
-    public function canViewInternalComments(): bool
+    public function canViewPrivateNotes(): bool
     {
-        return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Manager) ?? false;
+        return Auth::user()->can('managePrivateNotes', $this->ideaModel->board);
     }
 
     /**
@@ -657,7 +657,7 @@ new #[Title('Idea')] class extends Component {
     {
         return $this->ideaModel->comments()
             ->with('user:id,name')
-            ->when(! $this->canViewInternalComments, fn ($query) => $query->where('is_internal', false))
+            ->when(! $this->canViewPrivateNotes, fn ($query) => $query->where('is_internal', false))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
@@ -1244,11 +1244,12 @@ new #[Title('Idea')] class extends Component {
                             data-test="comment-body"
                         />
                         <div class="flex items-center justify-between gap-3">
-                            @if ($this->canPostInternal)
+                            @if ($this->canPostPrivateNote)
                                 <flux:checkbox
-                                    wire:model="isInternal"
-                                    :label="__('Internal note (staff only)')"
-                                    data-test="comment-internal"
+                                    wire:model="isPrivateNote"
+                                    :label="__('Private management note')"
+                                    :description="__('Only administrators and users with permission to manage ideas can see this note.')"
+                                    data-test="comment-private-note"
                                 />
                             @else
                                 <span></span>
@@ -1303,7 +1304,7 @@ new #[Title('Idea')] class extends Component {
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-sm font-medium text-slate-900 dark:text-slate-200">{{ $comment->user?->name ?? __('Unknown') }}</span>
                                 @if ($comment->is_internal)
-                                    <flux:badge color="amber" size="sm">{{ __('Internal') }}</flux:badge>
+                                    <flux:badge color="amber" size="sm" icon="lock-closed">{{ __('Private note') }}</flux:badge>
                                 @endif
                                 @if ($comment->isHidden())
                                     <flux:badge color="red" size="sm" icon="flag">{{ __('Flagged') }}</flux:badge>

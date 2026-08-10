@@ -101,7 +101,7 @@ class IdeaBoard extends Model
     }
 
     /**
-     * Get the per-role access rules for this board (Phase 2).
+     * Get the per-role access rules for this board.
      *
      * @return HasMany<IdeaBoardRoleAccess, $this>
      */
@@ -111,7 +111,7 @@ class IdeaBoard extends Model
     }
 
     /**
-     * Get the per-user access rules for this board (Phase 2).
+     * Get the per-user access rules for this board.
      *
      * @return HasMany<IdeaBoardUserAccess, $this>
      */

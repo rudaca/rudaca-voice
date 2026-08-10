@@ -28,12 +28,13 @@ class IdeaCommentFactory extends Factory
     }
 
     /**
-     * Indicate that the comment is internal (visible to managers/admins/owners only).
+     * Indicate that the comment is a private management note (visible only to
+     * users authorized to manage the idea's board).
      */
-    public function internal(): static
+    public function privateNote(): static
     {
         return $this->state(fn (array $attributes) => [
-            'body' => fake()->randomElement($this->internalBodies()),
+            'body' => fake()->randomElement($this->privateNoteBodies()),
             'is_internal' => true,
         ]);
     }
@@ -62,11 +63,12 @@ class IdeaCommentFactory extends Factory
     }
 
     /**
-     * Realistic internal notes reviewers leave that only managers/admins/owners see.
+     * Realistic private management notes reviewers leave that only board
+     * managers/admins/owners see.
      *
      * @return array<int, string>
      */
-    private function internalBodies(): array
+    private function privateNoteBodies(): array
     {
         return [
             'Checked with IT — feasible, but will need a bit of budget for third-party tooling.',

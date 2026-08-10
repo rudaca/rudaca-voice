@@ -11,7 +11,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Phase 2 / Planned model. Schema only — per-board role access is not enforced yet.
+ * A per-role grant giving every team member holding the given role access to
+ * a specific board, independent of the team-wide role hierarchy. Used to
+ * scope private-management-note authorization to individual board
+ * managers/moderators.
  *
  * @property int $id
  * @property int $board_id

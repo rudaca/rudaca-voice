@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Concerns\HasBoardAccess;
 use App\Concerns\HasTeams;
 use App\Enums\Timezone;
 use Database\Factories\UserFactory;
@@ -48,7 +49,7 @@ use Illuminate\Support\Str;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasTeams, Notifiable;
+    use HasBoardAccess, HasFactory, HasTeams, Notifiable;
 
     /**
      * Get the attributes that should be cast.

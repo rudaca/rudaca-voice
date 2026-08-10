@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Livewire\Concerns\ScopesPrivateNoteAccess;
 use App\Models\IdeaComment;
 use App\Models\IdeaStatusHistory;
 use App\Models\IdeaVote;
@@ -14,6 +15,8 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Dashboard')] class extends Component {
+    use ScopesPrivateNoteAccess;
+
     /**
      * Which stat card set is showing for roles that can toggle between them.
      */
@@ -328,7 +331,7 @@ new #[Title('Dashboard')] class extends Component {
             ->withCount([
                 'votes',
                 'comments',
-                'comments as internal_comments_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
+                'comments as private_notes_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
             ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->orderByRaw('(votes_count + comments_count * 3) desc')
@@ -352,7 +355,7 @@ new #[Title('Dashboard')] class extends Component {
             ->withCount([
                 'votes',
                 'comments',
-                'comments as internal_comments_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
+                'comments as private_notes_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
             ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->orderByDesc('votes_count')
@@ -375,7 +378,7 @@ new #[Title('Dashboard')] class extends Component {
             ->withCount([
                 'votes',
                 'comments',
-                'comments as internal_comments_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
+                'comments as private_notes_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
             ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->orderByDesc('votes_count')
@@ -625,9 +628,9 @@ new #[Title('Dashboard')] class extends Component {
                                         <div class="w-fit max-w-full truncate font-semibold text-slate-900 hover:underline dark:text-slate-200">{{ $idea->title }}</div>
                                     </a>
 
-                                    @if ($this->role?->isAtLeast(TeamRole::Manager) && $idea->internal_comments_count > 0)
-                                        <flux:tooltip :content="trans_choice(':count internal comment|:count internal comments', $idea->internal_comments_count, ['count' => $idea->internal_comments_count])">
-                                            <flux:badge size="sm" icon="exclamation-triangle" class="bg-red-100! text-red-800! dark:bg-red-950! dark:text-red-400!">{{ __('Internal Comments') }}</flux:badge>
+                                    @if (in_array($idea->board_id, $this->authorizedPrivateNoteBoardIds, true) && $idea->private_notes_count > 0)
+                                        <flux:tooltip :content="trans_choice(':count private note|:count private notes', $idea->private_notes_count, ['count' => $idea->private_notes_count])">
+                                            <flux:badge size="sm" icon="lock-closed" class="bg-amber-100! text-amber-800! dark:bg-amber-950! dark:text-amber-400!">{{ __('Private Notes') }}</flux:badge>
                                         </flux:tooltip>
                                     @endif
                                 </div>

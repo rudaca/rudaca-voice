@@ -2,6 +2,7 @@
 
 use App\Enums\IdeaStatus;
 use App\Enums\TeamRole;
+use App\Livewire\Concerns\ScopesPrivateNoteAccess;
 use App\Models\Idea;
 use App\Models\IdeaVote;
 use App\Models\Team;
@@ -17,7 +18,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 new class extends Component {
-    use WithPagination;
+    use ScopesPrivateNoteAccess, WithPagination;
 
     #[Url(as: 'sort')]
     public string $sort = 'newest';
@@ -70,8 +71,8 @@ new class extends Component {
 
     public ?int $pendingMoveToIdeaId = null;
 
-    #[Url(as: 'internal_comments')]
-    public bool $onlyInternalComments = false;
+    #[Url(as: 'private_notes')]
+    public bool $onlyPrivateNotes = false;
 
     /**
      * Reset pagination whenever a filter changes.
@@ -106,7 +107,7 @@ new class extends Component {
             }
         }
 
-        if (in_array($property, ['status', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo', 'hideDuplicates', 'onlyInternalComments'], true)) {
+        if (in_array($property, ['status', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo', 'hideDuplicates', 'onlyPrivateNotes'], true)) {
             $this->resetPage();
         }
     }
@@ -345,7 +346,7 @@ new class extends Component {
         return $this->category !== []
             || $this->author !== []
             || $this->hideDuplicates
-            || $this->onlyInternalComments
+            || $this->onlyPrivateNotes
             || $this->dateFrom !== ''
             || $this->dateTo !== '';
     }
@@ -369,7 +370,7 @@ new class extends Component {
      */
     public function clearFilters(): void
     {
-        $this->reset(['status', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo', 'hideDuplicates', 'onlyInternalComments']);
+        $this->reset(['status', 'group', 'board', 'category', 'author', 'search', 'dateFrom', 'dateTo', 'hideDuplicates', 'onlyPrivateNotes']);
         $this->resetPage();
     }
 
@@ -440,7 +441,7 @@ new class extends Component {
             ->withCount([
                 'votes',
                 'comments',
-                'comments as internal_comments_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
+                'comments as private_notes_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
             ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
             ->when($this->status !== [], fn ($query) => $query->whereIn('status', $this->status))
@@ -453,8 +454,10 @@ new class extends Component {
             ->when($this->dateTo !== '', fn ($query) => $query->whereDate('created_at', '<=', $this->dateTo))
             ->when($this->hideDuplicates, fn ($query) => $query->where('status', '!=', 'duplicate'))
             ->when(
-                $this->onlyInternalComments && $this->role?->isAtLeast(TeamRole::Manager),
-                fn ($query) => $query->whereHas('comments', fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'))
+                $this->onlyPrivateNotes && $this->canViewAnyPrivateNotes,
+                fn ($query) => $query
+                    ->whereIn('board_id', $this->authorizedPrivateNoteBoardIds)
+                    ->whereHas('comments', fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'))
             );
 
         match ($this->sort) {
@@ -807,13 +810,13 @@ new class extends Component {
                                     <flux:checkbox wire:model.live="hideDuplicates" :label="__('Do not show duplicates')" data-test="filter-hide-duplicates" />
                                 </div>
 
-                                @if ($this->role?->isAtLeast(TeamRole::Manager))
+                                @if ($this->canViewAnyPrivateNotes)
                                     <div @class([
                                         'flex items-center gap-2 rounded-md border px-2 py-1 transition-colors',
-                                        'border-transparent' => ! $onlyInternalComments,
-                                        'border-gray-800! font-semibold! dark:border-gray-400!' => $onlyInternalComments,
+                                        'border-transparent' => ! $onlyPrivateNotes,
+                                        'border-gray-800! font-semibold! dark:border-gray-400!' => $onlyPrivateNotes,
                                     ])>
-                                        <flux:checkbox wire:model.live="onlyInternalComments" :label="__('Show only with internal comments')" data-test="filter-only-internal-comments" />
+                                        <flux:checkbox wire:model.live="onlyPrivateNotes" :label="__('Show only with private notes')" data-test="filter-only-private-notes" />
                                     </div>
                                 @endif
                             </div>
@@ -934,9 +937,9 @@ new class extends Component {
                                 <flux:heading size="lg" class="w-fit max-w-full truncate hover:underline">{{ $idea->title }}</flux:heading>
                             </a>
 
-                            @if ($this->role?->isAtLeast(TeamRole::Manager) && $idea->internal_comments_count > 0)
-                                <flux:tooltip :content="trans_choice(':count internal comment|:count internal comments', $idea->internal_comments_count, ['count' => $idea->internal_comments_count])">
-                                    <flux:badge size="sm" icon="exclamation-triangle" class="bg-red-100! text-red-800! dark:bg-red-950! dark:text-red-400!">{{ __('Internal Comments') }}</flux:badge>
+                            @if (in_array($idea->board_id, $this->authorizedPrivateNoteBoardIds, true) && $idea->private_notes_count > 0)
+                                <flux:tooltip :content="trans_choice(':count private note|:count private notes', $idea->private_notes_count, ['count' => $idea->private_notes_count])">
+                                    <flux:badge size="sm" icon="lock-closed" class="bg-amber-100! text-amber-800! dark:bg-amber-950! dark:text-amber-400!">{{ __('Private Notes') }}</flux:badge>
                                 </flux:tooltip>
                             @endif
                         </div>

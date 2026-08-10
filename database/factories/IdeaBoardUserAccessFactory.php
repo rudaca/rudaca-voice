@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\AccessLevel;
 use App\Models\IdeaBoard;
 use App\Models\IdeaBoardUserAccess;
 use App\Models\User;
@@ -22,7 +23,7 @@ class IdeaBoardUserAccessFactory extends Factory
         return [
             'board_id' => IdeaBoard::factory(),
             'user_id' => User::factory(),
-            'access_level' => fake()->randomElement(['view', 'contribute', 'manage']),
+            'access_level' => fake()->randomElement(AccessLevel::cases()),
         ];
     }
 }

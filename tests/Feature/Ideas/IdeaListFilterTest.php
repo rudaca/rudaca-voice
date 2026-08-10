@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\AccessLevel;
 use App\Enums\TeamRole;
+use App\Models\IdeaBoardUserAccess;
 use App\Models\IdeaCategory;
 use App\Models\IdeaComment;
 use App\Models\User;
@@ -124,41 +126,66 @@ test('category filter dedupes same-named categories across boards and matches id
         ->and($ids)->not->toContain($unrelated->id);
 });
 
-test('only-internal-comments filter restricts the list to ideas with internal comments, for managers and above', function () {
+test('only-private-notes filter restricts the list to ideas with private notes, for managers and above', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
 
-    $withInternal = makeIdea($team);
-    IdeaComment::factory()->internal()->create(['idea_id' => $withInternal->id]);
+    $withPrivateNote = makeIdea($team);
+    IdeaComment::factory()->privateNote()->create(['idea_id' => $withPrivateNote->id]);
 
-    $withoutInternal = makeIdea($team);
-    IdeaComment::factory()->create(['idea_id' => $withoutInternal->id]);
+    $withoutPrivateNote = makeIdea($team);
+    IdeaComment::factory()->create(['idea_id' => $withoutPrivateNote->id]);
 
     $component = Livewire::actingAs($manager)
         ->test('pages::ideas.index')
-        ->set('onlyInternalComments', true);
+        ->set('onlyPrivateNotes', true);
 
     $ids = $component->instance()->ideas->pluck('id')->all();
 
-    expect($ids)->toContain($withInternal->id)
-        ->and($ids)->not->toContain($withoutInternal->id);
+    expect($ids)->toContain($withPrivateNote->id)
+        ->and($ids)->not->toContain($withoutPrivateNote->id);
 });
 
-test('only-internal-comments filter is ignored for roles below manager', function () {
+test('only-private-notes filter is ignored for an employee with no board access grant', function () {
     ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
 
-    $withInternal = makeIdea($team);
-    IdeaComment::factory()->internal()->create(['idea_id' => $withInternal->id]);
+    $withPrivateNote = makeIdea($team);
+    IdeaComment::factory()->privateNote()->create(['idea_id' => $withPrivateNote->id]);
 
-    $withoutInternal = makeIdea($team);
+    $withoutPrivateNote = makeIdea($team);
 
     $component = Livewire::actingAs($employee)
         ->test('pages::ideas.index')
-        ->set('onlyInternalComments', true);
+        ->set('onlyPrivateNotes', true);
 
     $ids = $component->instance()->ideas->pluck('id')->all();
 
-    expect($ids)->toContain($withInternal->id)
-        ->and($ids)->toContain($withoutInternal->id);
+    expect($ids)->toContain($withPrivateNote->id)
+        ->and($ids)->toContain($withoutPrivateNote->id);
+});
+
+test('only-private-notes filter applies for a board-scoped employee, restricted to their granted board', function () {
+    ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
+
+    $onGrantedBoard = makeIdea($team);
+    IdeaComment::factory()->privateNote()->create(['idea_id' => $onGrantedBoard->id]);
+
+    $onOtherBoard = makeIdea($team);
+    IdeaComment::factory()->privateNote()->create(['idea_id' => $onOtherBoard->id]);
+
+    IdeaBoardUserAccess::factory()->create([
+        'board_id' => $onGrantedBoard->board_id,
+        'user_id' => $employee->id,
+        'access_level' => AccessLevel::Manage,
+    ]);
+
+    $component = Livewire::actingAs($employee)
+        ->test('pages::ideas.index')
+        ->set('onlyPrivateNotes', true);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($onGrantedBoard->id)
+        ->and($ids)->not->toContain($onOtherBoard->id);
 });
 
 test('search filters ideas by title', function () {
@@ -252,7 +279,7 @@ test('clearFilters resets every filter control back to its default', function ()
         ->set('dateFrom', '2026-06-01')
         ->set('dateTo', '2026-06-30')
         ->set('hideDuplicates', true)
-        ->set('onlyInternalComments', true)
+        ->set('onlyPrivateNotes', true)
         ->call('clearFilters');
 
     $component
@@ -264,7 +291,7 @@ test('clearFilters resets every filter control back to its default', function ()
         ->assertSet('dateFrom', '')
         ->assertSet('dateTo', '')
         ->assertSet('hideDuplicates', false)
-        ->assertSet('onlyInternalComments', false);
+        ->assertSet('onlyPrivateNotes', false);
 
     expect($component->instance()->hasActiveFilters)->toBeFalse();
 });

@@ -288,13 +288,13 @@ test('Top Boards are ranked by idea count, ties broken alphabetically', function
         ->assertSeeInOrder(['Alpha Board', 'Bravo Board', 'Zebra Board']);
 });
 
-test('Top Boards computes ideas and comments counts, without an internal comments badge', function () {
+test('Top Boards computes ideas and comments counts, without a private notes badge', function () {
     ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
     $stack = boardStack($team);
     $idea = makeIdea($team, ['board_id' => $stack['board']->id, 'board_group_id' => $stack['board']->board_group_id, 'category_id' => $stack['category']->id]);
 
     IdeaComment::factory()->count(2)->create(['idea_id' => $idea->id]);
-    IdeaComment::factory()->internal()->create(['idea_id' => $idea->id]);
+    IdeaComment::factory()->privateNote()->create(['idea_id' => $idea->id]);
 
     $component = Livewire::actingAs($employee)->test('pages::dashboard');
     $board = $component->instance()->topBoards->firstWhere('id', $stack['board']->id);
@@ -302,7 +302,7 @@ test('Top Boards computes ideas and comments counts, without an internal comment
     expect($board->ideas_count)->toBe(1)
         ->and($board->comments_count)->toBe(3);
 
-    $component->assertDontSeeText('Internal Comments');
+    $component->assertDontSeeText('Private Notes');
 });
 
 test('Top Boards counts unique contributors across idea submitters and commenters', function () {
