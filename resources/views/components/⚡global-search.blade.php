@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Livewire\Concerns\ScopesPrivateNoteAccess;
 use App\Models\Idea;
 use App\Models\IdeaBoard;
 use App\Models\Team;
@@ -12,6 +13,8 @@ use Livewire\Attributes\Computed;
 use Livewire\Component;
 
 new class extends Component {
+    use ScopesPrivateNoteAccess;
+
     /**
      * Display metadata for each idea status (label + Flux badge color).
      *
@@ -68,7 +71,10 @@ new class extends Component {
                 ->distinct('board_id')
                 ->count('board_id'),
             'ideas' => $person->submittedIdeas()->where('team_id', $teamId)->visibleTo($this->role, Auth::id())->count(),
-            'comments' => $person->ideaComments()->whereHas('idea', fn ($query) => $query->where('team_id', $teamId)->visibleTo($this->role, Auth::id()))->count(),
+            'comments' => $person->ideaComments()
+                ->visibleTo($this->authorizedPrivateNoteBoardIds)
+                ->whereHas('idea', fn ($query) => $query->where('team_id', $teamId)->visibleTo($this->role, Auth::id()))
+                ->count(),
         ];
     }
 
@@ -113,7 +119,10 @@ new class extends Component {
             ->visibleTo($this->role, Auth::id())
             ->where('title', 'like', $this->likeTerm())
             ->with('submittedBy:id,name')
-            ->withCount(['votes', 'comments'])
+            ->withCount([
+                'votes',
+                'comments as comments_count' => fn ($query) => $query->visibleTo($this->authorizedPrivateNoteBoardIds),
+            ])
             ->orderByDesc('created_at')
             ->limit(5)
             ->get(['id', 'title', 'slug', 'status', 'submitted_by_user_id', 'is_anonymous', 'created_at']);

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\TeamRole;
+use App\Livewire\Concerns\ScopesPrivateNoteAccess;
 use App\Models\Idea;
 use App\Models\IdeaStatusHistory;
 use App\Models\Team;
@@ -18,7 +19,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 new #[Title('Review Queue')] class extends Component {
-    use WithPagination;
+    use ScopesPrivateNoteAccess, WithPagination;
 
     /**
      * Statuses that make up the review queue: ideas still waiting on a decision.
@@ -284,7 +285,10 @@ new #[Title('Review Queue')] class extends Component {
     {
         $query = $this->applyFilters($this->queueQuery())
             ->with(['board:id,name', 'submittedBy:id,name'])
-            ->withCount(['votes', 'comments'])
+            ->withCount([
+                'votes',
+                'comments as comments_count' => fn ($query) => $query->visibleTo($this->authorizedPrivateNoteBoardIds),
+            ])
             ->withExists(['votes as voted' => fn (Builder $query) => $query->where('user_id', Auth::id())]);
 
         match ($this->sort) {

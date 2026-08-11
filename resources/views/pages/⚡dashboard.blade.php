@@ -330,7 +330,7 @@ new #[Title('Dashboard')] class extends Component {
             ->with(['board:id,name', 'submittedBy:id,name'])
             ->withCount([
                 'votes',
-                'comments',
+                'comments as comments_count' => fn ($query) => $query->visibleTo($this->authorizedPrivateNoteBoardIds),
                 'comments as private_notes_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
             ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
@@ -354,7 +354,7 @@ new #[Title('Dashboard')] class extends Component {
             ->with(['board:id,name', 'submittedBy:id,name'])
             ->withCount([
                 'votes',
-                'comments',
+                'comments as comments_count' => fn ($query) => $query->visibleTo($this->authorizedPrivateNoteBoardIds),
                 'comments as private_notes_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
             ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
@@ -377,7 +377,7 @@ new #[Title('Dashboard')] class extends Component {
             ->with(['board:id,name', 'submittedBy:id,name'])
             ->withCount([
                 'votes',
-                'comments',
+                'comments as comments_count' => fn ($query) => $query->visibleTo($this->authorizedPrivateNoteBoardIds),
                 'comments as private_notes_count' => fn ($query) => $query->where('is_internal', true)->whereNull('hidden_at'),
             ])
             ->withExists(['votes as voted' => fn ($query) => $query->where('user_id', Auth::id())])
@@ -404,7 +404,7 @@ new #[Title('Dashboard')] class extends Component {
             ->where('is_active', true)
             ->withCount([
                 'ideas' => fn ($query) => $query->visibleTo($role, $userId),
-                'comments',
+                'comments as comments_count' => fn ($query) => $query->visibleTo($this->authorizedPrivateNoteBoardIds),
             ])
             ->orderByDesc('ideas_count')
             ->orderBy('name')

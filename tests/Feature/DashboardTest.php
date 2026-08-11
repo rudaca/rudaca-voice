@@ -300,9 +300,23 @@ test('Top Boards computes ideas and comments counts, without a private notes bad
     $board = $component->instance()->topBoards->firstWhere('id', $stack['board']->id);
 
     expect($board->ideas_count)->toBe(1)
-        ->and($board->comments_count)->toBe(3);
+        ->and($board->comments_count)->toBe(2);
 
     $component->assertDontSeeText('Private Notes');
+});
+
+test('Top Boards comments count includes private notes for a user authorized to view them', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    $stack = boardStack($team);
+    $idea = makeIdea($team, ['board_id' => $stack['board']->id, 'board_group_id' => $stack['board']->board_group_id, 'category_id' => $stack['category']->id]);
+
+    IdeaComment::factory()->count(2)->create(['idea_id' => $idea->id]);
+    IdeaComment::factory()->privateNote()->create(['idea_id' => $idea->id]);
+
+    $component = Livewire::actingAs($manager)->test('pages::dashboard');
+    $board = $component->instance()->topBoards->firstWhere('id', $stack['board']->id);
+
+    expect($board->comments_count)->toBe(3);
 });
 
 test('Top Boards counts unique contributors across idea submitters and commenters', function () {

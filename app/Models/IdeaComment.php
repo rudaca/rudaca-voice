@@ -104,6 +104,26 @@ class IdeaComment extends Model
     }
 
     /**
+     * Scope a query to comments visible to a viewer: public comments are
+     * always visible, private management notes only on boards the viewer is
+     * authorized to manage private notes on.
+     *
+     * @param  Builder<IdeaComment>  $query
+     * @param  array<int, int>  $authorizedBoardIds  Board IDs the viewer may view private notes on.
+     * @return Builder<IdeaComment>
+     */
+    public function scopeVisibleTo(Builder $query, array $authorizedBoardIds): Builder
+    {
+        return $query->where(function (Builder $query) use ($authorizedBoardIds) {
+            $query->where('is_internal', false);
+
+            if ($authorizedBoardIds !== []) {
+                $query->orWhereHas('idea', fn (Builder $idea) => $idea->whereIn('board_id', $authorizedBoardIds));
+            }
+        });
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
