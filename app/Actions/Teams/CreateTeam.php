@@ -12,13 +12,14 @@ class CreateTeam
     /**
      * Create a new team and add the user as owner.
      */
-    public function handle(User $user, string $name, bool $isPersonal = false, bool $allowAnonymousIdeas = true): Team
+    public function handle(User $user, string $name, bool $isPersonal = false, bool $allowAnonymousIdeas = true, bool $limitOneActiveVotePerBoard = false): Team
     {
-        return DB::transaction(function () use ($user, $name, $isPersonal, $allowAnonymousIdeas) {
+        return DB::transaction(function () use ($user, $name, $isPersonal, $allowAnonymousIdeas, $limitOneActiveVotePerBoard) {
             $team = Team::create([
                 'name' => $name,
                 'is_personal' => $isPersonal,
                 'allow_anonymous_ideas' => $allowAnonymousIdeas,
+                'limit_one_active_vote_per_board' => $limitOneActiveVotePerBoard,
             ]);
 
             $membership = $team->memberships()->create([

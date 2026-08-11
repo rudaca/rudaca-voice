@@ -166,6 +166,37 @@ test('anonymous ideas can be allowed when creating a team', function () {
     expect($team->allowsAnonymousIdeas())->toBeTrue();
 });
 
+test('teams created via the create team modal disallow limiting one active vote per board by default', function () {
+    $user = User::factory()->systemOwner()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Test Team')
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $team = Team::where('name', 'Test Team')->firstOrFail();
+
+    expect($team->limitsOneActiveVotePerBoard())->toBeFalse();
+});
+
+test('limiting one active vote per board can be enabled when creating a team', function () {
+    $user = User::factory()->systemOwner()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::teams.index')
+        ->set('name', 'Limits Votes Team')
+        ->set('limitOneActiveVotePerBoard', true)
+        ->call('createTeam')
+        ->assertHasNoErrors();
+
+    $team = Team::where('name', 'Limits Votes Team')->firstOrFail();
+
+    expect($team->limitsOneActiveVotePerBoard())->toBeTrue();
+});
+
 test('team slug uses next available suffix', function () {
     $user = User::factory()->systemOwner()->create();
 

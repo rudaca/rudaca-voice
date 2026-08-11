@@ -13,6 +13,8 @@ new class extends Component {
 
     public bool $allowAnonymousIdeas = false;
 
+    public bool $limitOneActiveVotePerBoard = false;
+
     public function createTeam(CreateTeam $createTeam): void
     {
         Gate::authorize('create', Team::class);
@@ -21,11 +23,16 @@ new class extends Component {
             'teamName' => ['required', 'string', 'max:255', new TeamName],
         ]);
 
-        $team = $createTeam->handle(Auth::user(), $validated['teamName'], allowAnonymousIdeas: $this->allowAnonymousIdeas);
+        $team = $createTeam->handle(
+            Auth::user(),
+            $validated['teamName'],
+            allowAnonymousIdeas: $this->allowAnonymousIdeas,
+            limitOneActiveVotePerBoard: $this->limitOneActiveVotePerBoard,
+        );
 
         $this->dispatch('modal-close', name: 'create-team-switcher');
 
-        $this->reset('teamName', 'allowAnonymousIdeas');
+        $this->reset('teamName', 'allowAnonymousIdeas', 'limitOneActiveVotePerBoard');
 
         Flux::toast(variant: 'success', text: __('Organization created.'));
 
@@ -46,6 +53,13 @@ new class extends Component {
             wire:model="allowAnonymousIdeas"
             :label="__('Allow anonymous posting of ideas')"
             data-test="switcher-create-team-allow-anonymous-ideas"
+        />
+
+        <flux:checkbox
+            wire:model="limitOneActiveVotePerBoard"
+            :label="__('Limit users to one active vote per board')"
+            :description="__('When enabled, voting for a new idea while a user already has an active vote elsewhere on the same board offers to move it instead of adding a second vote.')"
+            data-test="switcher-create-team-limit-one-active-vote-per-board"
         />
 
         <div class="flex justify-end space-x-2 rtl:space-x-reverse">
