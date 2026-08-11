@@ -10,10 +10,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "firebase/php-jwt": "^7.1",
+        "guzzlehttp/guzzle": "^7.15",
         "laravel/chisel": "^0.1.0",
         "laravel/fortify": "^1.37.2",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
+        "league/oauth2-client": "^2.9",
         "livewire/blaze": "^1.0",
         "livewire/flux": "^2.13.1",
         "livewire/livewire": "^4.1"

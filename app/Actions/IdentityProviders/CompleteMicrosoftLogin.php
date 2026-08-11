@@ -1,0 +1,198 @@
+<?php
+
+namespace App\Actions\IdentityProviders;
+
+use App\Data\MicrosoftLoginResult;
+use App\Enums\IdentityProvider;
+use App\Enums\IdentityProviderAuditAction;
+use App\Exceptions\MicrosoftSsoLoginException;
+use App\Models\Team;
+use App\Models\TeamIdentityProvider;
+use App\Models\User;
+use App\Services\Microsoft\MicrosoftIdTokenValidator;
+use App\Services\Microsoft\MicrosoftOAuthClientFactory;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
+
+class CompleteMicrosoftLogin
+{
+    public function __construct(
+        private readonly MicrosoftOAuthClientFactory $clientFactory,
+        private readonly MicrosoftIdTokenValidator $tokenValidator,
+    ) {}
+
+    /**
+     * Complete a Microsoft sign-in callback, returning the authenticated
+     * (or newly provisioned) user and the organization they signed into.
+     *
+     * Every rejection point audits (or, when no organization could even be
+     * resolved, logs) a sanitized reason — never a raw token, secret, or
+     * provider error body.
+     */
+    public function handle(Request $request): MicrosoftLoginResult
+    {
+        $state = (string) $request->query('state');
+        $stored = filled($state) ? Cache::pull("oidc_state:{$state}") : null;
+
+        if (! $stored) {
+            $this->reject(null, 'invalid_state', __('Your Microsoft sign-in request has expired. Please try signing in again.'));
+        }
+
+        $team = Team::find($stored['team_id']);
+        $identityProvider = $team?->identityProviderFor(IdentityProvider::Microsoft);
+
+        if (! $team || ! $identityProvider || ! $identityProvider->enabled || ! $identityProvider->isConfigurable()) {
+            $this->reject($identityProvider, 'provider_disabled', __('Microsoft sign-in is not available for this organization.'), $team?->id);
+        }
+
+        if ($request->filled('error')) {
+            $this->reject($identityProvider, 'provider_error', __('Microsoft sign-in was cancelled or denied.'));
+        }
+
+        $code = (string) $request->query('code');
+
+        if (blank($code)) {
+            $this->reject($identityProvider, 'missing_code', __('Your Microsoft sign-in could not be completed. Please try again.'));
+        }
+
+        $idToken = $this->exchangeCodeForIdToken($identityProvider, $code, $stored['code_verifier']);
+
+        try {
+            $claims = $this->tokenValidator->validate($idToken, $identityProvider, $stored['nonce']);
+        } catch (MicrosoftSsoLoginException $e) {
+            // Re-thrown through reject() (rather than left to propagate as-is)
+            // so this failure gets the same audit trail entry as every other
+            // rejection — MicrosoftIdTokenValidator has no audit access of
+            // its own.
+            $this->reject($identityProvider, $e->logReason, $e->publicMessage);
+        }
+
+        $email = $claims['email'] ?? $claims['preferred_username'] ?? null;
+
+        if (! is_string($email) || blank($email)) {
+            $this->reject($identityProvider, 'missing_email_claim', __('Your Microsoft account does not have an email address we can sign you in with.'));
+        }
+
+        $name = is_string($claims['name'] ?? null) ? $claims['name'] : $email;
+
+        $user = $this->locateOrProvisionUser($team, $identityProvider, $email, $name);
+
+        $this->audit($identityProvider, IdentityProviderAuditAction::LoginSucceeded, $user->id);
+
+        return new MicrosoftLoginResult($user, $team);
+    }
+
+    /**
+     * Exchange the authorization code for tokens and pull the raw ID token
+     * out of the response, without ever calling the resource owner (userinfo)
+     * endpoint — every claim we need already lives in the ID token.
+     */
+    private function exchangeCodeForIdToken(TeamIdentityProvider $identityProvider, string $code, string $codeVerifier): string
+    {
+        $provider = $this->clientFactory->make($identityProvider);
+        $provider->setPkceCode($codeVerifier);
+
+        try {
+            $accessToken = $provider->getAccessToken('authorization_code', ['code' => $code]);
+        } catch (IdentityProviderException) {
+            $this->reject($identityProvider, 'token_exchange_failed', __('Your Microsoft sign-in could not be completed. Please try again.'));
+        }
+
+        $idToken = $accessToken->getValues()['id_token'] ?? null;
+
+        if (! is_string($idToken) || blank($idToken)) {
+            $this->reject($identityProvider, 'missing_id_token', __('Your Microsoft sign-in could not be completed. Please try again.'));
+        }
+
+        return $idToken;
+    }
+
+    /**
+     * Find an existing member of the organization by email, or provision one
+     * per the organization's auto-provisioning settings.
+     */
+    private function locateOrProvisionUser(Team $team, TeamIdentityProvider $identityProvider, string $email, string $name): User
+    {
+        $existing = $team->members()
+            ->whereRaw('LOWER(users.email) = ?', [Str::lower($email)])
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        if (! $identityProvider->auto_provision_users) {
+            $this->reject($identityProvider, 'unauthorized_account', __('No account was found for you in this organization, and automatic sign-up is not enabled.'));
+        }
+
+        if (! $identityProvider->default_role) {
+            $this->reject($identityProvider, 'misconfigured_default_role', __('Microsoft sign-in is not fully configured for this organization.'));
+        }
+
+        $allowedDomains = $identityProvider->allowed_domains;
+
+        if (filled($allowedDomains)) {
+            $domain = Str::lower(Str::after($email, '@'));
+
+            if (! in_array($domain, array_map(Str::lower(...), $allowedDomains), true)) {
+                $this->reject($identityProvider, 'domain_not_allowed', __('Your email domain is not authorized to sign in to this organization.'));
+            }
+        }
+
+        // Only the writes are transactional. The checks above throw (and
+        // audit) before this point, and must never be rolled back by it.
+        $user = DB::transaction(function () use ($team, $identityProvider, $email, $name) {
+            // forceCreate: email_verified_at isn't mass-assignable (see
+            // User's #[Fillable] attribute), but a Microsoft-authenticated
+            // address is already verified by definition.
+            $user = User::forceCreate([
+                'name' => $name,
+                'email' => $email,
+                'password' => Str::password(64),
+                'email_verified_at' => now(),
+            ]);
+
+            $team->memberships()->create([
+                'user_id' => $user->id,
+                'role' => $identityProvider->default_role,
+            ]);
+
+            return $user;
+        });
+
+        $this->audit($identityProvider, IdentityProviderAuditAction::UserProvisioned, $user->id);
+
+        return $user;
+    }
+
+    /**
+     * Record the outcome and throw. When no identity provider could be
+     * resolved (e.g. an invalid/expired state), there is nothing to audit
+     * against, so this only logs a sanitized reason instead.
+     */
+    private function reject(?TeamIdentityProvider $identityProvider, string $reason, string $publicMessage, ?int $teamId = null): never
+    {
+        if ($identityProvider) {
+            $this->audit($identityProvider, IdentityProviderAuditAction::LoginFailed, null, $reason);
+        } else {
+            Log::warning('microsoft_sso_login_failed', ['reason' => $reason, 'team_id' => $teamId]);
+        }
+
+        throw new MicrosoftSsoLoginException($publicMessage, $reason, $teamId ?? $identityProvider?->team_id);
+    }
+
+    private function audit(TeamIdentityProvider $identityProvider, IdentityProviderAuditAction $action, ?int $performedByUserId, ?string $reason = null): void
+    {
+        $identityProvider->audits()->create([
+            'team_id' => $identityProvider->team_id,
+            'provider' => $identityProvider->provider,
+            'action' => $action,
+            'changed_fields' => $reason ? [$reason] : [],
+            'performed_by_user_id' => $performedByUserId,
+        ]);
+    }
+}

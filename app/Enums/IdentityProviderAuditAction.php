@@ -12,6 +12,9 @@ enum IdentityProviderAuditAction: string
     case Enabled = 'enabled';
     case Disabled = 'disabled';
     case Disconnected = 'disconnected';
+    case LoginSucceeded = 'login succeeded';
+    case UserProvisioned = 'user provisioned';
+    case LoginFailed = 'login failed';
 
     /**
      * Get the display label for the action.
