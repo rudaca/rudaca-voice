@@ -166,6 +166,7 @@ class MicrosoftOidcFixture
             'nbf' => now()->timestamp,
             'exp' => now()->addMinutes(10)->timestamp,
             'sub' => fake()->uuid(),
+            'oid' => fake()->uuid(),
         ], $overrides);
     }
 

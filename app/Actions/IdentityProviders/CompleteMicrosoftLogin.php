@@ -5,12 +5,16 @@ namespace App\Actions\IdentityProviders;
 use App\Data\MicrosoftLoginResult;
 use App\Enums\IdentityProvider;
 use App\Enums\IdentityProviderAuditAction;
+use App\Enums\UserIdentityAccountAuditAction;
 use App\Exceptions\MicrosoftSsoLoginException;
 use App\Models\Team;
 use App\Models\TeamIdentityProvider;
 use App\Models\User;
+use App\Models\UserIdentityAccount;
+use App\Models\UserIdentityAccountAudit;
 use App\Services\Microsoft\MicrosoftIdTokenValidator;
 use App\Services\Microsoft\MicrosoftOAuthClientFactory;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -79,7 +83,7 @@ class CompleteMicrosoftLogin
 
         $name = is_string($claims['name'] ?? null) ? $claims['name'] : $email;
 
-        $user = $this->locateOrProvisionUser($team, $identityProvider, $email, $name);
+        $user = $this->resolveUser($team, $identityProvider, $claims, $email, $name);
 
         $this->audit($identityProvider, IdentityProviderAuditAction::LoginSucceeded, $user->id);
 
@@ -112,17 +116,128 @@ class CompleteMicrosoftLogin
     }
 
     /**
+     * Resolve the authenticated user for this callback.
+     *
+     * A previously linked identity is always authoritative and is looked up
+     * first, entirely independent of the claims' current email — this is what
+     * makes a later email change on the Microsoft side a non-event for an
+     * already-linked account. Only when no link exists yet does this fall
+     * back to matching (and then linking) an existing member by email, or
+     * provisioning a new one.
+     *
+     * @param  array<string, mixed>  $claims
+     */
+    private function resolveUser(Team $team, TeamIdentityProvider $identityProvider, array $claims, string $email, string $name): User
+    {
+        $tenantId = (string) $claims['tid'];
+        $subjectId = $claims['oid'] ?? $claims['sub'] ?? null;
+
+        if (! is_string($subjectId) || blank($subjectId)) {
+            $this->reject($identityProvider, 'missing_subject_claim', __('Your Microsoft account is missing information we need to sign you in. Please try again.'));
+        }
+
+        $link = UserIdentityAccount::query()
+            ->provider(IdentityProvider::Microsoft)
+            ->where('provider_tenant_id', $tenantId)
+            ->where('provider_subject_id', $subjectId)
+            ->first();
+
+        if ($link) {
+            if ($link->team_id !== $team->id) {
+                $this->reject($identityProvider, 'identity_linked_to_other_organization', __('This Microsoft account is linked to a different organization and cannot sign in here.'));
+            }
+
+            $user = $link->user;
+            $this->assertActive($identityProvider, $user);
+
+            $link->update(['last_login_at' => now()]);
+
+            return $user;
+        }
+
+        $user = $this->locateOrProvisionUser($team, $identityProvider, $email, $name);
+        $this->assertActive($identityProvider, $user);
+
+        $this->linkIdentity($team, $identityProvider, $user, $tenantId, $subjectId, $email, $name);
+
+        return $user;
+    }
+
+    /**
+     * Reject the login if the resolved user's account has been deactivated,
+     * matching the message Fortify's password login already uses for the
+     * same rule (see FortifyServiceProvider::configureActions()).
+     */
+    private function assertActive(TeamIdentityProvider $identityProvider, User $user): void
+    {
+        if (! $user->is_active) {
+            $this->reject($identityProvider, 'account_inactive', __('Your account has been deactivated. Contact your administrator for access.'));
+        }
+    }
+
+    /**
+     * Create the identity link for a user just matched (or provisioned) by
+     * email, so subsequent logins locate them by tenant + subject instead.
+     *
+     * A unique-constraint violation here means a concurrent login raced this
+     * one to link the same identity first; rather than trying to reconcile,
+     * the safest response is to ask the user to try again — the retry will
+     * find the link that just won the race and succeed cleanly.
+     */
+    private function linkIdentity(Team $team, TeamIdentityProvider $identityProvider, User $user, string $tenantId, string $subjectId, string $email, string $name): void
+    {
+        try {
+            DB::transaction(function () use ($team, $user, $tenantId, $subjectId, $email, $name) {
+                $link = UserIdentityAccount::create([
+                    'user_id' => $user->id,
+                    'team_id' => $team->id,
+                    'provider' => IdentityProvider::Microsoft,
+                    'provider_tenant_id' => $tenantId,
+                    'provider_subject_id' => $subjectId,
+                    'email_at_link_time' => $email,
+                    'display_name' => $name,
+                    'last_login_at' => now(),
+                ]);
+
+                UserIdentityAccountAudit::create([
+                    'team_id' => $team->id,
+                    'user_identity_account_id' => $link->id,
+                    'user_id' => $user->id,
+                    'provider' => IdentityProvider::Microsoft,
+                    'action' => UserIdentityAccountAuditAction::Linked,
+                    'performed_by_user_id' => $user->id,
+                ]);
+            });
+        } catch (QueryException $e) {
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+
+            $this->reject($identityProvider, 'identity_link_race', __('Your Microsoft sign-in could not be completed. Please try again.'));
+        }
+    }
+
+    /**
      * Find an existing member of the organization by email, or provision one
      * per the organization's auto-provisioning settings.
+     *
+     * More than one member matching case-insensitively is treated as an
+     * ambiguous match rather than picking one arbitrarily — the account's
+     * database-level uniqueness is case-sensitive, so this can only happen
+     * for genuinely distinct accounts differing only in email case.
      */
     private function locateOrProvisionUser(Team $team, TeamIdentityProvider $identityProvider, string $email, string $name): User
     {
-        $existing = $team->members()
+        $matches = $team->members()
             ->whereRaw('LOWER(users.email) = ?', [Str::lower($email)])
-            ->first();
+            ->get();
 
-        if ($existing) {
-            return $existing;
+        if ($matches->count() > 1) {
+            $this->reject($identityProvider, 'ambiguous_email_match', __('Multiple accounts in this organization match your email address. Contact your administrator.'));
+        }
+
+        if ($matches->count() === 1) {
+            return $matches->first();
         }
 
         if (! $identityProvider->auto_provision_users) {
@@ -149,11 +264,17 @@ class CompleteMicrosoftLogin
             // forceCreate: email_verified_at isn't mass-assignable (see
             // User's #[Fillable] attribute), but a Microsoft-authenticated
             // address is already verified by definition.
+            // is_active is set explicitly (rather than left to the column's
+            // database default) because forceCreate() only populates the
+            // in-memory model with the attributes given here — leaving it out
+            // would make the assertActive() check below read a null (falsy)
+            // is_active on the very user it just created.
             $user = User::forceCreate([
                 'name' => $name,
                 'email' => $email,
                 'password' => Str::password(64),
                 'email_verified_at' => now(),
+                'is_active' => true,
             ]);
 
             $team->memberships()->create([

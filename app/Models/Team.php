@@ -33,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, IdeaCategory> $categories
  * @property-read Collection<int, Idea> $ideas
  * @property-read Collection<int, TeamIdentityProvider> $identityProviders
+ * @property-read Collection<int, UserIdentityAccount> $identityAccounts
  */
 #[Fillable(['name', 'slug', 'is_personal', 'allow_anonymous_ideas', 'limit_one_active_vote_per_board'])]
 class Team extends Model
@@ -172,6 +173,16 @@ class Team extends Model
     public function identityProviderFor(IdentityProvider $provider): ?TeamIdentityProvider
     {
         return $this->identityProviders()->provider($provider)->first();
+    }
+
+    /**
+     * Get all linked external identities for members of this team.
+     *
+     * @return HasMany<UserIdentityAccount, $this>
+     */
+    public function identityAccounts(): HasMany
+    {
+        return $this->hasMany(UserIdentityAccount::class);
     }
 
     /**
