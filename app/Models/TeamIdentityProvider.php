@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\IdentityProvider;
+use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamRole;
 use Database\Factories\TeamIdentityProviderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -29,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $client_secret_encrypted
  * @property bool $enabled
  * @property bool $enforce_sso
+ * @property SsoEnforcementScope $enforce_sso_scope
  * @property bool $auto_provision_users
  * @property TeamRole|null $default_role
  * @property array<int, string> $allowed_domains
@@ -48,6 +50,7 @@ use Illuminate\Support\Carbon;
     'client_secret_encrypted',
     'enabled',
     'enforce_sso',
+    'enforce_sso_scope',
     'auto_provision_users',
     'default_role',
     'allowed_domains',
@@ -78,6 +81,7 @@ class TeamIdentityProvider extends Model
     protected $attributes = [
         'enabled' => false,
         'enforce_sso' => false,
+        'enforce_sso_scope' => 'global',
         'auto_provision_users' => false,
         'allowed_domains' => '[]',
     ];
@@ -165,6 +169,7 @@ class TeamIdentityProvider extends Model
             'client_secret_encrypted' => 'encrypted',
             'enabled' => 'boolean',
             'enforce_sso' => 'boolean',
+            'enforce_sso_scope' => SsoEnforcementScope::class,
             'auto_provision_users' => 'boolean',
             'default_role' => TeamRole::class,
             'allowed_domains' => 'array',

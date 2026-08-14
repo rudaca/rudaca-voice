@@ -15,48 +15,52 @@
                 {{ __('Continue with Microsoft') }}
             </flux:button>
 
-            <flux:separator :text="__('or')" />
+            @unless ($enforceSso)
+                <flux:separator :text="__('or')" />
+            @endunless
         @endif
 
-        <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
-            @csrf
+        @unless ($enforceSso)
+            <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
+                @csrf
 
-            <flux:input
-                name="email"
-                :label="__('Email address')"
-                :value="old('email')"
-                type="email"
-                required
-                autofocus
-                autocomplete="email"
-                placeholder="email@ellisontravel.com"
-            />
-
-            <div class="relative">
                 <flux:input
-                    name="password"
-                    :label="__('Password')"
-                    type="password"
+                    name="email"
+                    :label="__('Email address')"
+                    :value="old('email')"
+                    type="email"
                     required
-                    autocomplete="current-password"
-                    :placeholder="__('Password')"
-                    viewable
+                    autofocus
+                    autocomplete="email"
+                    placeholder="email@ellisontravel.com"
                 />
 
-                @if (Route::has('password.request'))
-                    <flux:link class="absolute top-0 text-sm end-0" :href="route('password.request')" wire:navigate>
-                        {{ __('Forgot your password?') }}
-                    </flux:link>
-                @endif
-            </div>
+                <div class="relative">
+                    <flux:input
+                        name="password"
+                        :label="__('Password')"
+                        type="password"
+                        required
+                        autocomplete="current-password"
+                        :placeholder="__('Password')"
+                        viewable
+                    />
 
-            <flux:checkbox name="remember" :label="__('Remember me')" :checked="old('remember')" />
+                    @if (Route::has('password.request'))
+                        <flux:link class="absolute top-0 text-sm end-0" :href="route('password.request')" wire:navigate>
+                            {{ __('Forgot your password?') }}
+                        </flux:link>
+                    @endif
+                </div>
 
-            <div class="flex items-center justify-end">
-                <flux:button variant="primary" type="submit" class="w-full" data-test="login-button">
-                    {{ __('Log in') }}
-                </flux:button>
-            </div>
-        </form>
+                <flux:checkbox name="remember" :label="__('Remember me')" :checked="old('remember')" />
+
+                <div class="flex items-center justify-end">
+                    <flux:button variant="primary" type="submit" class="w-full" data-test="login-button">
+                        {{ __('Log in') }}
+                    </flux:button>
+                </div>
+            </form>
+        @endunless
     </div>
 </x-layouts::auth>

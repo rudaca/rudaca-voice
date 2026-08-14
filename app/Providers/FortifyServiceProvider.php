@@ -59,6 +59,12 @@ class FortifyServiceProvider extends ServiceProvider
                 ]);
             }
 
+            if ($user->requiresSsoSignIn()) {
+                throw ValidationException::withMessages([
+                    Fortify::username() => [__('Your organization requires Microsoft sign-in. Please use your organization\'s sign-in page instead of a password.')],
+                ]);
+            }
+
             return $user;
         });
     }

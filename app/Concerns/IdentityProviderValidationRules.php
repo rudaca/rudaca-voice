@@ -2,6 +2,7 @@
 
 namespace App\Concerns;
 
+use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamRole;
 use App\Rules\MicrosoftTenantId;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -13,20 +14,21 @@ trait IdentityProviderValidationRules
      * Get the validation rules used to validate a Microsoft identity provider
      * configuration.
      *
-     * `$enabling` toggles the rules that only apply when the organization is
-     * turning Microsoft sign-in on: tenant id, client id, and (only on first
-     * enablement — enforced in the action, since "unchanged" can't be expressed
-     * as a validation rule) the client secret.
+     * Tenant id and client id are always required — the panel does not allow
+     * saving without a complete app registration, whether or not sign-in is
+     * currently enabled. `$requireSecret` gates the client secret, since a
+     * secret already on file may be left blank to keep it unchanged.
      *
      * @return array<string, array<int, ValidationRule|array<mixed>|string>>
      */
-    protected function microsoftIdentityProviderRules(bool $enabling, bool $requireSecret): array
+    protected function microsoftIdentityProviderRules(bool $requireSecret): array
     {
         return [
-            'tenantId' => [$enabling ? 'required' : 'nullable', 'string', new MicrosoftTenantId],
-            'clientId' => [$enabling ? 'required' : 'nullable', 'string', 'uuid'],
+            'tenantId' => ['required', 'string', new MicrosoftTenantId],
+            'clientId' => ['required', 'string', 'uuid'],
             'newSecretInput' => [$requireSecret ? 'required' : 'nullable', 'string'],
             'enforceSso' => ['boolean'],
+            'enforceSsoScope' => ['required', Rule::enum(SsoEnforcementScope::class)],
             'autoProvisionUsers' => ['boolean'],
             'defaultRole' => [
                 Rule::requiredIf(fn () => $this->autoProvisionUsers === true),

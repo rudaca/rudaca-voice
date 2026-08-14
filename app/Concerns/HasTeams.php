@@ -4,6 +4,7 @@ namespace App\Concerns;
 
 use App\Data\TeamPermissions;
 use App\Data\UserTeam;
+use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamPermission;
 use App\Enums\TeamRole;
 use App\Models\Membership;
@@ -199,5 +200,26 @@ trait HasTeams
     public function hasTeamPermission(Team $team, TeamPermission $permission): bool
     {
         return $this->teamRole($team)?->hasPermission($permission) ?? false;
+    }
+
+    /**
+     * Determine if any organization the user belongs to requires sign-in via
+     * an external identity provider, with that requirement scoped globally.
+     *
+     * Password authentication has no team context at credential-check time
+     * (see FortifyServiceProvider::configureActions()), so a globally-scoped
+     * requirement blocks the user's password everywhere in the app rather
+     * than only for the enforcing organization. An organization-scoped
+     * requirement only hides that organization's own password field (see
+     * OrganizationLoginController) and is intentionally not enforced here.
+     */
+    public function requiresSsoSignIn(): bool
+    {
+        return $this->teams()
+            ->whereHas('identityProviders', fn ($query) => $query
+                ->where('enabled', true)
+                ->where('enforce_sso', true)
+                ->where('enforce_sso_scope', SsoEnforcementScope::Global))
+            ->exists();
     }
 }

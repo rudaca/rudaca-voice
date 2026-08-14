@@ -4,6 +4,7 @@ namespace App\Actions\IdentityProviders;
 
 use App\Enums\IdentityProvider;
 use App\Enums\IdentityProviderAuditAction;
+use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\TeamIdentityProvider;
@@ -25,6 +26,7 @@ class SaveTeamIdentityProvider
      *     client_id?: ?string,
      *     client_secret?: ?string,
      *     enforce_sso?: bool,
+     *     enforce_sso_scope?: SsoEnforcementScope|string|null,
      *     auto_provision_users?: bool,
      *     default_role?: TeamRole|string|null,
      *     allowed_domains?: array<int, string>,
@@ -46,6 +48,7 @@ class SaveTeamIdentityProvider
 
             $defaultRole = $this->resolveDefaultRole($attributes['default_role'] ?? null);
             $autoProvisionUsers = (bool) ($attributes['auto_provision_users'] ?? false);
+            $enforceSsoScope = $this->resolveEnforceSsoScope($attributes['enforce_sso_scope'] ?? null);
 
             $this->guardPrivilegedDefaultRole($actor, $team, $autoProvisionUsers, $defaultRole);
 
@@ -54,6 +57,7 @@ class SaveTeamIdentityProvider
             $this->fill($identityProvider, 'tenant_id', $attributes['tenant_id'] ?? null, $changed);
             $this->fill($identityProvider, 'client_id', $attributes['client_id'] ?? null, $changed);
             $this->fill($identityProvider, 'enforce_sso', (bool) ($attributes['enforce_sso'] ?? false), $changed);
+            $this->fill($identityProvider, 'enforce_sso_scope', $enforceSsoScope, $changed);
             $this->fill($identityProvider, 'auto_provision_users', $autoProvisionUsers, $changed);
             $this->fill($identityProvider, 'default_role', $defaultRole, $changed);
             $this->fill($identityProvider, 'allowed_domains', $this->normalizeDomains($attributes['allowed_domains'] ?? []), $changed);
@@ -131,6 +135,19 @@ class SaveTeamIdentityProvider
         }
 
         return $role instanceof TeamRole ? $role : TeamRole::from($role);
+    }
+
+    /**
+     * Resolve the submitted enforcement scope, defaulting to Global — the
+     * safer choice when a caller omits it, matching the column's own default.
+     */
+    private function resolveEnforceSsoScope(SsoEnforcementScope|string|null $scope): SsoEnforcementScope
+    {
+        if ($scope === null || $scope === '') {
+            return SsoEnforcementScope::Global;
+        }
+
+        return $scope instanceof SsoEnforcementScope ? $scope : SsoEnforcementScope::from($scope);
     }
 
     /**

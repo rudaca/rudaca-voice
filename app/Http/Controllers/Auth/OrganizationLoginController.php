@@ -19,10 +19,12 @@ class OrganizationLoginController extends Controller
     public function show(Team $team): View
     {
         $microsoftProvider = $team->identityProviderFor(IdentityProvider::Microsoft);
+        $showMicrosoft = $microsoftProvider !== null && $microsoftProvider->enabled && $microsoftProvider->isConfigurable();
 
         return view('pages::auth.org-login', [
             'team' => $team,
-            'showMicrosoft' => $microsoftProvider !== null && $microsoftProvider->enabled && $microsoftProvider->isConfigurable(),
+            'showMicrosoft' => $showMicrosoft,
+            'enforceSso' => $showMicrosoft && $microsoftProvider->enforce_sso,
         ]);
     }
 }

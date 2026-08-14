@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\IdentityProvider;
+use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamRole;
 use App\Models\TeamIdentityProvider;
 use App\Models\User;
@@ -52,7 +53,7 @@ test('an owner can configure and enable Microsoft sign-in', function () {
 
 test('an admin with manage-authentication permission can update settings', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
-    TeamIdentityProvider::factory()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+    TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
 
     Livewire::actingAs($admin)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
@@ -61,6 +62,42 @@ test('an admin with manage-authentication permission can update settings', funct
         ->assertHasNoErrors();
 
     expect($team->identityProviderFor(IdentityProvider::Microsoft)->enforce_sso)->toBeTrue();
+});
+
+test('requiring Microsoft sign-in without enabling it is rejected', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    TeamIdentityProvider::factory()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('enabled', false)
+        ->set('enforceSso', true)
+        ->call('save')
+        ->assertHasErrors(['enforceSso']);
+
+    expect($team->identityProviderFor(IdentityProvider::Microsoft)->enforce_sso)->toBeFalse();
+});
+
+test('a fresh organization defaults its enforcement scope to global', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->assertSet('enforceSsoScope', SsoEnforcementScope::Global->value);
+});
+
+test('an owner can scope the Microsoft sign-in requirement to this organization only', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('enforceSso', true)
+        ->set('enforceSsoScope', SsoEnforcementScope::Organization->value)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($team->identityProviderFor(IdentityProvider::Microsoft)->enforce_sso_scope)->toBe(SsoEnforcementScope::Organization);
 });
 
 test('a manager without manage-authentication permission is denied access to the panel', function () {
@@ -111,6 +148,7 @@ test('updating settings without submitting a new secret preserves the previously
 
     Livewire::actingAs($owner)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('enabled', true)
         ->set('enforceSso', true)
         ->call('save')
         ->assertHasNoErrors();
@@ -169,6 +207,17 @@ test('enabling without a client secret is rejected when none has ever been saved
         ->assertHasErrors(['newSecretInput']);
 });
 
+test('an incomplete app registration is rejected even when sign-in is not being enabled', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->call('save')
+        ->assertHasErrors(['tenantId', 'clientId', 'newSecretInput']);
+
+    expect($team->identityProviderFor(IdentityProvider::Microsoft))->toBeNull();
+});
+
 test('duplicate allowed domains are rejected', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
 
@@ -194,6 +243,9 @@ test('valid allowed domains are normalized to lowercase and saved', function () 
 
     Livewire::actingAs($owner)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('tenantId', (string) fake()->uuid())
+        ->set('clientId', (string) fake()->uuid())
+        ->set('newSecretInput', 'a-secret')
         ->set('allowedDomainsInput', 'Example.com, other.org')
         ->call('save')
         ->assertHasNoErrors();
@@ -217,6 +269,9 @@ test('an admin cannot assign a privileged default role for auto-provisioned user
 
     Livewire::actingAs($admin)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('tenantId', (string) fake()->uuid())
+        ->set('clientId', (string) fake()->uuid())
+        ->set('newSecretInput', 'a-secret')
         ->set('autoProvisionUsers', true)
         ->set('defaultRole', TeamRole::Admin->value)
         ->call('save')
@@ -228,6 +283,9 @@ test('an owner can assign a privileged default role for auto-provisioned users',
 
     Livewire::actingAs($owner)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('tenantId', (string) fake()->uuid())
+        ->set('clientId', (string) fake()->uuid())
+        ->set('newSecretInput', 'a-secret')
         ->set('autoProvisionUsers', true)
         ->set('defaultRole', TeamRole::Admin->value)
         ->call('save')
@@ -281,6 +339,25 @@ test('an owner can disable a fully configured provider without losing its config
     expect($identityProvider->fresh())
         ->enabled->toBeFalse()
         ->tenant_id->not->toBeNull();
+});
+
+test('disabling a provider that required Microsoft sign-in also turns off the requirement', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $identityProvider = TeamIdentityProvider::factory()->enabled()->create([
+        'team_id' => $team->id,
+        'provider' => IdentityProvider::Microsoft,
+        'enforce_sso' => true,
+    ]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->call('disable')
+        ->assertSet('enabled', false)
+        ->assertSet('enforceSso', false);
+
+    expect($identityProvider->fresh())
+        ->enabled->toBeFalse()
+        ->enforce_sso->toBeFalse();
 });
 
 test('an owner can disconnect a provider, deleting its configuration', function () {
