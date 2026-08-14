@@ -254,12 +254,18 @@ test('the sidebar shows an Administration section with the awaiting-review count
         ->getContent();
 
     // The badge next to "Review Queue" should reflect only the new ideas (3), not the planned one.
-    // Anchored on "Administration" rather than "Review Queue" itself, since the page's own
-    // <title> tag also contains "Review Queue" and would otherwise be matched first.
-    preg_match('/Administration(.{0,3000})/s', $content, $matches);
-    expect($matches[1] ?? '')
-        ->toContain('Review Queue')
-        ->toContain('3');
+    // Find "Review Queue" starting after "Administration" (skipping the page's own <title> tag,
+    // which also contains "Review Queue" and would otherwise be matched first), then look for the
+    // badge in a fixed-size window from there. Anchoring the window at "Review Queue" itself,
+    // rather than at "Administration", keeps this independent of the team slug's length in the
+    // preceding sidebar link href, which varies with the Faker-generated team name.
+    $administrationPos = strpos($content, 'Administration');
+    expect($administrationPos)->not->toBeFalse();
+
+    $reviewQueuePos = strpos($content, 'Review Queue', $administrationPos);
+    expect($reviewQueuePos)->not->toBeFalse();
+
+    expect(substr($content, $reviewQueuePos, 3000))->toContain('3');
 });
 
 test('the approve confirmation shows the Approved target status', function () {
