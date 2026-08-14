@@ -29,7 +29,7 @@ test('a fresh organization has Microsoft sign-in disabled and no stored secret',
         ->test('pages::ideas.authentication-settings', ['team' => $team])
         ->assertSet('enabled', false)
         ->assertSet('hasExistingSecret', false)
-        ->assertSeeHtml('data-test="microsoft-status-unconfigured"');
+        ->assertSeeHtml('data-test="microsoft-status-not_configured"');
 });
 
 test('an owner can configure and enable Microsoft sign-in', function () {
@@ -53,7 +53,7 @@ test('an owner can configure and enable Microsoft sign-in', function () {
 
 test('an admin with manage-authentication permission can update settings', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
-    TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+    TeamIdentityProvider::factory()->enabled()->verified()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
 
     Livewire::actingAs($admin)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
@@ -88,7 +88,7 @@ test('a fresh organization defaults its enforcement scope to global', function (
 
 test('an owner can scope the Microsoft sign-in requirement to this organization only', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
-    TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+    TeamIdentityProvider::factory()->enabled()->verified()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
 
     Livewire::actingAs($owner)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
@@ -144,7 +144,13 @@ test('updating settings without submitting a new secret preserves the previously
         ->call('save')
         ->assertHasNoErrors();
 
-    $original = $team->identityProviderFor(IdentityProvider::Microsoft)->client_secret_encrypted;
+    $identityProvider = $team->identityProviderFor(IdentityProvider::Microsoft);
+    $original = $identityProvider->client_secret_encrypted;
+
+    // Simulates a connection test having already succeeded for this exact
+    // configuration — SaveTeamIdentityProvider requires that before it will
+    // accept enforce_sso.
+    $identityProvider->forceFill(['verified_at' => now()])->save();
 
     Livewire::actingAs($owner)
         ->test('pages::ideas.authentication-settings', ['team' => $team])

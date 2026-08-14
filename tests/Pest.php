@@ -8,6 +8,7 @@ use App\Models\IdeaCategory;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /*
@@ -66,6 +67,22 @@ function teamWithMember(TeamRole $role = TeamRole::Employee): array
     $user->switchTeam($team);
 
     return ['team' => $team, 'user' => $user];
+}
+
+/**
+ * Assert that a Microsoft callback response is the popup-bridge page pointed
+ * at the given destination.
+ *
+ * MicrosoftCallbackController renders this bridge (200 OK + HTML) instead of
+ * redirecting directly, so a popup can hand the destination to the window
+ * that opened it and close itself. This asserts the bridge rendered
+ * successfully and embeds the expected destination, standing in for the
+ * `assertRedirect($url)` a direct redirect would otherwise get.
+ */
+function assertMicrosoftBridgeTo(TestResponse $response, string $url): void
+{
+    $response->assertOk();
+    $response->assertSee($url);
 }
 
 /**

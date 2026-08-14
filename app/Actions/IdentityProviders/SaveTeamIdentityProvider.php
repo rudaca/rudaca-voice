@@ -74,6 +74,22 @@ class SaveTeamIdentityProvider
                 $changed[] = 'client_secret';
             }
 
+            // Any credential change invalidates a prior connection test — it
+            // proved the *previous* tenant/client/secret worked, which says
+            // nothing about the new values.
+            if (array_intersect(['tenant_id', 'client_id', 'client_secret'], $changed)) {
+                $identityProvider->verified_at = null;
+                $identityProvider->verified_by = null;
+                $identityProvider->last_test_failed_at = null;
+                $identityProvider->last_test_failure_message = null;
+            }
+
+            if ($identityProvider->enforce_sso && blank($identityProvider->verified_at)) {
+                throw ValidationException::withMessages([
+                    'enforce_sso' => __('Run a successful connection test before requiring Microsoft sign-in.'),
+                ]);
+            }
+
             $identityProvider->configured_by = $actor->id;
             $identityProvider->configured_at = now();
             $identityProvider->save();

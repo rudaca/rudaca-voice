@@ -23,7 +23,7 @@ class InitiateMicrosoftLogin
      * by the state value, so the callback can be tied back to this
      * organization without trusting anything the client sends.
      */
-    public function handle(Team $team): string
+    public function handle(Team $team, ?string $loginHint = null): string
     {
         $identityProvider = $team->identityProviderFor(IdentityProvider::Microsoft);
 
@@ -38,11 +38,20 @@ class InitiateMicrosoftLogin
         $provider = $this->clientFactory->make($identityProvider);
         $nonce = Str::random(32);
 
-        $authorizationUrl = $provider->getAuthorizationUrl([
+        $options = [
             'nonce' => $nonce,
             'scope' => ['openid', 'profile', 'email'],
             'response_mode' => 'query',
-        ]);
+        ];
+
+        // Purely a UX convenience — pre-fills the email Microsoft's own
+        // sign-in page shows, it never bypasses or weakens Microsoft's own
+        // authentication.
+        if (filled($loginHint)) {
+            $options['login_hint'] = Str::limit($loginHint, 254, '');
+        }
+
+        $authorizationUrl = $provider->getAuthorizationUrl($options);
 
         Cache::put(
             "oidc_state:{$provider->getState()}",

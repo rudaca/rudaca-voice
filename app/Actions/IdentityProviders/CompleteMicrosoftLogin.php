@@ -12,20 +12,19 @@ use App\Models\TeamIdentityProvider;
 use App\Models\User;
 use App\Models\UserIdentityAccount;
 use App\Models\UserIdentityAccountAudit;
+use App\Services\Microsoft\MicrosoftAuthorizationCodeExchanger;
 use App\Services\Microsoft\MicrosoftIdTokenValidator;
-use App\Services\Microsoft\MicrosoftOAuthClientFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 
 class CompleteMicrosoftLogin
 {
     public function __construct(
-        private readonly MicrosoftOAuthClientFactory $clientFactory,
+        private readonly MicrosoftAuthorizationCodeExchanger $codeExchanger,
         private readonly MicrosoftIdTokenValidator $tokenValidator,
     ) {}
 
@@ -91,28 +90,17 @@ class CompleteMicrosoftLogin
     }
 
     /**
-     * Exchange the authorization code for tokens and pull the raw ID token
-     * out of the response, without ever calling the resource owner (userinfo)
-     * endpoint — every claim we need already lives in the ID token.
+     * Exchange the authorization code for the raw ID token, re-throwing any
+     * failure through reject() so it gets the same audit trail entry as
+     * every other rejection in this flow.
      */
     private function exchangeCodeForIdToken(TeamIdentityProvider $identityProvider, string $code, string $codeVerifier): string
     {
-        $provider = $this->clientFactory->make($identityProvider);
-        $provider->setPkceCode($codeVerifier);
-
         try {
-            $accessToken = $provider->getAccessToken('authorization_code', ['code' => $code]);
-        } catch (IdentityProviderException) {
-            $this->reject($identityProvider, 'token_exchange_failed', __('Your Microsoft sign-in could not be completed. Please try again.'));
+            return $this->codeExchanger->exchange($identityProvider, $code, $codeVerifier);
+        } catch (MicrosoftSsoLoginException $e) {
+            $this->reject($identityProvider, $e->logReason, $e->publicMessage);
         }
-
-        $idToken = $accessToken->getValues()['id_token'] ?? null;
-
-        if (! is_string($idToken) || blank($idToken)) {
-            $this->reject($identityProvider, 'missing_id_token', __('Your Microsoft sign-in could not be completed. Please try again.'));
-        }
-
-        return $idToken;
     }
 
     /**

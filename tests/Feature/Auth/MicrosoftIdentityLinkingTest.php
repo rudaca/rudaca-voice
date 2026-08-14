@@ -79,7 +79,7 @@ test('a second login with the same tenant and subject authenticates via the link
 
     $response = $this->get(route('auth.microsoft.callback', ['state' => $flow['state'], 'code' => 'auth-code']));
 
-    $response->assertRedirect(route('dashboard', ['current_team' => $team->slug]));
+    assertMicrosoftBridgeTo($response, route('dashboard', ['current_team' => $team->slug]));
     $this->assertAuthenticatedAs($member);
 
     expect(User::count())->toBe(1)
@@ -153,7 +153,7 @@ test('an identity linked under one organization is rejected when presented to an
 
     $response = $this->get(route('auth.microsoft.callback', ['state' => $flow['state'], 'code' => 'auth-code']));
 
-    $response->assertRedirect(route('org.login', $teamB));
+    assertMicrosoftBridgeTo($response, route('org.login', $teamB));
     $this->assertGuest();
 
     $failure = $providerB->audits()->latest('id')->first();
@@ -200,7 +200,7 @@ test('an ambiguous case-variant email match is rejected without creating a link'
 
     $response = $this->get(route('auth.microsoft.callback', ['state' => $flow['state'], 'code' => 'auth-code']));
 
-    $response->assertRedirect(route('org.login', $team));
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
     $this->assertGuest();
 
     $failure = $provider->audits()->latest('id')->first();
@@ -239,7 +239,8 @@ test('an inactive user linked to a Microsoft identity is rejected', function () 
 
     $response = $this->get(route('auth.microsoft.callback', ['state' => $flow['state'], 'code' => 'auth-code']));
 
-    $response->assertRedirect(route('org.login', $team))->assertSessionHas('error');
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
+    $response->assertSessionHas('error');
     $this->assertGuest();
 });
 
@@ -267,7 +268,7 @@ test('an inactive user matched by email is rejected before a link is created', f
 
     $response = $this->get(route('auth.microsoft.callback', ['state' => $flow['state'], 'code' => 'auth-code']));
 
-    $response->assertRedirect(route('org.login', $team));
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
     $this->assertGuest();
     expect(UserIdentityAccount::count())->toBe(0);
 });

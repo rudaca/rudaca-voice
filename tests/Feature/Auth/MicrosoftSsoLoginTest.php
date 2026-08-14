@@ -90,7 +90,7 @@ test('a valid callback authenticates an existing organization member into the co
 
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
 
-    $response->assertRedirect(route('dashboard', ['current_team' => $team->slug]));
+    assertMicrosoftBridgeTo($response, route('dashboard', ['current_team' => $team->slug]));
     $this->assertAuthenticatedAs($member);
     expect(session()->getId())->not->toBe($sessionIdBeforeLogin);
     expect($member->fresh()->currentTeam->id)->toBe($team->id);
@@ -125,7 +125,7 @@ test('a valid callback provisions a new user when auto-provisioning is enabled',
 
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
 
-    $response->assertRedirect(route('dashboard', ['current_team' => $team->slug]));
+    assertMicrosoftBridgeTo($response, route('dashboard', ['current_team' => $team->slug]));
 
     $newUser = User::where('email', $newEmail)->firstOrFail();
     $this->assertAuthenticatedAs($newUser);
@@ -157,7 +157,7 @@ test('provisioning-disabled organizations reject an unrecognized microsoft accou
 
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
 
-    $response->assertRedirect(route('org.login', $team));
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
     $response->assertSessionHas('error');
     $this->assertGuest();
     expect(User::where('email', 'nobody@example.com')->exists())->toBeFalse();
@@ -172,7 +172,7 @@ test('a missing or unknown state is rejected without ever resolving an organizat
 
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => 'not-a-real-state']));
 
-    $response->assertRedirect(route('login'));
+    assertMicrosoftBridgeTo($response, route('login'));
     $this->assertGuest();
 
     Log::shouldHaveReceived('warning')
@@ -203,15 +203,17 @@ test('a state can only be used once', function () {
     Http::fake(["login.microsoftonline.com/{$provider->tenant_id}/discovery/v2.0/keys" => Http::response($fixture->jwks())]);
     bindMicrosoftTokenExchange($fixture, $idToken);
 
-    $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]))
-        ->assertRedirect(route('dashboard', ['current_team' => $team->slug]));
+    assertMicrosoftBridgeTo(
+        $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']])),
+        route('dashboard', ['current_team' => $team->slug]),
+    );
 
     auth()->logout();
     $this->app['session']->flush();
 
     $replay = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
 
-    $replay->assertRedirect(route('login'));
+    assertMicrosoftBridgeTo($replay, route('login'));
     $this->assertGuest();
 });
 
@@ -234,7 +236,7 @@ test('a nonce that does not match the one issued for this flow is rejected', fun
 
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
 
-    $response->assertRedirect(route('org.login', $team));
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
     $this->assertGuest();
 
     expect(TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first()->changed_fields)
@@ -262,7 +264,7 @@ test('a token signed by a key not in the tenant jwks is rejected', function () {
 
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
 
-    $response->assertRedirect(route('org.login', $team));
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
     $this->assertGuest();
 
     expect(TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first()->changed_fields)
@@ -293,7 +295,7 @@ test('a token from a different tenant than the one this organization is pinned t
 
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
 
-    $response->assertRedirect(route('org.login', $team));
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
     $this->assertGuest();
 
     expect(TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first()->changed_fields)
@@ -334,9 +336,9 @@ test('an org login initiated by one organization cannot be completed into anothe
     // memberB has no account in team A, and auto-provisioning is off by
     // default, so the attempt is rejected rather than silently landing in
     // team A or leaking into team B.
-    $response->assertRedirect(route('org.login', $teamA));
+    assertMicrosoftBridgeTo($response, route('org.login', $teamA));
     $this->assertGuest();
-    expect($response->headers->get('Location'))->not->toContain('evil.example.com');
+    expect($response->getContent())->not->toContain('evil.example.com');
 });
 
 test('a client-supplied redirect parameter can never override the post-login destination', function () {
@@ -363,5 +365,5 @@ test('a client-supplied redirect parameter can never override the post-login des
         'next' => '//evil.example.com',
     ]));
 
-    $response->assertRedirect(route('dashboard', ['current_team' => $team->slug]));
+    assertMicrosoftBridgeTo($response, route('dashboard', ['current_team' => $team->slug]));
 });

@@ -58,6 +58,14 @@ class TeamIdentityProviderPolicy
     }
 
     /**
+     * Determine whether the user can run a connection test.
+     */
+    public function test(User $user, TeamIdentityProvider $identityProvider): bool
+    {
+        return $this->canManage($user, $identityProvider->team);
+    }
+
+    /**
      * Determine whether the user may assign the given role as the default role
      * for auto-provisioned users.
      *

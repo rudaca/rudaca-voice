@@ -3,12 +3,15 @@
 use App\Actions\IdentityProviders\DisableTeamIdentityProvider;
 use App\Actions\IdentityProviders\DisconnectTeamIdentityProvider;
 use App\Actions\IdentityProviders\EnableTeamIdentityProvider;
+use App\Actions\IdentityProviders\InitiateMicrosoftConnectionTest;
 use App\Actions\IdentityProviders\SaveTeamIdentityProvider;
 use App\Actions\IdentityProviders\UnlinkUserIdentityAccount;
 use App\Concerns\IdentityProviderValidationRules;
 use App\Enums\IdentityProvider;
+use App\Enums\IdentityProviderConfigurationStatus;
 use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamRole;
+use App\Exceptions\MicrosoftSsoLoginException;
 use App\Models\Team;
 use App\Models\TeamIdentityProvider;
 use App\Models\UserIdentityAccount;
@@ -84,6 +87,10 @@ new class extends Component
         $this->team = $team;
 
         $this->hydrateFromRecord();
+
+        if ($status = session('microsoft_test_status')) {
+            Flux::toast(variant: $status === 'success' ? 'success' : 'danger', text: session('microsoft_test_message'));
+        }
     }
 
     /**
@@ -135,6 +142,24 @@ new class extends Component
     public function identityProviderRecord(): ?TeamIdentityProvider
     {
         return $this->team->identityProviderFor(IdentityProvider::Microsoft);
+    }
+
+    #[Computed]
+    public function configurationStatus(): IdentityProviderConfigurationStatus
+    {
+        return $this->identityProviderRecord?->configurationStatus() ?? IdentityProviderConfigurationStatus::NotConfigured;
+    }
+
+    #[Computed]
+    public function showVerificationDetails(): bool
+    {
+        return $this->configurationStatus === IdentityProviderConfigurationStatus::Verified;
+    }
+
+    #[Computed]
+    public function showTestFailureDetails(): bool
+    {
+        return $this->configurationStatus === IdentityProviderConfigurationStatus::ConfigurationError;
     }
 
     #[Computed]
@@ -291,6 +316,33 @@ new class extends Component
     }
 
     /**
+     * Start a Microsoft connection test, returning the authorization URL for
+     * the browser to open (in a popup, opened synchronously by the caller —
+     * see the button markup below — with a same-tab fallback if popups are
+     * blocked). Returns null on failure, after toasting the reason.
+     *
+     * Configuration completeness is checked here, server-side, before ever
+     * contacting Microsoft — a caller can't attempt a test just because the
+     * button happened to be clickable.
+     */
+    public function testConnection(): ?string
+    {
+        $existing = $this->identityProviderRecord;
+
+        abort_if(! $existing, 404);
+
+        Gate::authorize('test', $existing);
+
+        try {
+            return app(InitiateMicrosoftConnectionTest::class)->handle($existing, Auth::user());
+        } catch (MicrosoftSsoLoginException $e) {
+            Flux::toast(variant: 'danger', text: $e->publicMessage);
+
+            return null;
+        }
+    }
+
+    /**
      * Reset every field from the current (possibly just-saved) database state.
      */
     private function hydrateFromRecord(): void
@@ -334,6 +386,7 @@ new class extends Component
             'client_secret' => 'newSecretInput',
             'default_role' => 'defaultRole',
             'enabled' => 'enabled',
+            'enforce_sso' => 'enforceSso',
         ];
 
         foreach ($e->errors() as $key => $messages) {
@@ -357,16 +410,58 @@ new class extends Component
                     <div>
                         <flux:heading size="lg" class="font-bold">{{ __('Microsoft 365 Configuration') }}</flux:heading>
                         <flux:subheading>{{ __('Microsoft Entra ID (Microsoft 365)') }}</flux:subheading>
+                        <a href="https://github.com/rudaca/rudaca-voice/blob/main/docs/microsoft-sso-setup.md" target="_blank" rel="noopener" class="text-xs text-indigo-600 hover:underline dark:text-indigo-400" data-test="microsoft-setup-guide-link">
+                            {{ __('View setup guide') }}
+                        </a>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-2">
-                    @if ($this->identityProviderRecord?->enabled)
-                        <flux:badge color="green" size="sm" data-test="microsoft-status-connected">{{ __('Enabled') }}</flux:badge>
-                    @elseif ($this->identityProviderRecord)
-                        <flux:badge color="zinc" size="sm" data-test="microsoft-status-disabled">{{ __('Disabled') }}</flux:badge>
-                    @else
-                        <flux:badge color="zinc" size="sm" data-test="microsoft-status-unconfigured">{{ __('Not configured') }}</flux:badge>
+                    <div class="text-right">
+                        <flux:badge color="{{ $this->configurationStatus->color() }}" size="sm" data-test="microsoft-status-{{ $this->configurationStatus->value }}">
+                            {{ $this->configurationStatus->label() }}
+                        </flux:badge>
+
+                        @if ($this->showVerificationDetails)
+                            <flux:text class="mt-1 block text-xs text-slate-600 dark:text-slate-500" data-test="microsoft-verified-details">
+                                {{ __('Tested :date by :name', [
+                                    'date' => $this->identityProviderRecord->verified_at->forUser()->format('M d, Y h:i A'),
+                                    'name' => $this->identityProviderRecord->verifiedBy?->name ?? __('an administrator'),
+                                ]) }}
+                            </flux:text>
+                        @elseif ($this->showTestFailureDetails)
+                            <flux:text class="mt-1 block text-xs text-red-600 dark:text-red-400" data-test="microsoft-test-failure-details">
+                                {{ $this->identityProviderRecord->last_test_failure_message }}
+                            </flux:text>
+                        @endif
+                    </div>
+
+                    @if ($this->identityProviderRecord?->isConfigurable())
+                        <flux:button
+                            size="sm"
+                            type="button"
+                            class="bg-black! text-white! hover:bg-zinc-800! dark:bg-gray-500! dark:text-white! dark:hover:bg-gray-600!"
+                            x-data
+                            x-on:click="
+                                const popup = window.open('about:blank', 'microsoft-test-connection', 'width=500,height=650');
+
+                                $wire.testConnection().then((url) => {
+                                    if (!url) {
+                                        if (popup) { popup.close(); }
+                                        return;
+                                    }
+
+                                    if (popup && !popup.closed) {
+                                        popup.location = url;
+                                    } else {
+                                        window.location.href = url;
+                                    }
+                                });
+                            "
+                            data-test="test-connection-button"
+                        >
+                            {{ __('Test Connection') }}
+                        </flux:button>
                     @endif
 
                     <flux:button
@@ -437,7 +532,44 @@ new class extends Component
                                 />
                             @endif
 
-                            <flux:input :value="$this->redirectUrl" readonly :label="__('Redirect URL')" :description="__('Register this URL as the redirect URI in your Microsoft app registration.')" data-test="redirect-url-input" />
+                            <flux:field>
+                                <flux:label>{{ __('Redirect URL') }}</flux:label>
+                                <flux:input.group>
+                                    <flux:input :value="$this->redirectUrl" readonly data-test="redirect-url-input" />
+                                    <flux:button
+                                        type="button"
+                                        x-data="{
+                                            copied: false,
+                                            copy() {
+                                                const text = @js($this->redirectUrl);
+
+                                                if (navigator.clipboard && window.isSecureContext) {
+                                                    navigator.clipboard.writeText(text);
+                                                } else {
+                                                    const input = document.createElement('textarea');
+                                                    input.value = text;
+                                                    input.style.position = 'fixed';
+                                                    input.style.opacity = '0';
+                                                    document.body.appendChild(input);
+                                                    input.focus();
+                                                    input.select();
+                                                    document.execCommand('copy');
+                                                    document.body.removeChild(input);
+                                                }
+
+                                                this.copied = true;
+                                                setTimeout(() => (this.copied = false), 2000);
+                                            },
+                                        }"
+                                        x-on:click="copy()"
+                                        data-test="copy-redirect-url-button"
+                                    >
+                                        <flux:icon.clipboard-document x-show="!copied" x-cloak class="size-4" />
+                                        <flux:icon.clipboard-document-check x-show="copied" x-cloak class="size-4" />
+                                    </flux:button>
+                                </flux:input.group>
+                                <flux:description>{{ __('Register this URL as the redirect URI in your Microsoft app registration.') }}</flux:description>
+                            </flux:field>
                         </div>
 
                         <div class="space-y-6">

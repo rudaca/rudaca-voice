@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\IdentityProvider;
+use App\Enums\IdentityProviderConfigurationStatus;
 use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamRole;
 use Database\Factories\TeamIdentityProviderFactory;
@@ -36,10 +37,15 @@ use Illuminate\Support\Carbon;
  * @property array<int, string> $allowed_domains
  * @property int|null $configured_by
  * @property Carbon|null $configured_at
+ * @property Carbon|null $verified_at
+ * @property int|null $verified_by
+ * @property Carbon|null $last_test_failed_at
+ * @property string|null $last_test_failure_message
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Team $team
  * @property-read User|null $configuredBy
+ * @property-read User|null $verifiedBy
  * @property-read Collection<int, TeamIdentityProviderAudit> $audits
  */
 #[Fillable([
@@ -107,6 +113,16 @@ class TeamIdentityProvider extends Model
     }
 
     /**
+     * Get the user who last ran a successful connection test.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function verifiedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    /**
      * Get the audit trail for this configuration.
      *
      * @return HasMany<TeamIdentityProviderAudit, $this>
@@ -158,6 +174,41 @@ class TeamIdentityProvider extends Model
     }
 
     /**
+     * Whether a connection test has succeeded for the currently saved
+     * configuration. Cleared by SaveTeamIdentityProvider whenever the tenant,
+     * client id, or secret change, so this can never describe stale
+     * credentials.
+     */
+    public function isVerified(): bool
+    {
+        return filled($this->verified_at);
+    }
+
+    /**
+     * Resolve the single status shown on the configuration panel.
+     */
+    public function configurationStatus(): IdentityProviderConfigurationStatus
+    {
+        if (! $this->isConfigurable()) {
+            return IdentityProviderConfigurationStatus::Incomplete;
+        }
+
+        if (! $this->enabled) {
+            return IdentityProviderConfigurationStatus::Disabled;
+        }
+
+        if ($this->last_test_failed_at && (! $this->verified_at || $this->last_test_failed_at->gt($this->verified_at))) {
+            return IdentityProviderConfigurationStatus::ConfigurationError;
+        }
+
+        if ($this->isVerified()) {
+            return IdentityProviderConfigurationStatus::Verified;
+        }
+
+        return IdentityProviderConfigurationStatus::ConfiguredNotTested;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -174,6 +225,8 @@ class TeamIdentityProvider extends Model
             'default_role' => TeamRole::class,
             'allowed_domains' => 'array',
             'configured_at' => 'datetime',
+            'verified_at' => 'datetime',
+            'last_test_failed_at' => 'datetime',
         ];
     }
 }

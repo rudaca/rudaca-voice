@@ -92,6 +92,11 @@ test('updating a configuration without submitting a new secret preserves the pre
         'client_secret' => 'original-secret',
     ]);
 
+    // Simulates a connection test having already succeeded for this exact
+    // configuration — SaveTeamIdentityProvider requires that before it will
+    // accept enforce_sso, see the dedicated tests below.
+    $identityProvider->forceFill(['verified_at' => now(), 'verified_by' => $owner->id])->save();
+
     $updated = $saveAction->handle($team, $owner, IdentityProvider::Microsoft, [
         'tenant_id' => $identityProvider->tenant_id,
         'client_id' => $identityProvider->client_id,
@@ -101,7 +106,59 @@ test('updating a configuration without submitting a new secret preserves the pre
 
     expect($updated->id)->toBe($identityProvider->id)
         ->and($updated->client_secret_encrypted)->toBe('original-secret')
-        ->and($updated->enforce_sso)->toBeTrue();
+        ->and($updated->enforce_sso)->toBeTrue()
+        ->and($updated->verified_at)->not->toBeNull();
+});
+
+test('enforce_sso is rejected unless a connection test has already succeeded for the configuration', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+
+    $identityProvider = app(SaveTeamIdentityProvider::class)->handle($team, $owner, IdentityProvider::Microsoft, [
+        'tenant_id' => (string) fake()->uuid(),
+        'client_id' => (string) fake()->uuid(),
+        'client_secret' => 'a-secret',
+    ]);
+
+    expect($identityProvider->verified_at)->toBeNull();
+
+    expect(fn () => app(SaveTeamIdentityProvider::class)->handle($team, $owner, IdentityProvider::Microsoft, [
+        'tenant_id' => $identityProvider->tenant_id,
+        'client_id' => $identityProvider->client_id,
+        'client_secret' => null,
+        'enforce_sso' => true,
+    ]))->toThrow(ValidationException::class);
+
+    expect($identityProvider->fresh()->enforce_sso)->toBeFalse();
+});
+
+test('changing the tenant id, client id, or client secret invalidates a previous connection test', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+
+    $saveAction = app(SaveTeamIdentityProvider::class);
+
+    $identityProvider = $saveAction->handle($team, $owner, IdentityProvider::Microsoft, [
+        'tenant_id' => (string) fake()->uuid(),
+        'client_id' => (string) fake()->uuid(),
+        'client_secret' => 'original-secret',
+    ]);
+
+    $identityProvider->forceFill([
+        'verified_at' => now(),
+        'verified_by' => $owner->id,
+        'last_test_failed_at' => now(),
+        'last_test_failure_message' => 'a previous failure',
+    ])->save();
+
+    $updated = $saveAction->handle($team, $owner, IdentityProvider::Microsoft, [
+        'tenant_id' => $identityProvider->tenant_id,
+        'client_id' => $identityProvider->client_id,
+        'client_secret' => 'a-new-secret',
+    ]);
+
+    expect($updated->verified_at)->toBeNull()
+        ->and($updated->verified_by)->toBeNull()
+        ->and($updated->last_test_failed_at)->toBeNull()
+        ->and($updated->last_test_failure_message)->toBeNull();
 });
 
 test('submitting a new secret on update replaces the previously saved secret', function () {
@@ -199,7 +256,7 @@ test('every lifecycle action is audited, and the audit trail never contains the 
         'tenant_id' => $identityProvider->tenant_id,
         'client_id' => $identityProvider->client_id,
         'client_secret' => null,
-        'enforce_sso' => true,
+        'allowed_domains' => ['example.com'],
     ]);
 
     app(DisableTeamIdentityProvider::class)->handle($identityProvider, $owner);

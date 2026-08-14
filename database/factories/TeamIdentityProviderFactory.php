@@ -45,4 +45,15 @@ class TeamIdentityProviderFactory extends Factory
             'configured_at' => now(),
         ]);
     }
+
+    /**
+     * Indicate that a connection test has already succeeded, which
+     * SaveTeamIdentityProvider requires before it will accept enforce_sso.
+     */
+    public function verified(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'verified_at' => now(),
+        ]);
+    }
 }

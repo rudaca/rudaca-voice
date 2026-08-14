@@ -1,5 +1,5 @@
 <x-layouts::auth :title="__('Log in to :team', ['team' => $team->name])">
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6" x-data="{ email: @js(old('email', '')) }">
         <x-auth-header :title="$team->name" :description="__('Sign in to continue to :team', ['team' => $team->name])" />
 
         <x-auth-session-status class="text-center" :status="session('status')" />
@@ -11,8 +11,36 @@
         @endif
 
         @if ($showMicrosoft)
-            <flux:button variant="primary" class="w-full" :href="route('org.login.microsoft', $team)" data-test="microsoft-login-button">
-                {{ __('Continue with Microsoft') }}
+            @if ($enforceSso)
+                <flux:input
+                    x-model="email"
+                    :label="__('Email address')"
+                    type="email"
+                    autofocus
+                    autocomplete="email"
+                    placeholder="email@ellisontravel.com"
+                    data-test="microsoft-email-input"
+                />
+            @endif
+
+            <flux:button
+                variant="primary"
+                class="w-full"
+                type="button"
+                x-on:click="
+                    const url = @js(route('org.login.microsoft', $team)) + (email ? '?email=' + encodeURIComponent(email) : '');
+                    const popup = window.open(url, 'microsoft-oauth', 'width=500,height=650');
+
+                    if (!popup) {
+                        window.location.href = url;
+                    }
+                "
+                data-test="microsoft-login-button"
+            >
+                <span class="flex items-center justify-center gap-2">
+                    <flux:icon.microsoft class="size-5" />
+                    {{ __('Continue with Microsoft') }}
+                </span>
             </flux:button>
 
             @unless ($enforceSso)
@@ -26,8 +54,8 @@
 
                 <flux:input
                     name="email"
+                    x-model="email"
                     :label="__('Email address')"
-                    :value="old('email')"
                     type="email"
                     required
                     autofocus
