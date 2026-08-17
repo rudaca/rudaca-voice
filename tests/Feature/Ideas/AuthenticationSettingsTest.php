@@ -5,6 +5,7 @@ use App\Enums\SsoEnforcementScope;
 use App\Enums\TeamRole;
 use App\Models\TeamIdentityProvider;
 use App\Models\User;
+use App\Models\UserIdentityAccount;
 use Livewire\Livewire;
 
 test('the Authentication tab is visible to an owner but not to an employee', function () {
@@ -53,15 +54,47 @@ test('an owner can configure and enable Microsoft sign-in', function () {
 
 test('an admin with manage-authentication permission can update settings', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $owner = User::factory()->create();
+    $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
     TeamIdentityProvider::factory()->enabled()->verified()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+    UserIdentityAccount::factory()->create(['team_id' => $team->id, 'user_id' => $owner->id, 'provider' => IdentityProvider::Microsoft]);
 
     Livewire::actingAs($admin)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
         ->set('enforceSso', true)
         ->call('save')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->call('confirmEnableEnforcement');
 
     expect($team->identityProviderFor(IdentityProvider::Microsoft)->enforce_sso)->toBeTrue();
+});
+
+test('requiring Microsoft sign-in for the first time stages a confirmation instead of saving immediately', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    TeamIdentityProvider::factory()->enabled()->verified()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+    UserIdentityAccount::factory()->create(['team_id' => $team->id, 'user_id' => $owner->id, 'provider' => IdentityProvider::Microsoft]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('enforceSso', true)
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-show', name: 'confirm-enforce-sso');
+
+    expect($team->identityProviderFor(IdentityProvider::Microsoft)->enforce_sso)->toBeFalse();
+});
+
+test('requiring Microsoft sign-in is rejected until an owner has linked their own Microsoft identity', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    TeamIdentityProvider::factory()->enabled()->verified()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('enforceSso', true)
+        ->call('save')
+        ->assertHasErrors(['enforceSso']);
+
+    expect($team->identityProviderFor(IdentityProvider::Microsoft)->enforce_sso)->toBeFalse();
 });
 
 test('requiring Microsoft sign-in without enabling it is rejected', function () {
@@ -89,13 +122,15 @@ test('a fresh organization defaults its enforcement scope to global', function (
 test('an owner can scope the Microsoft sign-in requirement to this organization only', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     TeamIdentityProvider::factory()->enabled()->verified()->create(['team_id' => $team->id, 'provider' => IdentityProvider::Microsoft]);
+    UserIdentityAccount::factory()->create(['team_id' => $team->id, 'user_id' => $owner->id, 'provider' => IdentityProvider::Microsoft]);
 
     Livewire::actingAs($owner)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
         ->set('enforceSso', true)
         ->set('enforceSsoScope', SsoEnforcementScope::Organization->value)
         ->call('save')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->call('confirmEnableEnforcement');
 
     expect($team->identityProviderFor(IdentityProvider::Microsoft)->enforce_sso_scope)->toBe(SsoEnforcementScope::Organization);
 });
@@ -151,13 +186,15 @@ test('updating settings without submitting a new secret preserves the previously
     // configuration — SaveTeamIdentityProvider requires that before it will
     // accept enforce_sso.
     $identityProvider->forceFill(['verified_at' => now()])->save();
+    UserIdentityAccount::factory()->create(['team_id' => $team->id, 'user_id' => $owner->id, 'provider' => IdentityProvider::Microsoft]);
 
     Livewire::actingAs($owner)
         ->test('pages::ideas.authentication-settings', ['team' => $team])
         ->set('enabled', true)
         ->set('enforceSso', true)
         ->call('save')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->call('confirmEnableEnforcement');
 
     expect($team->identityProviderFor(IdentityProvider::Microsoft)->client_secret_encrypted)->toBe($original);
 });

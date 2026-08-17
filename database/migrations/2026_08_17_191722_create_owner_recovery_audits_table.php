@@ -1,0 +1,41 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('owner_recovery_audits', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
+
+            // Nulled rather than cascaded: the audit trail has to outlive both
+            // the token it describes (once expired/used) and the owner it was
+            // for (once deleted).
+            $table->foreignId('owner_recovery_token_id')->nullable()->constrained('owner_recovery_tokens')->nullOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+
+            $table->string('action');
+
+            // Contextual notes only (e.g. requesting IP) — never the emailed
+            // code, the token, or any other credential-shaped value.
+            $table->json('changed_fields')->nullable();
+
+            $table->timestamp('created_at')->nullable(); // append-only log; no updated_at
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('owner_recovery_audits');
+    }
+};

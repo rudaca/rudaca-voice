@@ -34,6 +34,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Idea> $ideas
  * @property-read Collection<int, TeamIdentityProvider> $identityProviders
  * @property-read Collection<int, UserIdentityAccount> $identityAccounts
+ * @property-read Collection<int, OwnerRecoveryToken> $ownerRecoveryTokens
+ * @property-read Collection<int, OwnerRecoveryAudit> $ownerRecoveryAudits
  */
 #[Fillable(['name', 'slug', 'is_personal', 'allow_anonymous_ideas', 'limit_one_active_vote_per_board'])]
 class Team extends Model
@@ -115,6 +117,26 @@ class Team extends Model
     public function invitations(): HasMany
     {
         return $this->hasMany(TeamInvitation::class);
+    }
+
+    /**
+     * Get all owner-recovery tokens issued for this team.
+     *
+     * @return HasMany<OwnerRecoveryToken, $this>
+     */
+    public function ownerRecoveryTokens(): HasMany
+    {
+        return $this->hasMany(OwnerRecoveryToken::class);
+    }
+
+    /**
+     * Get the owner-recovery audit trail for this team.
+     *
+     * @return HasMany<OwnerRecoveryAudit, $this>
+     */
+    public function ownerRecoveryAudits(): HasMany
+    {
+        return $this->hasMany(OwnerRecoveryAudit::class);
     }
 
     /**

@@ -94,6 +94,19 @@ class FortifyServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($throttleKey);
         });
 
+        RateLimiter::for('owner-recovery-request', function (Request $request) {
+            $throttleKey = Str::transliterate(Str::lower((string) $request->input('email')).'|'.$request->ip());
+
+            return Limit::perHour(3)->by($throttleKey);
+        });
+
+        RateLimiter::for('owner-recovery-verify', function (Request $request) {
+            // Deliberately higher than OwnerRecoveryToken::MAX_ATTEMPTS (5) —
+            // that per-token cap is the real defense against guessing one
+            // token's code; this is a coarser, per-IP backstop against
+            // spraying attempts across many different tokens.
+            return Limit::perMinutes(15, 10)->by($request->ip());
+        });
     }
 
     /**

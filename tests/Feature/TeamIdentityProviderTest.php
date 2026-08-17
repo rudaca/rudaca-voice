@@ -10,6 +10,7 @@ use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\TeamIdentityProvider;
 use App\Models\TeamIdentityProviderAudit;
+use App\Models\UserIdentityAccount;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -96,6 +97,11 @@ test('updating a configuration without submitting a new secret preserves the pre
     // configuration — SaveTeamIdentityProvider requires that before it will
     // accept enforce_sso, see the dedicated tests below.
     $identityProvider->forceFill(['verified_at' => now(), 'verified_by' => $owner->id])->save();
+
+    // SaveTeamIdentityProvider also requires the team's owner to already
+    // have linked their own Microsoft identity before it will accept
+    // enforce_sso — see the owner-recovery-protection tests.
+    UserIdentityAccount::factory()->create(['team_id' => $team->id, 'user_id' => $owner->id, 'provider' => IdentityProvider::Microsoft]);
 
     $updated = $saveAction->handle($team, $owner, IdentityProvider::Microsoft, [
         'tenant_id' => $identityProvider->tenant_id,

@@ -9,6 +9,7 @@ use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\TeamIdentityProvider;
 use App\Models\User;
+use App\Models\UserIdentityAccount;
 use App\Policies\TeamIdentityProviderPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -45,6 +46,7 @@ class SaveTeamIdentityProvider
                 ]);
 
             $wasNew = ! $identityProvider->exists;
+            $wasEnforcing = (bool) $identityProvider->enforce_sso;
 
             $defaultRole = $this->resolveDefaultRole($attributes['default_role'] ?? null);
             $autoProvisionUsers = (bool) ($attributes['auto_provision_users'] ?? false);
@@ -87,6 +89,18 @@ class SaveTeamIdentityProvider
             if ($identityProvider->enforce_sso && blank($identityProvider->verified_at)) {
                 throw ValidationException::withMessages([
                     'enforce_sso' => __('Run a successful connection test before requiring Microsoft sign-in.'),
+                ]);
+            }
+
+            // Newly turning enforcement on must not be able to lock the
+            // organization's own owner out: require proof Microsoft sign-in
+            // already works for them specifically, not just that the
+            // connection test passed. (The owner-recovery flow is the
+            // standing fallback beyond this point, in case that link later
+            // breaks.)
+            if ($identityProvider->enforce_sso && ! $wasEnforcing && ! $this->ownerHasLinkedIdentity($team, $provider)) {
+                throw ValidationException::withMessages([
+                    'enforce_sso' => __('At least one organization owner must sign in with Microsoft before you can require it for everyone.'),
                 ]);
             }
 
@@ -164,6 +178,29 @@ class SaveTeamIdentityProvider
         }
 
         return $scope instanceof SsoEnforcementScope ? $scope : SsoEnforcementScope::from($scope);
+    }
+
+    /**
+     * Determine whether this team's owner has already linked this provider.
+     *
+     * Public so callers (e.g. the authentication-settings Livewire
+     * component) can pre-check this before showing the "require Microsoft
+     * sign-in" confirmation modal, rather than only discovering it fails
+     * after the admin confirms.
+     */
+    public function ownerHasLinkedIdentity(Team $team, IdentityProvider $provider): bool
+    {
+        $owner = $team->owner();
+
+        if (! $owner) {
+            return false;
+        }
+
+        return UserIdentityAccount::query()
+            ->forTeam($team)
+            ->provider($provider)
+            ->where('user_id', $owner->id)
+            ->exists();
     }
 
     /**

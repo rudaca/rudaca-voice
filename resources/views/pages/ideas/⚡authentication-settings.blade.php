@@ -80,6 +80,15 @@ new class extends Component
      */
     public bool $unlinkNeedsForce = false;
 
+    // --- Require-Microsoft-sign-in confirmation ---
+    /**
+     * The validated form payload staged while the confirmation modal is
+     * open — populated by save(), consumed by confirmEnableEnforcement().
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $pendingEnforceSsoSave = null;
+
     public function mount(Team $team): void
     {
         Gate::authorize('viewAny', [TeamIdentityProvider::class, $team]);
@@ -240,6 +249,52 @@ new class extends Component
             return;
         }
 
+        // Turning enforcement on for the first time requires the admin to
+        // explicitly confirm they understand password login goes away for
+        // everyone else — stage the validated payload and let
+        // confirmEnableEnforcement() finish the save once they do.
+        $wasEnforcing = $existing?->enforce_sso ?? false;
+
+        if ($validated['enforceSso'] && ! $wasEnforcing) {
+            if (! app(SaveTeamIdentityProvider::class)->ownerHasLinkedIdentity($this->team, IdentityProvider::Microsoft)) {
+                $this->addError('enforceSso', __('At least one organization owner must sign in with Microsoft before you can require it for everyone.'));
+
+                return;
+            }
+
+            $this->pendingEnforceSsoSave = $validated;
+            $this->dispatch('modal-show', name: 'confirm-enforce-sso');
+
+            return;
+        }
+
+        $this->persistIdentityProvider($validated);
+    }
+
+    /**
+     * Finish saving after the admin confirms the require-Microsoft-sign-in
+     * warning from save().
+     */
+    public function confirmEnableEnforcement(): void
+    {
+        if (! $this->pendingEnforceSsoSave) {
+            return;
+        }
+
+        $validated = $this->pendingEnforceSsoSave;
+        $this->pendingEnforceSsoSave = null;
+
+        $this->persistIdentityProvider($validated);
+
+        $this->dispatch('modal-close', name: 'confirm-enforce-sso');
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function persistIdentityProvider(array $validated): void
+    {
+        $existing = $this->identityProviderRecord;
         $wasEnabled = $existing?->enabled ?? false;
 
         try {
@@ -764,6 +819,26 @@ new class extends Component
             </div>
         </div>
     </div>
+
+    <flux:modal name="confirm-enforce-sso" :dismissible="false" class="max-w-lg" data-test="confirm-enforce-sso-modal">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Require Microsoft sign-in for this organization?') }}</flux:heading>
+                <flux:subheading>
+                    {{ __("Members will no longer be able to use normal password login. Confirm that at least one owner can sign in with Microsoft before continuing.") }}
+                </flux:subheading>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost" data-test="confirm-enforce-sso-cancel">{{ __('Cancel') }}</flux:button>
+                </flux:modal.close>
+                <flux:button variant="danger" wire:click="confirmEnableEnforcement" data-test="confirm-enforce-sso-button">
+                    {{ __('Require Microsoft sign-in') }}
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     <flux:modal name="confirm-unlink-identity" :dismissible="false" class="max-w-lg" data-test="confirm-unlink-modal">
         <div class="space-y-6">
