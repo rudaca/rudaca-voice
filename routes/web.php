@@ -33,6 +33,9 @@ Route::prefix('{current_team}')
         Route::livewire('idea-settings', 'pages::ideas.settings')
             ->middleware(EnsureTeamMembership::class.':admin')
             ->name('ideas.settings');
+        Route::livewire('idea-settings/authentication/setup-guide', 'pages::ideas.microsoft-sso-guide')
+            ->middleware(EnsureTeamMembership::class.':admin')
+            ->name('ideas.settings.microsoft-sso-guide');
         Route::livewire('ideas/moderate-comments', 'pages::ideas.moderate-comments')
             ->middleware(EnsureTeamMembership::class.':admin')
             ->name('ideas.moderate-comments');

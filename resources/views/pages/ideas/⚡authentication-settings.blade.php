@@ -465,8 +465,15 @@ new class extends Component
                     <div>
                         <flux:heading size="lg" class="font-bold">{{ __('Microsoft 365 Configuration') }}</flux:heading>
                         <flux:subheading>{{ __('Microsoft Entra ID (Microsoft 365)') }}</flux:subheading>
-                        <a href="https://github.com/rudaca/rudaca-voice/blob/main/docs/microsoft-sso-setup.md" target="_blank" rel="noopener" class="text-xs text-indigo-600 hover:underline dark:text-indigo-400" data-test="microsoft-setup-guide-link">
+                        <a
+                            href="{{ route('ideas.settings.microsoft-sso-guide', ['current_team' => $this->team->slug]) }}"
+                            target="_blank"
+                            rel="noopener"
+                            class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                            data-test="microsoft-setup-guide-link"
+                        >
                             {{ __('View setup guide') }}
+                            <flux:icon.arrow-top-right-on-square class="size-3" />
                         </a>
                     </div>
                 </div>
