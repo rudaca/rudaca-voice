@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Auth\RedirectUnauthenticatedToOrganizationLogin;
 use App\Http\Middleware\SetTeamUrlDefaults;
 use App\Http\Middleware\TrackViewAsSession;
 use Illuminate\Foundation\Application;
@@ -14,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(
+            fn (Request $request) => app(RedirectUnauthenticatedToOrganizationLogin::class)->handle($request),
+        );
+
         $middleware->web(append: [
             SetTeamUrlDefaults::class,
             TrackViewAsSession::class,

@@ -191,12 +191,12 @@ test('votes on different boards are independent of one another', function () {
     expect(IdeaVote::where('idea_id', $ideaOnB->id)->where('user_id', $user->id)->count())->toBe(1);
 });
 
-test('guests are redirected to the login page instead of voting', function () {
+test('guests are redirected to their organization\'s login page instead of voting', function () {
     ['team' => $team] = teamWithMember(TeamRole::Employee);
     $idea = makeIdea($team, ['status' => 'new']);
 
-    $this->get(route('ideas.show', ['idea' => $idea->slug]))
-        ->assertRedirect(route('login'));
+    $this->get(route('ideas.show', ['current_team' => $team->slug, 'idea' => $idea->slug]))
+        ->assertRedirect(route('org.login', $team));
 
     expect(IdeaVote::where('idea_id', $idea->id)->count())->toBe(0);
 });

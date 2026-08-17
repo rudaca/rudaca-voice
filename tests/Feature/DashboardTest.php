@@ -7,12 +7,12 @@ use App\Models\IdeaVote;
 use App\Models\User;
 use Livewire\Livewire;
 
-test('guests are redirected to the login page', function () {
+test('guests are redirected to their organization\'s login page', function () {
     $user = User::factory()->create();
     $team = $user->currentTeam;
 
-    $response = $this->get(route('dashboard'));
-    $response->assertRedirect(route('login'));
+    $response = $this->get(route('dashboard', ['current_team' => $team->slug]));
+    $response->assertRedirect(route('org.login', $team));
 });
 
 test('authenticated users can visit the dashboard', function () {
