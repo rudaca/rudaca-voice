@@ -385,6 +385,20 @@ select:focus[data-flux-control] {
     @apply outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
 }
 
+/*
+Inside an input group (e.g. a readonly field paired with an action button),
+put the focus ring around the whole group instead of just the focused
+control, so the pair reads as one connected unit rather than the button
+looking disconnected from the field next to it.
+*/
+[data-flux-input-group] input:focus[data-flux-control] {
+    @apply ring-0 ring-offset-0;
+}
+
+[data-flux-input-group]:focus-within {
+    @apply rounded-lg outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
+}
+
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */

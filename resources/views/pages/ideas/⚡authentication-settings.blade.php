@@ -578,9 +578,14 @@ new class extends Component
                                     <flux:label>{{ __('Client secret') }}</flux:label>
                                     <flux:input.group>
                                         <flux:input value="••••••••••••••••" readonly data-test="client-secret-masked" />
-                                        <flux:button wire:click="$set('replacingSecret', true)" data-test="replace-secret-button">
-                                            {{ __('Replace secret') }}
-                                        </flux:button>
+                                        <flux:tooltip :content="__('Replace secret')">
+                                            <flux:button
+                                                icon="arrow-left-right"
+                                                wire:click="$set('replacingSecret', true)"
+                                                aria-label="{{ __('Replace secret') }}"
+                                                data-test="replace-secret-button"
+                                            />
+                                        </flux:tooltip>
                                     </flux:input.group>
                                 </flux:field>
                             @else
@@ -594,44 +599,14 @@ new class extends Component
                                 />
                             @endif
 
-                            <flux:field>
-                                <flux:label>{{ __('Redirect URL') }}</flux:label>
-                                <flux:input.group>
-                                    <flux:input :value="$this->redirectUrl" readonly data-test="redirect-url-input" />
-                                    <flux:button
-                                        type="button"
-                                        x-data="{
-                                            copied: false,
-                                            copy() {
-                                                const text = @js($this->redirectUrl);
-
-                                                if (navigator.clipboard && window.isSecureContext) {
-                                                    navigator.clipboard.writeText(text);
-                                                } else {
-                                                    const input = document.createElement('textarea');
-                                                    input.value = text;
-                                                    input.style.position = 'fixed';
-                                                    input.style.opacity = '0';
-                                                    document.body.appendChild(input);
-                                                    input.focus();
-                                                    input.select();
-                                                    document.execCommand('copy');
-                                                    document.body.removeChild(input);
-                                                }
-
-                                                this.copied = true;
-                                                setTimeout(() => (this.copied = false), 2000);
-                                            },
-                                        }"
-                                        x-on:click="copy()"
-                                        data-test="copy-redirect-url-button"
-                                    >
-                                        <flux:icon.clipboard-document x-show="!copied" x-cloak class="size-4" />
-                                        <flux:icon.clipboard-document-check x-show="copied" x-cloak class="size-4" />
-                                    </flux:button>
-                                </flux:input.group>
-                                <flux:description>{{ __('Register this URL as the redirect URI in your Microsoft app registration.') }}</flux:description>
-                            </flux:field>
+                            <flux:input
+                                :value="$this->redirectUrl"
+                                :label="__('Redirect URL')"
+                                :description="__('Register this URL as the redirect URI in your Microsoft app registration.')"
+                                readonly
+                                copyable
+                                data-test="redirect-url-input"
+                            />
                         </div>
 
                         <div class="space-y-6">
