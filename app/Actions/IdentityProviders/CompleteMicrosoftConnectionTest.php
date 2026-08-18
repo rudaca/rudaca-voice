@@ -85,7 +85,7 @@ class CompleteMicrosoftConnectionTest
             $idToken = $this->codeExchanger->exchange($identityProvider, $code, $stored['code_verifier']);
             $this->tokenValidator->validate($idToken, $identityProvider, $stored['nonce']);
         } catch (MicrosoftSsoLoginException $e) {
-            $this->reject($identityProvider, $e->logReason, $e->publicMessage);
+            $this->reject($identityProvider, $e->logReason, $e->publicMessage, $e->context);
         }
 
         $this->succeed($identityProvider);

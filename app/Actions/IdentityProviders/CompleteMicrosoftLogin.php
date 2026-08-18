@@ -74,7 +74,7 @@ class CompleteMicrosoftLogin
             // so this failure gets the same audit trail entry as every other
             // rejection — MicrosoftIdTokenValidator has no audit access of
             // its own.
-            $this->reject($identityProvider, $e->logReason, $e->publicMessage);
+            $this->reject($identityProvider, $e->logReason, $e->publicMessage, context: $e->context);
         }
 
         $email = $claims['email'] ?? $claims['preferred_username'] ?? null;
@@ -102,7 +102,7 @@ class CompleteMicrosoftLogin
         try {
             return $this->codeExchanger->exchange($identityProvider, $code, $codeVerifier);
         } catch (MicrosoftSsoLoginException $e) {
-            $this->reject($identityProvider, $e->logReason, $e->publicMessage);
+            $this->reject($identityProvider, $e->logReason, $e->publicMessage, context: $e->context);
         }
     }
 

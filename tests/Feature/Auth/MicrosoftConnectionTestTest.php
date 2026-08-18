@@ -180,7 +180,7 @@ test('a non-admin cannot run the connection test', function () {
         ->assertForbidden();
 });
 
-test('a failed connection test never surfaces a raw provider error', function () {
+test('a failed connection test never surfaces a raw provider error, but still records it internally', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $provider = TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id]);
 
@@ -192,6 +192,8 @@ test('a failed connection test never surfaces a raw provider error', function ()
     ]);
     $mock = new MockHandler([new Response(400, ['Content-Type' => 'application/json'], $sensitiveBody)]);
     app()->instance(MicrosoftOAuthClientFactory::class, new MicrosoftOAuthClientFactory(new Client(['handler' => HandlerStack::create($mock)])));
+
+    Log::spy();
 
     $this->actingAs($owner);
     $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $state]));
@@ -207,6 +209,20 @@ test('a failed connection test never surfaces a raw provider error', function ()
     expect($provider->last_test_failure_message)
         ->not->toContain('AADSTS7000215')
         ->not->toContain('super-sensitive-internal-detail');
+
+    // The raw detail is discarded from anything the admin sees, but it must
+    // still reach the log and the audit trail — otherwise there is no way
+    // to diagnose *why* Microsoft rejected the token exchange.
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(fn (string $message, array $context) => $message === 'microsoft_connection_test_failed'
+            && $context['reason'] === 'token_exchange_failed'
+            && $context['provider_error'] === 'invalid_client'
+            && str_contains($context['provider_error_description'], 'AADSTS7000215'));
+
+    $audit = TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first();
+    expect($audit->error_context['provider_error'])->toBe('invalid_client')
+        ->and($audit->error_context['provider_error_description'])->toContain('AADSTS7000215');
 });
 
 test('Microsoft reporting an error during a connection test is logged with its actual reason, not just a generic one', function () {

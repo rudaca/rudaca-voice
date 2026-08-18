@@ -26,11 +26,17 @@ class MicrosoftAuthorizationCodeExchanger
 
         try {
             $accessToken = $provider->getAccessToken('authorization_code', ['code' => $code]);
-        } catch (IdentityProviderException) {
+        } catch (IdentityProviderException $e) {
+            $response = $e->getResponseBody();
+
             throw new MicrosoftSsoLoginException(
                 __('Your Microsoft sign-in could not be completed. Please try again.'),
                 'token_exchange_failed',
                 $identityProvider->team_id,
+                [
+                    'provider_error' => $e->getMessage(),
+                    'provider_error_description' => is_array($response) ? (string) ($response['error_description'] ?? '') : '',
+                ],
             );
         }
 
