@@ -58,6 +58,21 @@ test('the redirect route builds an authorization url scoped to the correct organ
         ->and($location)->not->toContain($provider->client_secret_encrypted);
 });
 
+test('the authorization url requests scopes separated by spaces, not commas', function () {
+    // league/oauth2-client defaults to a comma separator, which Microsoft's
+    // v2.0 endpoint misparses as one invalid scope and rejects with
+    // AADSTS650053 — this must stay space-separated.
+    $team = Team::factory()->create();
+    TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id]);
+
+    $response = $this->get(route('org.login.microsoft', $team));
+    $location = $response->headers->get('Location');
+
+    parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+
+    expect($query['scope'])->toBe('openid profile email');
+});
+
 test('the redirect route rejects a disabled or unconfigured provider server-side', function () {
     $team = Team::factory()->create();
 
@@ -209,6 +224,10 @@ test('Microsoft reporting an error is logged with its actual reason, not just a 
             && $context['reason'] === 'provider_error'
             && $context['provider_error'] === 'access_denied'
             && str_contains($context['provider_error_description'], 'AADSTS65004'));
+
+    $audit = TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first();
+    expect($audit->error_context['provider_error'])->toBe('access_denied')
+        ->and($audit->error_context['provider_error_description'])->toContain('AADSTS65004');
 });
 
 test('a state can only be used once', function () {

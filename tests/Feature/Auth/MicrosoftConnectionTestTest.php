@@ -232,6 +232,10 @@ test('Microsoft reporting an error during a connection test is logged with its a
             && $context['reason'] === 'provider_error'
             && $context['provider_error'] === 'access_denied'
             && str_contains($context['provider_error_description'], 'AADSTS65004'));
+
+    $audit = TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first();
+    expect($audit->error_context['provider_error'])->toBe('access_denied')
+        ->and($audit->error_context['provider_error_description'])->toContain('AADSTS65004');
 });
 
 test('a connection test verifying one organization has no effect on another\'s status', function () {

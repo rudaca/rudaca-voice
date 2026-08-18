@@ -296,7 +296,7 @@ class CompleteMicrosoftLogin
     private function reject(?TeamIdentityProvider $identityProvider, string $reason, string $publicMessage, ?int $teamId = null, array $context = []): never
     {
         if ($identityProvider) {
-            $this->audit($identityProvider, IdentityProviderAuditAction::LoginFailed, null, $reason);
+            $this->audit($identityProvider, IdentityProviderAuditAction::LoginFailed, null, $reason, $context);
         }
 
         if (! $identityProvider || $context !== []) {
@@ -306,13 +306,17 @@ class CompleteMicrosoftLogin
         throw new MicrosoftSsoLoginException($publicMessage, $reason, $teamId ?? $identityProvider?->team_id);
     }
 
-    private function audit(TeamIdentityProvider $identityProvider, IdentityProviderAuditAction $action, ?int $performedByUserId, ?string $reason = null): void
+    /**
+     * @param  array<string, string>  $context
+     */
+    private function audit(TeamIdentityProvider $identityProvider, IdentityProviderAuditAction $action, ?int $performedByUserId, ?string $reason = null, array $context = []): void
     {
         $identityProvider->audits()->create([
             'team_id' => $identityProvider->team_id,
             'provider' => $identityProvider->provider,
             'action' => $action,
             'changed_fields' => $reason ? [$reason] : [],
+            'error_context' => $context !== [] ? $context : null,
             'performed_by_user_id' => $performedByUserId,
         ]);
     }

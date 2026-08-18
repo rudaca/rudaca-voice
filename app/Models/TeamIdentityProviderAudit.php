@@ -16,12 +16,17 @@ use Illuminate\Support\Carbon;
  * `changed_fields` holds field *names* only. Secret values never reach this
  * table, not even masked or truncated.
  *
+ * `error_context` holds short diagnostic detail for a failure — e.g. the
+ * error code and description a provider returned — never a secret, token,
+ * or full request/response body.
+ *
  * @property int $id
  * @property int $team_id
  * @property int|null $identity_provider_id
  * @property IdentityProvider $provider
  * @property IdentityProviderAuditAction $action
  * @property array<int, string>|null $changed_fields
+ * @property array<string, string>|null $error_context
  * @property int|null $performed_by_user_id
  * @property Carbon|null $created_at
  * @property-read Team $team
@@ -34,6 +39,7 @@ use Illuminate\Support\Carbon;
     'provider',
     'action',
     'changed_fields',
+    'error_context',
     'performed_by_user_id',
 ])]
 class TeamIdentityProviderAudit extends Model
@@ -88,6 +94,7 @@ class TeamIdentityProviderAudit extends Model
             'provider' => IdentityProvider::class,
             'action' => IdentityProviderAuditAction::class,
             'changed_fields' => 'array',
+            'error_context' => 'array',
             'created_at' => 'datetime',
         ];
     }

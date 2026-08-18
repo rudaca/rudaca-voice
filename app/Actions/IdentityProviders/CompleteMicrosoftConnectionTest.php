@@ -118,9 +118,9 @@ class CompleteMicrosoftConnectionTest
      * configuration no longer currently tests clean.
      *
      * `$context` carries diagnostic detail (e.g. Microsoft's own error code)
-     * that is safe to log but deliberately never becomes `$publicMessage` —
-     * it's for reading in the log file when troubleshooting a report like
-     * "the connection test failed", not for showing to the admin who ran it.
+     * that is safe to log and store but deliberately never becomes
+     * `$publicMessage` — it's for troubleshooting a report like "the
+     * connection test failed", not for showing to the admin who ran it.
      *
      * @param  array<string, string>  $context
      */
@@ -136,6 +136,7 @@ class CompleteMicrosoftConnectionTest
             'provider' => $identityProvider->provider,
             'action' => IdentityProviderAuditAction::ConnectionTestFailed,
             'changed_fields' => [$reason],
+            'error_context' => $context !== [] ? $context : null,
             'performed_by_user_id' => Auth::id(),
         ]);
 

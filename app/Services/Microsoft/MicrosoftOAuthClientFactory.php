@@ -41,6 +41,12 @@ class MicrosoftOAuthClientFactory
             // GenericProvider requires this option to be set regardless.
             'urlResourceOwnerDetails' => 'https://graph.microsoft.com/oidc/userinfo',
             'pkceMethod' => GenericProvider::PKCE_METHOD_S256,
+            // league/oauth2-client joins scope arrays with a comma by
+            // default, but Microsoft Entra's v2.0 endpoint requires a
+            // space-separated scope string — a comma-joined scope is
+            // silently misparsed as one long invalid scope name, which
+            // Microsoft rejects with AADSTS650053.
+            'scopeSeparator' => ' ',
         ];
 
         $collaborators = $this->httpClient ? ['httpClient' => $this->httpClient] : [];
