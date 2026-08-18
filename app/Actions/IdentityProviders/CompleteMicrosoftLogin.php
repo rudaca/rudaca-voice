@@ -53,7 +53,10 @@ class CompleteMicrosoftLogin
         }
 
         if ($request->filled('error')) {
-            $this->reject($identityProvider, 'provider_error', __('Microsoft sign-in was cancelled or denied.'));
+            $this->reject($identityProvider, 'provider_error', __('Microsoft sign-in was cancelled or denied.'), $team?->id, [
+                'provider_error' => (string) $request->query('error'),
+                'provider_error_description' => (string) $request->query('error_description'),
+            ]);
         }
 
         $code = (string) $request->query('code');
@@ -282,13 +285,22 @@ class CompleteMicrosoftLogin
      * Record the outcome and throw. When no identity provider could be
      * resolved (e.g. an invalid/expired state), there is nothing to audit
      * against, so this only logs a sanitized reason instead.
+     *
+     * `$context` carries diagnostic detail (e.g. Microsoft's own error code)
+     * that is safe to log but deliberately never becomes `$publicMessage` —
+     * it's for reading in the log file when troubleshooting a failed
+     * sign-in, not for showing to the user it happened to.
+     *
+     * @param  array<string, string>  $context
      */
-    private function reject(?TeamIdentityProvider $identityProvider, string $reason, string $publicMessage, ?int $teamId = null): never
+    private function reject(?TeamIdentityProvider $identityProvider, string $reason, string $publicMessage, ?int $teamId = null, array $context = []): never
     {
         if ($identityProvider) {
             $this->audit($identityProvider, IdentityProviderAuditAction::LoginFailed, null, $reason);
-        } else {
-            Log::warning('microsoft_sso_login_failed', ['reason' => $reason, 'team_id' => $teamId]);
+        }
+
+        if (! $identityProvider || $context !== []) {
+            Log::warning('microsoft_sso_login_failed', ['reason' => $reason, 'team_id' => $teamId ?? $identityProvider?->team_id, ...$context]);
         }
 
         throw new MicrosoftSsoLoginException($publicMessage, $reason, $teamId ?? $identityProvider?->team_id);

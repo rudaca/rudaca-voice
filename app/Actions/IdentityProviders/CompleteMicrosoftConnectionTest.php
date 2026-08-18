@@ -69,7 +69,10 @@ class CompleteMicrosoftConnectionTest
         }
 
         if ($request->filled('error')) {
-            $this->reject($identityProvider, 'provider_error', __('Microsoft reported the connection attempt was cancelled or denied.'));
+            $this->reject($identityProvider, 'provider_error', __('Microsoft reported the connection attempt was cancelled or denied.'), [
+                'provider_error' => (string) $request->query('error'),
+                'provider_error_description' => (string) $request->query('error_description'),
+            ]);
         }
 
         $code = (string) $request->query('code');
@@ -113,8 +116,15 @@ class CompleteMicrosoftConnectionTest
      * `verified_at` is left untouched here — a failed re-test doesn't erase
      * proof that the configuration worked at some point, it just means the
      * configuration no longer currently tests clean.
+     *
+     * `$context` carries diagnostic detail (e.g. Microsoft's own error code)
+     * that is safe to log but deliberately never becomes `$publicMessage` —
+     * it's for reading in the log file when troubleshooting a report like
+     * "the connection test failed", not for showing to the admin who ran it.
+     *
+     * @param  array<string, string>  $context
      */
-    private function reject(TeamIdentityProvider $identityProvider, string $reason, string $publicMessage): never
+    private function reject(TeamIdentityProvider $identityProvider, string $reason, string $publicMessage, array $context = []): never
     {
         $identityProvider->forceFill([
             'last_test_failed_at' => now(),
@@ -128,6 +138,10 @@ class CompleteMicrosoftConnectionTest
             'changed_fields' => [$reason],
             'performed_by_user_id' => Auth::id(),
         ]);
+
+        if ($context !== []) {
+            Log::warning('microsoft_connection_test_failed', ['reason' => $reason, 'team_id' => $identityProvider->team_id, ...$context]);
+        }
 
         throw new MicrosoftSsoLoginException($publicMessage, $reason, $identityProvider->team_id);
     }

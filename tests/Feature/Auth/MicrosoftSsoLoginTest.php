@@ -186,6 +186,31 @@ test('a missing or unknown state is rejected without ever resolving an organizat
         });
 });
 
+test('Microsoft reporting an error is logged with its actual reason, not just a generic one', function () {
+    ['team' => $team] = teamWithMember(TeamRole::Employee);
+    TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id]);
+
+    $flow = startMicrosoftLogin($team);
+
+    Log::spy();
+
+    $response = $this->get(route('auth.microsoft.callback', [
+        'state' => $flow['state'],
+        'error' => 'access_denied',
+        'error_description' => 'AADSTS65004: User declined to consent to access the app.',
+    ]));
+
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
+    $this->assertGuest();
+
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(fn (string $message, array $context) => $message === 'microsoft_sso_login_failed'
+            && $context['reason'] === 'provider_error'
+            && $context['provider_error'] === 'access_denied'
+            && str_contains($context['provider_error_description'], 'AADSTS65004'));
+});
+
 test('a state can only be used once', function () {
     ['team' => $team, 'user' => $member] = teamWithMember(TeamRole::Employee);
     $provider = TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id]);

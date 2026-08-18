@@ -16,6 +16,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 use Tests\Support\MicrosoftOidcFixture;
 
@@ -206,6 +207,31 @@ test('a failed connection test never surfaces a raw provider error', function ()
     expect($provider->last_test_failure_message)
         ->not->toContain('AADSTS7000215')
         ->not->toContain('super-sensitive-internal-detail');
+});
+
+test('Microsoft reporting an error during a connection test is logged with its actual reason, not just a generic one', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $provider = TeamIdentityProvider::factory()->enabled()->create(['team_id' => $team->id]);
+
+    $state = startMicrosoftConnectionTest($provider, $owner);
+
+    Log::spy();
+
+    $this->actingAs($owner);
+    $response = $this->get(route('auth.microsoft.callback', [
+        'state' => $state,
+        'error' => 'access_denied',
+        'error_description' => 'AADSTS65004: User declined to consent to access the app.',
+    ]));
+
+    assertMicrosoftBridgeTo($response, route('ideas.settings', ['current_team' => $team->slug, 'tab' => 'authentication']));
+
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(fn (string $message, array $context) => $message === 'microsoft_connection_test_failed'
+            && $context['reason'] === 'provider_error'
+            && $context['provider_error'] === 'access_denied'
+            && str_contains($context['provider_error_description'], 'AADSTS65004'));
 });
 
 test('a connection test verifying one organization has no effect on another\'s status', function () {
