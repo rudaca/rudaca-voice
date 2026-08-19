@@ -7,6 +7,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,16 @@ class AppServiceProvider extends ServiceProvider
             if ($event->user instanceof User) {
                 $event->user->last_login_at = now();
                 $event->user->saveQuietly();
+            }
+        });
+
+        // The guard clears the authenticated user (and the session is
+        // invalidated) before LogoutResponse builds its redirect, so the
+        // team has to be captured here, while it's still available on the
+        // event, and stashed in the container for LogoutResponse to read.
+        Event::listen(function (Logout $event) {
+            if ($event->user instanceof User) {
+                $this->app->instance('logout.team', $event->user->currentTeam ?? $event->user->personalTeam());
             }
         });
     }
