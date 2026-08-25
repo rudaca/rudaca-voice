@@ -487,7 +487,7 @@ new class extends Component {
     ]" />
 @endpush
 
-<section class="mx-auto w-full container px-6 pb-7 lg:px-8">
+<section class="mx-auto w-full container px-3 pb-7 sm:px-6 lg:px-8">
     <div>
         {{-- Header --}}
         <div class="flex items-start justify-between gap-4">
@@ -529,7 +529,7 @@ new class extends Component {
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div class="flex flex-wrap items-center gap-3">
                         <div
-                            class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+                            class="relative flex w-full rounded-lg bg-zinc-100 p-0.5 sm:inline-flex sm:w-auto dark:bg-zinc-800"
                             role="group"
                             aria-label="{{ __('Sort ideas') }}"
                             data-sort="{{ $sort }}"
@@ -558,7 +558,7 @@ new class extends Component {
                                     x-on:click="sort = '{{ $value }}'"
                                     wire:click="sortBy('{{ $value }}')"
                                     @class([
-                                        'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                                        'relative flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none',
                                         'text-slate-900 dark:text-white' => $sort === $value,
                                         'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $sort !== $value,
                                     ])
@@ -584,98 +584,100 @@ new class extends Component {
 
                         @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-indigo-500!')
 
-                        <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
-                            'w-auto min-w-32',
-                            'border-gray-800! font-semibold! dark:border-gray-400!' => $group !== '',
-                        ])>
-                            <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
-                            @foreach ($this->boardGroups as $boardGroup)
-                                <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
-                            @endforeach
-                        </flux:select>
-
-                        <flux:dropdown position="bottom" align="start">
-                            <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-board-trigger" @class([
-                                'w-auto',
-                                'border-gray-800! font-semibold! dark:border-gray-400!' => $board !== [],
+                        <div class="flex w-full gap-2 sm:contents">
+                            <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
+                                'min-w-0 flex-1 sm:w-auto sm:flex-none sm:min-w-32',
+                                'border-gray-800! font-semibold! dark:border-gray-400!' => $group !== '',
                             ])>
-                                {{ __('Board') }}
-                                @if ($board !== [])
-                                    <flux:badge size="sm" color="zinc">{{ count($board) }}</flux:badge>
-                                @endif
-                            </flux:button>
+                                <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
+                                @foreach ($this->boardGroups as $boardGroup)
+                                    <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
 
-                            <flux:menu class="w-56">
-                                <flux:menu.item
-                                    keep-open
-                                    wire:click="clearBoardFilter"
-                                    icon:trailing="{{ $board === [] ? 'check' : '' }}"
-                                    class="{{ $board === [] ? 'font-semibold' : '' }}"
-                                    data-test="filter-board-all"
-                                >
-                                    {{ __('All Boards') }}
-                                </flux:menu.item>
-                                <flux:menu.separator />
+                            <flux:dropdown position="bottom" align="start" class="min-w-0 flex-1 sm:w-auto sm:flex-none">
+                                <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-board-trigger" @class([
+                                    'w-full sm:w-auto',
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $board !== [],
+                                ])>
+                                    {{ __('Board') }}
+                                    @if ($board !== [])
+                                        <flux:badge size="sm" color="zinc">{{ count($board) }}</flux:badge>
+                                    @endif
+                                </flux:button>
 
-                                <flux:menu.checkbox.group wire:model.live="board" wire:key="board-filter-group-{{ $group }}">
-                                    @foreach ($this->boards as $boardOption)
-                                        <flux:menu.checkbox value="{{ $boardOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-board-{{ $boardOption->id }}">{{ $boardOption->name }}</flux:menu.checkbox>
-                                    @endforeach
-                                </flux:menu.checkbox.group>
-                            </flux:menu>
-                        </flux:dropdown>
+                                <flux:menu class="w-56">
+                                    <flux:menu.item
+                                        keep-open
+                                        wire:click="clearBoardFilter"
+                                        icon:trailing="{{ $board === [] ? 'check' : '' }}"
+                                        class="{{ $board === [] ? 'font-semibold' : '' }}"
+                                        data-test="filter-board-all"
+                                    >
+                                        {{ __('All Boards') }}
+                                    </flux:menu.item>
+                                    <flux:menu.separator />
 
-                        <flux:dropdown position="bottom" align="start">
-                            <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-status-trigger" @class([
-                                'w-auto',
-                                'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
-                            ])>
-                                {{ __('Status') }}
-                                @if ($status !== [])
-                                    <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
-                                @endif
-                            </flux:button>
-
-                            <flux:menu class="w-56">
-                                <flux:menu.item
-                                    keep-open
-                                    wire:click="clearStatusFilter"
-                                    icon:trailing="{{ $status === [] ? 'check' : '' }}"
-                                    class="{{ $status === [] ? 'font-semibold' : '' }}"
-                                    data-test="filter-status-all"
-                                >
-                                    {{ __('All Status') }}
-                                </flux:menu.item>
-                                <flux:menu.separator />
-
-                                <flux:menu.checkbox.group wire:model.live="status">
-                                    @php($statusGroups = [
-                                        ['new', 'approved', 'planned', 'in_progress', 'on_hold', 'released'],
-                                        ['not_doing', 'duplicate', 'archived'],
-                                    ])
-
-                                    @foreach ($statusGroups as $groupIndex => $statusGroup)
-                                        @if ($groupIndex > 0)
-                                            <flux:menu.separator />
-                                        @endif
-
-                                        @foreach ($statusGroup as $value)
-                                            @php($meta = IdeaStatus::meta()[$value])
-                                            @php($isDanger = in_array($value, ['not_doing', 'duplicate', 'archived'], true))
-
-                                            <flux:menu.checkbox
-                                                value="{{ $value }}"
-                                                keep-open
-                                                class="{{ $selectedItemClasses }} {{ $isDanger ? 'text-red-600! dark:text-red-400!' : '' }}"
-                                                data-test="filter-status-{{ $value }}"
-                                            >
-                                                <x-status-dot :color="$meta['dotColor'] ?? $meta['color']" class="me-2" />{{ $meta['label'] }}
-                                            </flux:menu.checkbox>
+                                    <flux:menu.checkbox.group wire:model.live="board" wire:key="board-filter-group-{{ $group }}">
+                                        @foreach ($this->boards as $boardOption)
+                                            <flux:menu.checkbox value="{{ $boardOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-board-{{ $boardOption->id }}">{{ $boardOption->name }}</flux:menu.checkbox>
                                         @endforeach
-                                    @endforeach
-                                </flux:menu.checkbox.group>
-                            </flux:menu>
-                        </flux:dropdown>
+                                    </flux:menu.checkbox.group>
+                                </flux:menu>
+                            </flux:dropdown>
+
+                            <flux:dropdown position="bottom" align="start" class="min-w-0 flex-1 sm:w-auto sm:flex-none">
+                                <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-status-trigger" @class([
+                                    'w-full sm:w-auto',
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
+                                ])>
+                                    {{ __('Status') }}
+                                    @if ($status !== [])
+                                        <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
+                                    @endif
+                                </flux:button>
+
+                                <flux:menu class="w-56">
+                                    <flux:menu.item
+                                        keep-open
+                                        wire:click="clearStatusFilter"
+                                        icon:trailing="{{ $status === [] ? 'check' : '' }}"
+                                        class="{{ $status === [] ? 'font-semibold' : '' }}"
+                                        data-test="filter-status-all"
+                                    >
+                                        {{ __('All Status') }}
+                                    </flux:menu.item>
+                                    <flux:menu.separator />
+
+                                    <flux:menu.checkbox.group wire:model.live="status">
+                                        @php($statusGroups = [
+                                            ['new', 'approved', 'planned', 'in_progress', 'on_hold', 'released'],
+                                            ['not_doing', 'duplicate', 'archived'],
+                                        ])
+
+                                        @foreach ($statusGroups as $groupIndex => $statusGroup)
+                                            @if ($groupIndex > 0)
+                                                <flux:menu.separator />
+                                            @endif
+
+                                            @foreach ($statusGroup as $value)
+                                                @php($meta = IdeaStatus::meta()[$value])
+                                                @php($isDanger = in_array($value, ['not_doing', 'duplicate', 'archived'], true))
+
+                                                <flux:menu.checkbox
+                                                    value="{{ $value }}"
+                                                    keep-open
+                                                    class="{{ $selectedItemClasses }} {{ $isDanger ? 'text-red-600! dark:text-red-400!' : '' }}"
+                                                    data-test="filter-status-{{ $value }}"
+                                                >
+                                                    <x-status-dot :color="$meta['dotColor'] ?? $meta['color']" class="me-2" />{{ $meta['label'] }}
+                                                </flux:menu.checkbox>
+                                            @endforeach
+                                        @endforeach
+                                    </flux:menu.checkbox.group>
+                                </flux:menu>
+                            </flux:dropdown>
+                        </div>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2">
@@ -827,11 +829,11 @@ new class extends Component {
         </x-sticky-toolbar>
 
         {{-- Ideas list --}}
-        <div class="mt-3 space-y-3">
+        <div class="mt-3 space-y-2">
             @forelse ($this->ideas as $idea)
                 @php($meta = $this->statusMeta($idea->status))
                 <div
-                    class="flex gap-4 rounded-xl border border-zinc-200 bg-white p-4 transition hover:border-indigo-200 hover:bg-gray-50 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60 dark:hover:bg-gray-800/40"
+                    class="flex gap-1 md:gap-2 rounded-xl border border-zinc-200 bg-white p-3 transition hover:border-indigo-200 hover:bg-gray-50 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60 dark:hover:bg-gray-800/40"
                     wire:key="idea-{{ $idea->id }}"
                     data-test="idea-row"
                 >
@@ -844,7 +846,7 @@ new class extends Component {
                             @disabled(! $this->canParticipate)
                             aria-pressed="{{ $idea->voted ? 'true' : 'false' }}"
                             @class([
-                                'flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 self-start rounded-lg border py-2 transition',
+                                'flex w-10 shrink-0 flex-col items-center justify-center gap-0.5 self-start rounded-lg border py-1.5 transition',
                                 'cursor-not-allowed opacity-60' => ! $this->canParticipate,
                                 'cursor-pointer' => $this->canParticipate,
                                 'border-indigo-200 bg-indigo-50 text-indigo-600 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300' => $idea->voted,
@@ -946,7 +948,7 @@ new class extends Component {
 
                         @php($authorName = $idea->is_anonymous ? __('Anonymous') : ($idea->submittedBy?->name ?? __('Unknown')))
 
-                        <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
+                        <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                             <flux:tooltip :content="__('Idea submitted by :name', ['name' => $authorName])">
                                 @if ($idea->submitted_by_user_id)
                                     <a href="{{ route('ideas.index', ['author' => $idea->submitted_by_user_id]) }}" wire:navigate class="flex items-center gap-1.5 hover:underline">

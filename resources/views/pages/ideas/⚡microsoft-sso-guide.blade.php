@@ -34,7 +34,7 @@ new #[Title('Microsoft SSO Setup Guide')] class extends Component
     }
 }; ?>
 
-<section class="mx-auto w-full space-y-8 px-6 pb-7 lg:px-8" data-test="microsoft-sso-guide">
+<section class="mx-auto w-full space-y-8 px-3 pb-7 sm:px-6 lg:px-8" data-test="microsoft-sso-guide">
     <div>
         <flux:link :href="route('ideas.settings', ['current_team' => $this->team->slug, 'tab' => 'authentication'])" wire:navigate class="inline-flex items-center gap-1 text-sm">
             <flux:icon.arrow-left class="size-4" />

@@ -405,7 +405,7 @@ new #[Title('Review Queue')] class extends Component {
     ]" />
 @endpush
 
-<section class="mx-auto container px-6 pb-7 lg:px-8">
+<section class="mx-auto container px-3 pb-7 sm:px-6 lg:px-8">
     {{-- Header --}}
     <div class="flex flex-col gap-1">
         <div class="flex items-center gap-1.5">
@@ -483,7 +483,7 @@ new #[Title('Review Queue')] class extends Component {
             <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div class="flex flex-wrap items-center gap-3">
                     <div
-                        class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+                        class="relative flex w-full rounded-lg bg-zinc-100 p-0.5 sm:inline-flex sm:w-auto dark:bg-zinc-800"
                         role="group"
                         aria-label="{{ __('Sort ideas') }}"
                         data-sort="{{ $sort }}"
@@ -512,7 +512,7 @@ new #[Title('Review Queue')] class extends Component {
                                 x-on:click="sort = '{{ $value }}'"
                                 wire:click="sortBy('{{ $value }}')"
                                 @class([
-                                    'relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                                    'relative flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none',
                                     'text-slate-900 dark:text-white' => $sort === $value,
                                     'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $sort !== $value,
                                 ])
@@ -538,46 +538,48 @@ new #[Title('Review Queue')] class extends Component {
 
                     @php($selectedItemClasses = 'data-checked:font-semibold [&[data-checked]_[data-flux-menu-item-icon]]:text-indigo-500!')
 
-                    <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
-                        'w-auto min-w-32',
-                        'border-gray-800! font-semibold! dark:border-gray-400!' => $group !== '',
-                    ])>
-                        <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
-                        @foreach ($this->boardGroups as $boardGroup)
-                            <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
-                        @endforeach
-                    </flux:select>
-
-                    <flux:dropdown position="bottom" align="start">
-                        <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-board-trigger" @class([
-                            'w-auto',
-                            'border-gray-800! font-semibold! dark:border-gray-400!' => $board !== [],
+                    <div class="flex w-full gap-2 sm:contents">
+                        <flux:select wire:model.live="group" size="sm" data-test="filter-group" @class([
+                            'min-w-0 flex-1 sm:w-auto sm:flex-none sm:min-w-32',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => $group !== '',
                         ])>
-                            {{ __('Board') }}
-                            @if ($board !== [])
-                                <flux:badge size="sm" color="zinc">{{ count($board) }}</flux:badge>
-                            @endif
-                        </flux:button>
+                            <flux:select.option value="">{{ __('All groups') }}</flux:select.option>
+                            @foreach ($this->boardGroups as $boardGroup)
+                                <flux:select.option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
 
-                        <flux:menu class="w-56">
-                            <flux:menu.item
-                                keep-open
-                                wire:click="clearBoardFilter"
-                                icon:trailing="{{ $board === [] ? 'check' : '' }}"
-                                class="{{ $board === [] ? 'font-semibold' : '' }}"
-                                data-test="filter-board-all"
-                            >
-                                {{ __('All Boards') }}
-                            </flux:menu.item>
-                            <flux:menu.separator />
+                        <flux:dropdown position="bottom" align="start" class="min-w-0 flex-1 sm:w-auto sm:flex-none">
+                            <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-board-trigger" @class([
+                                'w-full sm:w-auto',
+                                'border-gray-800! font-semibold! dark:border-gray-400!' => $board !== [],
+                            ])>
+                                {{ __('Board') }}
+                                @if ($board !== [])
+                                    <flux:badge size="sm" color="zinc">{{ count($board) }}</flux:badge>
+                                @endif
+                            </flux:button>
 
-                            <flux:menu.checkbox.group wire:model.live="board">
-                                @foreach ($this->boards as $boardOption)
-                                    <flux:menu.checkbox value="{{ $boardOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-board-{{ $boardOption->id }}">{{ $boardOption->name }}</flux:menu.checkbox>
-                                @endforeach
-                            </flux:menu.checkbox.group>
-                        </flux:menu>
-                    </flux:dropdown>
+                            <flux:menu class="w-56">
+                                <flux:menu.item
+                                    keep-open
+                                    wire:click="clearBoardFilter"
+                                    icon:trailing="{{ $board === [] ? 'check' : '' }}"
+                                    class="{{ $board === [] ? 'font-semibold' : '' }}"
+                                    data-test="filter-board-all"
+                                >
+                                    {{ __('All Boards') }}
+                                </flux:menu.item>
+                                <flux:menu.separator />
+
+                                <flux:menu.checkbox.group wire:model.live="board">
+                                    @foreach ($this->boards as $boardOption)
+                                        <flux:menu.checkbox value="{{ $boardOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-board-{{ $boardOption->id }}">{{ $boardOption->name }}</flux:menu.checkbox>
+                                    @endforeach
+                                </flux:menu.checkbox.group>
+                            </flux:menu>
+                        </flux:dropdown>
+                    </div>
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">

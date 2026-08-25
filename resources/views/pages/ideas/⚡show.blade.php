@@ -834,7 +834,7 @@ new #[Title('Idea')] class extends Component {
     ]" />
 @endpush
 
-<section class="mx-auto w-full  px-6 pb-7 lg:px-8">
+<section class="mx-auto w-full px-3 pb-7 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between gap-3">
         <flux:link as="button" x-data x-on:click="window.history.back()" variant="subtle" class="inline-flex items-center gap-1 text-sm">
             <flux:icon.arrow-left class="size-4" />

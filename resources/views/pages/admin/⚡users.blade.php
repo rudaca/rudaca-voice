@@ -296,7 +296,7 @@ new #[Title('System Users')] class extends Component {
     ]" />
 @endpush
 
-<section class="mx-auto w-full px-6 pb-7 lg:px-8">
+<section class="mx-auto w-full px-3 pb-7 sm:px-6 lg:px-8">
     <div class="flex items-start justify-between gap-4">
         <div class="flex flex-col gap-1">
             <flux:heading size="xl">{{ __('System Users') }}</flux:heading>
@@ -310,7 +310,7 @@ new #[Title('System Users')] class extends Component {
         <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div class="flex flex-wrap items-center gap-3">
                 <div
-                    class="relative inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800"
+                    class="relative flex w-full rounded-lg bg-zinc-100 p-0.5 sm:inline-flex sm:w-auto dark:bg-zinc-800"
                     role="group"
                     aria-label="{{ __('Filter by role') }}"
                     data-role="{{ $role }}"
@@ -339,7 +339,7 @@ new #[Title('System Users')] class extends Component {
                             x-on:click="role = '{{ $value }}'"
                             wire:click="$set('role', '{{ $value }}')"
                             @class([
-                                'relative rounded-md px-3 py-1 text-sm font-medium transition-colors',
+                                'relative flex-1 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none',
                                 'text-slate-900 dark:text-white' => $role === $value,
                                 'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $role !== $value,
                             ])
@@ -360,66 +360,68 @@ new #[Title('System Users')] class extends Component {
                     data-test="user-search-input"
                 />
 
-                <flux:dropdown position="bottom" align="start">
-                    <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-status-trigger" @class([
-                        'w-auto',
-                        'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
-                    ])>
-                        {{ __('Status') }}
-                        @if ($status !== [])
-                            <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
-                        @endif
-                    </flux:button>
+                <div class="flex w-full gap-2 sm:contents">
+                    <flux:dropdown position="bottom" align="start" class="min-w-0 flex-1 sm:w-auto sm:flex-none">
+                        <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-status-trigger" @class([
+                            'w-full sm:w-auto',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
+                        ])>
+                            {{ __('Status') }}
+                            @if ($status !== [])
+                                <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
+                            @endif
+                        </flux:button>
 
-                    <flux:menu class="w-48">
-                        <flux:menu.item
-                            keep-open
-                            wire:click="$set('status', [])"
-                            icon:trailing="{{ $status === [] ? 'check' : '' }}"
-                            class="{{ $status === [] ? 'font-semibold' : '' }}"
-                            data-test="filter-status-all"
-                        >
-                            {{ __('All Status') }}
-                        </flux:menu.item>
-                        <flux:menu.separator />
+                        <flux:menu class="w-48">
+                            <flux:menu.item
+                                keep-open
+                                wire:click="$set('status', [])"
+                                icon:trailing="{{ $status === [] ? 'check' : '' }}"
+                                class="{{ $status === [] ? 'font-semibold' : '' }}"
+                                data-test="filter-status-all"
+                            >
+                                {{ __('All Status') }}
+                            </flux:menu.item>
+                            <flux:menu.separator />
 
-                        <flux:menu.checkbox.group wire:model.live="status">
-                            <flux:menu.checkbox value="active" keep-open data-test="filter-status-active">{{ __('Active') }}</flux:menu.checkbox>
-                            <flux:menu.checkbox value="inactive" keep-open data-test="filter-status-inactive">{{ __('Inactive') }}</flux:menu.checkbox>
-                        </flux:menu.checkbox.group>
-                    </flux:menu>
-                </flux:dropdown>
+                            <flux:menu.checkbox.group wire:model.live="status">
+                                <flux:menu.checkbox value="active" keep-open data-test="filter-status-active">{{ __('Active') }}</flux:menu.checkbox>
+                                <flux:menu.checkbox value="inactive" keep-open data-test="filter-status-inactive">{{ __('Inactive') }}</flux:menu.checkbox>
+                            </flux:menu.checkbox.group>
+                        </flux:menu>
+                    </flux:dropdown>
 
-                <flux:dropdown position="bottom" align="start">
-                    <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-organization-trigger" @class([
-                        'w-auto',
-                        'border-gray-800! font-semibold! dark:border-gray-400!' => $organization !== [],
-                    ])>
-                        {{ __('Organization') }}
-                        @if ($organization !== [])
-                            <flux:badge size="sm" color="zinc">{{ count($organization) }}</flux:badge>
-                        @endif
-                    </flux:button>
+                    <flux:dropdown position="bottom" align="start" class="min-w-0 flex-1 sm:w-auto sm:flex-none">
+                        <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-organization-trigger" @class([
+                            'w-full sm:w-auto',
+                            'border-gray-800! font-semibold! dark:border-gray-400!' => $organization !== [],
+                        ])>
+                            {{ __('Organization') }}
+                            @if ($organization !== [])
+                                <flux:badge size="sm" color="zinc">{{ count($organization) }}</flux:badge>
+                            @endif
+                        </flux:button>
 
-                    <flux:menu class="w-56">
-                        <flux:menu.item
-                            keep-open
-                            wire:click="$set('organization', [])"
-                            icon:trailing="{{ $organization === [] ? 'check' : '' }}"
-                            class="{{ $organization === [] ? 'font-semibold' : '' }}"
-                            data-test="filter-organization-all"
-                        >
-                            {{ __('All Organizations') }}
-                        </flux:menu.item>
-                        <flux:menu.separator />
+                        <flux:menu class="w-56">
+                            <flux:menu.item
+                                keep-open
+                                wire:click="$set('organization', [])"
+                                icon:trailing="{{ $organization === [] ? 'check' : '' }}"
+                                class="{{ $organization === [] ? 'font-semibold' : '' }}"
+                                data-test="filter-organization-all"
+                            >
+                                {{ __('All Organizations') }}
+                            </flux:menu.item>
+                            <flux:menu.separator />
 
-                        <flux:menu.checkbox.group wire:model.live="organization">
-                            @foreach ($this->organizations as $org)
-                                <flux:menu.checkbox value="{{ $org->id }}" keep-open data-test="filter-organization-{{ $org->id }}">{{ $org->name }}</flux:menu.checkbox>
-                            @endforeach
-                        </flux:menu.checkbox.group>
-                    </flux:menu>
-                </flux:dropdown>
+                            <flux:menu.checkbox.group wire:model.live="organization">
+                                @foreach ($this->organizations as $org)
+                                    <flux:menu.checkbox value="{{ $org->id }}" keep-open data-test="filter-organization-{{ $org->id }}">{{ $org->name }}</flux:menu.checkbox>
+                                @endforeach
+                            </flux:menu.checkbox.group>
+                        </flux:menu>
+                    </flux:dropdown>
+                </div>
             </div>
 
             @if ($this->hasActiveFilters)

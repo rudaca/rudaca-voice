@@ -169,7 +169,8 @@ new class extends Component {
                 class="flex min-w-0 items-center gap-1 truncate text-xs text-slate-700 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 data-test="team-switcher-trigger"
             >
-                <span class="truncate text-lg font-semibold">{{ $this->currentTeam()['name'] ?? __('Select organization') }}</span>
+                <flux:icon name="building-office" variant="outline" class="size-5 shrink-0 lg:hidden" />
+                <span class="hidden truncate text-lg font-semibold lg:inline">{{ $this->currentTeam()['name'] ?? __('Select organization') }}</span>
                 <flux:icon name="chevron-down" variant="outline" class="size-4 shrink-0" />
             </button>
         @else

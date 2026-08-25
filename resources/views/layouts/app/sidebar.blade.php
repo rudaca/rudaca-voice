@@ -235,7 +235,7 @@
         </flux:sidebar>
 
         <!-- Header -->
-        <flux:header sticky class="z-30 gap-3 border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+        <flux:header sticky class="z-30 gap-2 border-b border-zinc-200 bg-white px-3! lg:gap-3 lg:px-8! dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
             <livewire:team-switcher :compact="true" />
@@ -244,11 +244,11 @@
                 <livewire:global-search />
             </div>
 
-            <flux:spacer />
+            <flux:spacer class="hidden sm:block" />
 
             @if ($__canManageBoards)
                 <flux:dropdown position="bottom" align="end">
-                    <flux:button variant="primary" icon="plus" icon:trailing="chevron-down" size="sm" data-test="header-new-button">
+                    <flux:button variant="primary" icon="plus" icon:trailing="chevron-down" icon-trailing:class="hidden sm:inline-flex" size="sm" class="gap-1 px-2 sm:gap-2 sm:px-3" data-test="header-new-button">
                         <span class="hidden sm:inline">{{ __('New') }}</span>
                     </flux:button>
 

@@ -725,7 +725,7 @@ new #[Title('Organization Settings')] class extends Component {
     ]" />
 @endpush
 
-<section class="mx-auto w-full  px-6 pb-7 lg:px-8">
+<section class="mx-auto w-full px-3 pb-7 sm:px-6 lg:px-8">
     <div class="flex flex-col gap-1">
         <flux:heading size="xl">{{ __('Organization Settings') }}</flux:heading>
         <flux:text class="text-slate-600 dark:text-slate-500">{{ __('Manage boards, groups, categories, contributors and settings for :team.', ['team' => $this->team->name]) }}</flux:text>

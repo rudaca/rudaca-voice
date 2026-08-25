@@ -495,7 +495,7 @@ new #[Title('Dashboard')] class extends Component {
 }; ?>
 
 <div class="min-h-full dark:bg-zinc-800">
-    <div class="mx-auto w-full px-6 py-8 lg:px-8">
+    <div class="mx-auto w-full py-8 lg:px-8">
         <livewire:pages::teams.pending-invitations-modal />
 
         {{-- Header --}}
@@ -630,7 +630,7 @@ new #[Title('Dashboard')] class extends Component {
 
                                     @if (in_array($idea->board_id, $this->authorizedPrivateNoteBoardIds, true) && $idea->private_notes_count > 0)
                                         <flux:tooltip :content="trans_choice(':count private note|:count private notes', $idea->private_notes_count, ['count' => $idea->private_notes_count])">
-                                            <flux:badge size="sm" icon="lock-closed" class="bg-amber-100! text-amber-800! dark:bg-amber-950! dark:text-amber-400!">{{ __('Private Notes') }}</flux:badge>
+                                            <flux:badge size="sm" icon="lock-closed" class="hidden bg-amber-100! text-amber-800! sm:inline-flex dark:bg-amber-950! dark:text-amber-400!">{{ __('Private Notes') }}</flux:badge>
                                         </flux:tooltip>
                                     @endif
                                 </div>
@@ -661,6 +661,13 @@ new #[Title('Dashboard')] class extends Component {
                                             </flux:badge>
                                         </a>
                                     </flux:tooltip>
+
+                                    @if (in_array($idea->board_id, $this->authorizedPrivateNoteBoardIds, true) && $idea->private_notes_count > 0)
+                                        <span aria-hidden="true" class="text-base leading-none sm:hidden">·</span>
+                                        <flux:tooltip :content="trans_choice(':count private note|:count private notes', $idea->private_notes_count, ['count' => $idea->private_notes_count])">
+                                            <flux:badge size="sm" icon="lock-closed" class="bg-amber-100! text-amber-800! sm:hidden dark:bg-amber-950! dark:text-amber-400!">{{ __('Private Notes') }}</flux:badge>
+                                        </flux:tooltip>
+                                    @endif
 
                                     @if ($idea->board)
                                         <span aria-hidden="true" class="text-base leading-none">·</span>
