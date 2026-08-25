@@ -1,5 +1,22 @@
 <x-layouts::auth :title="__('Log in to :team', ['team' => $team->name])">
-    <div class="flex flex-col gap-6" x-data="{ email: @js(old('email', '')) }">
+    <div
+        class="flex flex-col gap-6"
+        x-data="{
+            email: @js(old('email', '')),
+            allowedDomains: @js($allowedDomains ?? []),
+            get emailIsValid() {
+                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email);
+            },
+            get domain() {
+                return this.email.includes('@') ? this.email.split('@').pop() : '';
+            },
+            get domainIsAllowed() {
+                return this.domain === ''
+                    || this.allowedDomains.length === 0
+                    || this.allowedDomains.some((allowed) => allowed.toLowerCase() === this.domain.toLowerCase());
+            },
+        }"
+    >
         <x-auth-header :title="$team->name" :description="__('Sign in to continue to :team', ['team' => $team->name])" />
 
         <x-auth-session-status class="text-center" :status="session('status')" />
@@ -12,21 +29,34 @@
 
         @if ($showMicrosoft)
             @if ($enforceSso)
-                <flux:input
-                    x-model="email"
-                    :label="__('Email address')"
-                    type="email"
-                    autofocus
-                    autocomplete="email"
-                    placeholder="email@ellisontravel.com"
-                    data-test="microsoft-email-input"
-                />
+                <div>
+                    <flux:input
+                        x-model="email"
+                        x-bind:data-invalid="!domainIsAllowed"
+                        :label="__('Email address')"
+                        type="email"
+                        autofocus
+                        autocomplete="email"
+                        placeholder="email@ellisontravel.com"
+                        data-test="microsoft-email-input"
+                    />
+
+                    <p
+                        x-show="!domainIsAllowed"
+                        x-cloak
+                        class="mt-2 text-sm text-red-600 dark:text-red-400"
+                        data-test="microsoft-email-domain-error"
+                    >
+                        {{ __('Email address domain is not allowed.') }}
+                    </p>
+                </div>
             @endif
 
             <flux:button
                 variant="primary"
                 class="w-full"
                 type="button"
+                x-bind:disabled="@js($enforceSso) && (!emailIsValid || !domainIsAllowed)"
                 x-on:click="
                     const url = @js(route('org.login.microsoft', $team)) + (email ? '?email=' + encodeURIComponent(email) : '');
                     const popup = window.open(url, 'microsoft-oauth', 'width=500,height=650');
