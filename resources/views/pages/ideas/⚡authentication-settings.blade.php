@@ -728,7 +728,7 @@ new class extends Component
         <div class="mt-3 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900" data-test="identity-links" x-data="{ open: true }">
             <div class="flex items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
-                    <flux:icon.plug class="size-6" />
+                    <flux:icon.cable class="size-6" />
                     <div>
                         <flux:heading size="lg" class="font-bold">{{ __('Linked Accounts') }}</flux:heading>
                         <flux:subheading>{{ __('Microsoft accounts linked to members of this organization.') }}</flux:subheading>

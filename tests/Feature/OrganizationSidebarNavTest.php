@@ -42,6 +42,17 @@ test('the organization nav group is absent for a user below admin', function () 
     $response->assertOk()->assertDontSee('data-test="organization-nav-group-toggle"', false);
 });
 
+test('the organization nav group, including the Authentication tab, shows for a super admin on a team they do not belong to', function () {
+    ['team' => $team] = teamWithMember(TeamRole::Owner);
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+
+    $response = $this->actingAs($superAdmin)->get(route('dashboard', ['current_team' => $team->slug]));
+
+    $response->assertOk()
+        ->assertSeeHtml('data-test="organization-nav-group-toggle"')
+        ->assertSeeText('Authentication');
+});
+
 test('the organization nav group has an icon-rail dropdown fallback for when the sidebar is collapsed', function () {
     ['user' => $admin] = teamWithMember(TeamRole::Admin);
 

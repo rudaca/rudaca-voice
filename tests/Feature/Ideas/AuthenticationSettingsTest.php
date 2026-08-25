@@ -152,6 +152,25 @@ test('a user outside the organization cannot view or modify its configuration by
         ->assertForbidden();
 });
 
+test('a super admin can view and configure Microsoft sign-in for an organization they do not belong to', function () {
+    ['team' => $team] = teamWithMember(TeamRole::Owner);
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->set('enabled', true)
+        ->set('tenantId', (string) fake()->uuid())
+        ->set('clientId', (string) fake()->uuid())
+        ->set('newSecretInput', 'a-real-secret')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $identityProvider = $team->identityProviderFor(IdentityProvider::Microsoft);
+
+    expect($identityProvider)->not->toBeNull()
+        ->and($identityProvider->enabled)->toBeTrue();
+});
+
 test('the client secret never appears in the component payload after saving', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
 

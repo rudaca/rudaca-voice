@@ -10,10 +10,14 @@
             $__currentTeam = auth()->user()?->currentTeam;
             $__currentRole = $__currentTeam ? auth()->user()->teamRole($__currentTeam) : null;
             $__canSubmitIdea = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Employee) ?? false;
-            $__canReview = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Manager) ?? false;
-            $__canManageBoards = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Admin) ?? false;
-            $__isOwner = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Owner) ?? false;
             $__isSuperAdmin = auth()->user()?->is_super_admin ?? false;
+
+            // Super Admins bypass the role check in EnsureTeamMembership, so they can
+            // already load Review Queue, Moderate Comments, and Organization Settings
+            // for any team by URL — these mirror that same access in the sidebar.
+            $__canReview = ($__currentRole?->isAtLeast(\App\Enums\TeamRole::Manager) ?? false) || $__isSuperAdmin;
+            $__canManageBoards = ($__currentRole?->isAtLeast(\App\Enums\TeamRole::Admin) ?? false) || $__isSuperAdmin;
+            $__isOwner = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Owner) ?? false;
 
             $__isOrgSettingsActive = request()->routeIs('ideas.settings');
             $__activeOrgSettingsTab = $__isOrgSettingsActive ? (request()->query('tab') ?: 'boards') : null;

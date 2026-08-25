@@ -780,7 +780,7 @@ new #[Title('Organization Settings')] class extends Component {
                 class="relative -mb-px flex gap-6 overflow-x-auto border-b border-zinc-200 [-ms-overflow-style:none] [scrollbar-width:none] dark:border-zinc-700 [&::-webkit-scrollbar]:hidden"
             >
                 <div
-                    class="absolute bottom-0 h-0.5 rounded-full bg-indigo-500 transition-all duration-300 ease-out"
+                    class="absolute bottom-0 h-0.5 rounded-full bg-black transition-all duration-300 ease-out dark:bg-indigo-500"
                     :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
                 ></div>
 

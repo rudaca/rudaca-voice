@@ -105,3 +105,16 @@ test('an outsider cannot unlink an identity by passing the team directly', funct
 
     expect(UserIdentityAccount::find($link->id))->not->toBeNull();
 });
+
+test('a super admin can view identity links for a team they do not belong to', function () {
+    ['team' => $team] = teamWithMember(TeamRole::Owner);
+    $member = User::factory()->create(['name' => 'Linked Member']);
+    $team->members()->attach($member, ['role' => TeamRole::Employee->value]);
+    UserIdentityAccount::factory()->create(['user_id' => $member->id, 'team_id' => $team->id]);
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::ideas.authentication-settings', ['team' => $team])
+        ->assertSeeHtml('data-test="identity-links"')
+        ->assertSee('Linked Member');
+});

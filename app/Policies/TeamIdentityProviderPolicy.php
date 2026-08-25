@@ -87,12 +87,14 @@ class TeamIdentityProviderPolicy
     }
 
     /**
-     * Whether the user owns the organization or holds the explicit permission to
-     * manage its authentication settings.
+     * Whether the user owns the organization, holds the explicit permission to
+     * manage its authentication settings, or is a Super Admin browsing on the
+     * organization's behalf.
      */
     protected function canManage(User $user, Team $team): bool
     {
-        return $user->ownsTeam($team)
+        return $user->is_super_admin
+            || $user->ownsTeam($team)
             || $user->hasTeamPermission($team, TeamPermission::ManageAuthentication);
     }
 }

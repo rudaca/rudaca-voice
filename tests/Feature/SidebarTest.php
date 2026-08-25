@@ -2,6 +2,7 @@
 
 use App\Enums\TeamRole;
 use App\Models\IdeaBoard;
+use App\Models\User;
 
 test('the sidebar lists board groups and boards with their idea counts', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
@@ -136,4 +137,16 @@ test('only managers and above see the review queue link', function () {
     $this->actingAs($manager)
         ->get(route('dashboard', ['current_team' => $managerTeam->slug]))
         ->assertSee('Review Queue');
+});
+
+test('a super admin sees the administration links for a team they do not belong to', function () {
+    ['team' => $team] = teamWithMember(TeamRole::Owner);
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+
+    $response = $this->actingAs($superAdmin)->get(route('dashboard', ['current_team' => $team->slug]));
+
+    $response->assertOk()
+        ->assertSee('Review Queue')
+        ->assertSee('Moderate Comments')
+        ->assertSeeHtml('data-test="organization-nav-group-toggle"');
 });
