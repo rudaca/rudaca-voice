@@ -55,6 +55,16 @@ test('the microsoft button is absent when the provider is fully configured but d
     $response->assertOk()->assertDontSeeText('Continue with Microsoft');
 });
 
+test('the organization name is shown in the page title and login card', function () {
+    $team = Team::factory()->create(['name' => 'Acme Corp']);
+
+    $response = $this->get(route('org.login', $team));
+
+    $response->assertOk()
+        ->assertSeeInOrder(['<title', 'Acme Corp'])
+        ->assertSeeText('Acme Corp');
+});
+
 test('an unknown organization slug 404s', function () {
     $this->get('/o/does-not-exist/login')->assertNotFound();
 });
