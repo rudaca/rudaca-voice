@@ -1012,7 +1012,7 @@ new #[Title('Idea')] class extends Component {
                 </div>
             @endif
 
-            <div class="flex gap-3">
+            <div class="flex gap-1">
                 {{-- Vote toggle --}}
                 <flux:tooltip :content="$this->canParticipate ? ($this->hasVoted ? __('You voted this idea..') : __('Click to vote for this idea..')) : __('Viewers have read-only access.')">
                     <button

@@ -701,7 +701,7 @@ new class extends Component {
                                 :aria-expanded="expanded.toString()"
                                 aria-controls="ideas-more-filters"
                                 aria-label="{{ __('More filters') }}"
-                                class="relative inline-flex items-center justify-center rounded-lg border border-zinc-200 p-2 text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-zinc-700 dark:text-slate-400 dark:hover:border-indigo-500/40"
+                                class="relative hidden items-center justify-center rounded-lg border border-zinc-200 p-2 text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 sm:inline-flex dark:border-zinc-700 dark:text-slate-400 dark:hover:border-indigo-500/40"
                                 data-test="toggle-more-filters"
                             >
                                 <flux:icon.chevron-down class="size-4 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''" />
@@ -713,6 +713,24 @@ new class extends Component {
                                 @endif
                             </button>
                         </flux:tooltip>
+
+                        <button
+                            type="button"
+                            x-on:click="expanded = !expanded"
+                            :aria-expanded="expanded.toString()"
+                            aria-controls="ideas-more-filters"
+                            aria-label="{{ __('More filters') }}"
+                            class="relative ms-auto inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 sm:hidden dark:border-zinc-700 dark:text-slate-400 dark:hover:border-indigo-500/40"
+                            data-test="toggle-more-filters-mobile"
+                        >
+                            {{ __('More') }}
+                            <flux:icon.chevron-down class="size-4 transition-transform duration-200" :class="expanded ? 'rotate-180' : ''" />
+                            @if ($this->hasSecondRowFilters)
+                                <span
+                                    class="absolute -top-1 -right-1 block size-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-zinc-800"
+                                ></span>
+                            @endif
+                        </button>
                     </div>
                 </div>
 
@@ -723,81 +741,83 @@ new class extends Component {
                 >
                     <div class="overflow-hidden">
                         <div class="flex flex-wrap items-center gap-2 pt-2">
-                            <flux:dropdown position="bottom" align="start">
-                                <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-category-trigger" @class([
-                                    'w-auto',
-                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $category !== [],
-                                ])>
-                                    {{ __('Category') }}
-                                    @if ($category !== [])
-                                        <flux:badge size="sm" color="zinc">{{ count($category) }}</flux:badge>
-                                    @endif
-                                </flux:button>
+                            <div class="flex w-full gap-2 sm:contents">
+                                <flux:dropdown position="bottom" align="start" class="flex-1 sm:flex-none">
+                                    <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-category-trigger" @class([
+                                        'w-full sm:w-auto',
+                                        'border-gray-800! font-semibold! dark:border-gray-400!' => $category !== [],
+                                    ])>
+                                        {{ __('Category') }}
+                                        @if ($category !== [])
+                                            <flux:badge size="sm" color="zinc">{{ count($category) }}</flux:badge>
+                                        @endif
+                                    </flux:button>
 
-                                <flux:menu class="w-56">
-                                    <flux:menu.item
-                                        keep-open
-                                        wire:click="clearCategoryFilter"
-                                        icon:trailing="{{ $category === [] ? 'check' : '' }}"
-                                        class="{{ $category === [] ? 'font-semibold' : '' }}"
-                                        data-test="filter-category-all"
-                                    >
-                                        {{ __('All Categories') }}
-                                    </flux:menu.item>
-                                    <flux:menu.separator />
+                                    <flux:menu class="w-56">
+                                        <flux:menu.item
+                                            keep-open
+                                            wire:click="clearCategoryFilter"
+                                            icon:trailing="{{ $category === [] ? 'check' : '' }}"
+                                            class="{{ $category === [] ? 'font-semibold' : '' }}"
+                                            data-test="filter-category-all"
+                                        >
+                                            {{ __('All Categories') }}
+                                        </flux:menu.item>
+                                        <flux:menu.separator />
 
-                                    <flux:menu.checkbox.group wire:model.live="category">
-                                        @foreach ($this->categories as $categoryIndex => $categoryName)
-                                            <flux:menu.checkbox value="{{ $categoryName }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-category-{{ $categoryIndex }}">{{ $categoryName }}</flux:menu.checkbox>
-                                        @endforeach
-                                    </flux:menu.checkbox.group>
-                                </flux:menu>
-                            </flux:dropdown>
+                                        <flux:menu.checkbox.group wire:model.live="category">
+                                            @foreach ($this->categories as $categoryIndex => $categoryName)
+                                                <flux:menu.checkbox value="{{ $categoryName }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-category-{{ $categoryIndex }}">{{ $categoryName }}</flux:menu.checkbox>
+                                            @endforeach
+                                        </flux:menu.checkbox.group>
+                                    </flux:menu>
+                                </flux:dropdown>
 
-                            <flux:dropdown position="bottom" align="start">
-                                <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-author-trigger" @class([
-                                    'w-auto',
-                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $author !== [],
-                                ])>
-                                    {{ __('Author') }}
-                                    @if ($author !== [])
-                                        <flux:badge size="sm" color="zinc">{{ count($author) }}</flux:badge>
-                                    @endif
-                                </flux:button>
+                                <flux:dropdown position="bottom" align="start" class="flex-1 sm:flex-none">
+                                    <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-author-trigger" @class([
+                                        'w-full sm:w-auto',
+                                        'border-gray-800! font-semibold! dark:border-gray-400!' => $author !== [],
+                                    ])>
+                                        {{ __('Author') }}
+                                        @if ($author !== [])
+                                            <flux:badge size="sm" color="zinc">{{ count($author) }}</flux:badge>
+                                        @endif
+                                    </flux:button>
 
-                                <flux:menu class="w-56">
-                                    <flux:menu.item
-                                        keep-open
-                                        wire:click="clearAuthorFilter"
-                                        icon:trailing="{{ $author === [] ? 'check' : '' }}"
-                                        class="{{ $author === [] ? 'font-semibold' : '' }}"
-                                        data-test="filter-author-all"
-                                    >
-                                        {{ __('All Authors') }}
-                                    </flux:menu.item>
-                                    <flux:menu.separator />
+                                    <flux:menu class="w-56">
+                                        <flux:menu.item
+                                            keep-open
+                                            wire:click="clearAuthorFilter"
+                                            icon:trailing="{{ $author === [] ? 'check' : '' }}"
+                                            class="{{ $author === [] ? 'font-semibold' : '' }}"
+                                            data-test="filter-author-all"
+                                        >
+                                            {{ __('All Authors') }}
+                                        </flux:menu.item>
+                                        <flux:menu.separator />
 
-                                    <flux:menu.checkbox.group wire:model.live="author">
-                                        @foreach ($this->authors as $authorOption)
-                                            <flux:menu.checkbox value="{{ $authorOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-author-{{ $authorOption->id }}">{{ $authorOption->name }}</flux:menu.checkbox>
-                                        @endforeach
-                                    </flux:menu.checkbox.group>
-                                </flux:menu>
-                            </flux:dropdown>
+                                        <flux:menu.checkbox.group wire:model.live="author">
+                                            @foreach ($this->authors as $authorOption)
+                                                <flux:menu.checkbox value="{{ $authorOption->id }}" keep-open class="{{ $selectedItemClasses }}" data-test="filter-author-{{ $authorOption->id }}">{{ $authorOption->name }}</flux:menu.checkbox>
+                                            @endforeach
+                                        </flux:menu.checkbox.group>
+                                    </flux:menu>
+                                </flux:dropdown>
+                            </div>
 
-                            <div class="flex items-center py-1 px-3 bg-gray-100 rounded-lg dark:bg-zinc-800">
-                                <div class="flex items-center gap-1.5">
+                            <div class="flex w-full items-center justify-between gap-2 py-1 px-3 bg-gray-100 rounded-lg dark:bg-zinc-800 sm:w-auto sm:justify-start">
+                                <div class="flex flex-1 items-center gap-1.5 sm:flex-none">
                                     <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('Created From') }}</flux:text>
                                     <flux:input type="date" wire:model.live="dateFrom" size="sm" data-test="filter-date-from" @class([
-                                        'w-auto',
+                                        'w-full min-w-0 sm:w-auto',
                                         'border-gray-800! font-semibold! dark:border-gray-400!' => $dateFrom !== '',
                                     ]) />
                                 </div>
 
-                                <div class="flex items-center gap-1.5">
+                                <div class="flex flex-1 items-center gap-1.5 sm:flex-none">
                                     <flux:text class="shrink-0 text-xs text-slate-700 dark:text-slate-500">{{ __('To') }}</flux:text>
                                     <flux:input type="date" wire:model.live="dateTo" size="sm" data-test="filter-date-to" @class([
-                                        'w-auto',
+                                        'w-full min-w-0 sm:w-auto',
                                         'border-gray-800! font-semibold! dark:border-gray-400!' => $dateTo !== '',
                                     ]) />
                                 </div>
