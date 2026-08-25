@@ -15,6 +15,34 @@
             $__isOwner = $__currentRole?->isAtLeast(\App\Enums\TeamRole::Owner) ?? false;
             $__isSuperAdmin = auth()->user()?->is_super_admin ?? false;
 
+            $__isOrgSettingsActive = request()->routeIs('ideas.settings');
+            $__activeOrgSettingsTab = $__isOrgSettingsActive ? (request()->query('tab') ?: 'boards') : null;
+            $__canManageAuthentication = $__currentTeam && auth()->user()->can('viewAny', [\App\Models\TeamIdentityProvider::class, $__currentTeam]);
+
+            $__orgSettingsTabs = [
+                'boards' => __('Boards'),
+                'groups' => __('Groups'),
+                'categories' => __('Categories'),
+                'members' => __('Contributors'),
+                'settings' => __('Settings'),
+            ];
+
+            if ($__canManageAuthentication) {
+                $__orgSettingsTabs['authentication'] = __('Authentication');
+            }
+
+            // Authentication deliberately has no entry here — it never shows a
+            // count badge, unlike the other tabs.
+            $__orgSettingsTabCounts = $__currentTeam
+                ? [
+                    'boards' => $__currentTeam->boards()->count(),
+                    'groups' => $__currentTeam->boardGroups()->count(),
+                    'categories' => $__currentTeam->categories()->count(),
+                    'members' => $__currentTeam->members()->count(),
+                    'settings' => (int) $__currentTeam->allow_anonymous_ideas + (int) $__currentTeam->limit_one_active_vote_per_board,
+                ]
+                : [];
+
             $__reviewQueueCount = $__canReview
                 ? $__currentTeam->ideas()->where('status', 'new')->count()
                 : 0;
@@ -121,16 +149,39 @@
                             >
                                 {{ __('Moderate Comments') }}
                             </flux:sidebar.item>
-
-                            <flux:sidebar.item icon="building-office" :href="route('ideas.settings')" :current="request()->routeIs('ideas.settings')" wire:navigate>
-                                {{ __('Organization') }}
-                            </flux:sidebar.item>
                         @endif
 
                         @if ($__isSuperAdmin)
                             <flux:sidebar.item icon="user" :href="route('admin.users')" :current="request()->routeIs('admin.users')" wire:navigate>
                                 {{ __('System Users') }}
                             </flux:sidebar.item>
+                        @endif
+
+                        @if ($__canManageBoards)
+                            <x-sidebar-nav-group
+                                :label="__('Organization')"
+                                icon="building-office"
+                                variant="item"
+                                :active="$__isOrgSettingsActive"
+                                :default-open="$__isOrgSettingsActive"
+                                data-test="organization-nav-group-toggle"
+                            >
+                                <x-organization-nav-tabs
+                                    :tabs="$__orgSettingsTabs"
+                                    :counts="$__orgSettingsTabCounts"
+                                    :active="$__activeOrgSettingsTab"
+                                    scope="sidebar"
+                                />
+
+                                <x-slot:collapsed>
+                                    <x-organization-nav-tabs
+                                        :tabs="$__orgSettingsTabs"
+                                        :counts="$__orgSettingsTabCounts"
+                                        :active="$__activeOrgSettingsTab"
+                                        scope="dropdown"
+                                    />
+                                </x-slot:collapsed>
+                            </x-sidebar-nav-group>
                         @endif
                     </div>
                 </flux:sidebar.nav>
@@ -161,7 +212,7 @@
                             </button>
 
                             <flux:menu class="max-h-[70vh] w-64 overflow-y-auto">
-                                <flux:menu.heading>{{ __('Boards') }}</flux:menu.heading>
+                                <flux:menu.heading class="font-bold! uppercase">{{ __('Boards') }}</flux:menu.heading>
 
                                 <div class="mt-1 p-1">
                                     <x-boards-nav-list :groups="$__boardGroups" :ungrouped="$__ungroupedBoards" scope="dropdown" />

@@ -89,7 +89,7 @@ test('the Members tab lists team members with their role', function () {
         ->assertSee('Manager');
 });
 
-test('the Members tab shows a System Owner or Super Admin badge below the name for those users', function () {
+test('the Members tab does not show a System Owner or Super Admin badge below the name', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
     $systemOwner = User::factory()->systemOwner()->create();
     $superAdmin = User::factory()->create(['is_super_admin' => true]);
@@ -99,8 +99,10 @@ test('the Members tab shows a System Owner or Super Admin badge below the name f
     Livewire::actingAs($admin)
         ->test('pages::ideas.settings')
         ->set('tab', 'members')
-        ->assertSee('System Owner')
-        ->assertSee('Super Admin');
+        ->assertSee($systemOwner->name)
+        ->assertSee($superAdmin->name)
+        ->assertDontSee('System Owner')
+        ->assertDontSee('Super Admin');
 });
 
 test('the Members tab shows a plain user\'s org role below the name', function () {
@@ -116,18 +118,16 @@ test('the Members tab shows a plain user\'s org role below the name', function (
         ->assertDontSee('Super Admin');
 });
 
-test('a user who is both a system owner and an organization owner keeps both sets of permissions, and the badge shows the global role', function () {
+test('a user who is both a system owner and an organization owner keeps both sets of permissions', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $owner->is_system_owner = true;
     $owner->save();
 
     // Org-level Owner permission: can still add/remove members on their own organization.
-    // The badge shows the global "System Owner" role rather than the org-level "Owner" role.
     Livewire::actingAs($owner)
         ->test('pages::ideas.settings')
         ->set('tab', 'members')
-        ->assertSeeHtml('data-test="new-member"')
-        ->assertSee('System Owner');
+        ->assertSeeHtml('data-test="new-member"');
 
     // System-level permission: can still create additional organizations.
     Livewire::actingAs($owner)

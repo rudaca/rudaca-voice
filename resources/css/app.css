@@ -217,10 +217,14 @@ Rotate a dropdown trigger's trailing chevron smoothly to mirror the open state..
 /*
 The Boards sidebar trigger's icon is decorative (ellipsis), not a directional
 chevron, so it shouldn't spin 180deg when its popover opens like other dropdown
-triggers do.
+triggers do. Same for a collapsible sidebar nav group's icon-rail trigger
+(e.g. Organization's building icon) — it identifies the section, it isn't a
+chevron either.
 */
-[data-flux-dropdown] > [aria-expanded][data-test="sidebar-boards-trigger"] svg[data-flux-icon]:last-of-type {
+[data-flux-dropdown] > [aria-expanded][data-test="sidebar-boards-trigger"] svg[data-flux-icon]:last-of-type,
+[data-flux-dropdown] > [aria-expanded][data-test="sidebar-nav-group-collapsed-trigger"] svg[data-flux-icon]:last-of-type {
     transition: none;
+    transform: none;
 }
 
 [data-flux-dropdown] > [aria-expanded="true"][data-test="sidebar-boards-trigger"] svg[data-flux-icon]:last-of-type {

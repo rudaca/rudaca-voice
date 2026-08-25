@@ -754,6 +754,17 @@ new #[Title('Organization Settings')] class extends Component {
                 :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
             ></div>
 
+            @php
+                $__tabIcons = [
+                    'boards' => 'chalkboard',
+                    'groups' => 'squares-2x2',
+                    'categories' => 'tag',
+                    'members' => 'users',
+                    'settings' => 'cog',
+                    'authentication' => 'shield-check',
+                ];
+            @endphp
+
             @foreach ($this->tabs as $key => $label)
                 <button
                     type="button"
@@ -761,12 +772,13 @@ new #[Title('Organization Settings')] class extends Component {
                     x-on:click="tab = '{{ $key }}'"
                     wire:click="$set('tab', '{{ $key }}')"
                     @class([
-                        'px-1 py-3 text-sm font-medium transition-colors',
+                        'flex items-center gap-1.5 px-1 py-3 text-sm font-medium transition-colors',
                         'text-indigo-600 dark:text-indigo-400' => $tab === $key,
                         'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $tab !== $key,
                     ])
                     data-test="tab-{{ $key }}"
                 >
+                    <flux:icon :icon="$__tabIcons[$key] ?? 'squares-2x2'" class="size-4" />
                     {{ $label }}
                 </button>
             @endforeach
@@ -1054,9 +1066,6 @@ new #[Title('Organization Settings')] class extends Component {
                                     </x-role-tooltip>
                                     <div class="min-w-0">
                                         <div class="font-bold text-slate-900 dark:text-slate-200">{{ $member->name }}</div>
-                                        @if ($member->is_super_admin || $member->is_system_owner)
-                                            <x-system-role-badge :is-super-admin="$member->is_super_admin" :is-system-owner="$member->is_system_owner" class="text-2xs" />
-                                        @endif
                                     </div>
                                 </div>
                             </td>
