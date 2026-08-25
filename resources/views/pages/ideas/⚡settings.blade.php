@@ -733,56 +733,99 @@ new #[Title('Organization Settings')] class extends Component {
 
     {{-- Tabs --}}
     <x-sticky-toolbar class="mt-6">
-        <nav
-            class="relative -mb-px flex gap-6 border-b border-zinc-200 dark:border-zinc-700"
+        <div
+            class="relative"
             data-tab="{{ $tab }}"
             x-data="{
                 tab: null,
                 indicator: { left: 0, width: 0 },
+                canScrollLeft: false,
+                canScrollRight: false,
                 updateIndicator() {
                     let el = this.$refs['tab-' + this.tab];
                     if (el) {
                         this.indicator = { left: el.offsetLeft, width: el.offsetWidth };
                     }
                 },
+                updateScrollState() {
+                    let el = this.$refs.scroller;
+                    if (!el) {
+                        return;
+                    }
+                    this.canScrollLeft = el.scrollLeft > 1;
+                    this.canScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+                },
+                scrollTabs(amount) {
+                    this.$refs.scroller.scrollBy({ left: amount, behavior: 'smooth' });
+                },
             }"
-            x-init="tab = $el.dataset.tab; updateIndicator()"
+            x-init="tab = $el.dataset.tab; updateIndicator(); $nextTick(() => updateScrollState())"
             x-effect="tab; updateIndicator()"
         >
-            <div
-                class="absolute bottom-0 h-0.5 rounded-full bg-indigo-500 transition-all duration-300 ease-out"
-                :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
-            ></div>
+            <button
+                type="button"
+                x-show="canScrollLeft"
+                x-on:click="scrollTabs(-120)"
+                x-cloak
+                class="absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-white from-60% pr-4 dark:from-zinc-800 sm:hidden"
+                aria-label="{{ __('Scroll tabs left') }}"
+                data-test="tabs-scroll-left"
+            >
+                <flux:icon.chevron-left class="size-4 text-slate-600 dark:text-slate-400" />
+            </button>
 
-            @php
-                $__tabIcons = [
-                    'boards' => 'chalkboard',
-                    'groups' => 'squares-2x2',
-                    'categories' => 'tag',
-                    'members' => 'users',
-                    'settings' => 'cog',
-                    'authentication' => 'shield-check',
-                ];
-            @endphp
+            <nav
+                x-ref="scroller"
+                x-on:scroll.passive="updateScrollState()"
+                class="relative -mb-px flex gap-6 overflow-x-auto border-b border-zinc-200 [-ms-overflow-style:none] [scrollbar-width:none] dark:border-zinc-700 [&::-webkit-scrollbar]:hidden"
+            >
+                <div
+                    class="absolute bottom-0 h-0.5 rounded-full bg-indigo-500 transition-all duration-300 ease-out"
+                    :style="`transform: translateX(${indicator.left}px); width: ${indicator.width}px`"
+                ></div>
 
-            @foreach ($this->tabs as $key => $label)
-                <button
-                    type="button"
-                    x-ref="tab-{{ $key }}"
-                    x-on:click="tab = '{{ $key }}'"
-                    wire:click="$set('tab', '{{ $key }}')"
-                    @class([
-                        'flex items-center gap-1.5 px-1 py-3 text-sm font-medium transition-colors',
-                        'text-indigo-600 dark:text-indigo-400' => $tab === $key,
-                        'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $tab !== $key,
-                    ])
-                    data-test="tab-{{ $key }}"
-                >
-                    <flux:icon :icon="$__tabIcons[$key] ?? 'squares-2x2'" class="size-4" />
-                    {{ $label }}
-                </button>
-            @endforeach
-        </nav>
+                @php
+                    $__tabIcons = [
+                        'boards' => 'chalkboard',
+                        'groups' => 'squares-2x2',
+                        'categories' => 'tag',
+                        'members' => 'users',
+                        'settings' => 'cog',
+                        'authentication' => 'shield-check',
+                    ];
+                @endphp
+
+                @foreach ($this->tabs as $key => $label)
+                    <button
+                        type="button"
+                        x-ref="tab-{{ $key }}"
+                        x-on:click="tab = '{{ $key }}'"
+                        wire:click="$set('tab', '{{ $key }}')"
+                        @class([
+                            'flex shrink-0 items-center gap-1.5 px-1 py-3 text-sm font-medium transition-colors',
+                            'text-indigo-600 dark:text-indigo-400' => $tab === $key,
+                            'text-slate-600 hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-300' => $tab !== $key,
+                        ])
+                        data-test="tab-{{ $key }}"
+                    >
+                        <flux:icon :icon="$__tabIcons[$key] ?? 'squares-2x2'" class="size-4" />
+                        {{ $label }}
+                    </button>
+                @endforeach
+            </nav>
+
+            <button
+                type="button"
+                x-show="canScrollRight"
+                x-on:click="scrollTabs(120)"
+                x-cloak
+                class="absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l from-white from-60% pl-4 dark:from-zinc-800 sm:hidden"
+                aria-label="{{ __('Scroll tabs right') }}"
+                data-test="tabs-scroll-right"
+            >
+                <flux:icon.chevron-right class="size-4 text-slate-600 dark:text-slate-400" />
+            </button>
+        </div>
     </x-sticky-toolbar>
 
     <flux:text class="mt-4 text-sm text-slate-600 dark:text-slate-500">

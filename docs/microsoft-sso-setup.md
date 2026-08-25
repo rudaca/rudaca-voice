@@ -2,7 +2,7 @@
 
 This guide walks an organization administrator through connecting their own Microsoft Entra ID (Azure AD) tenant to Rudaca Voice, so members can sign in with their Microsoft 365 account.
 
-**Every organization — and every Rudaca installation — configures its own Microsoft app registration.** There is no shared or default app registration. If you are self-hosting Rudaca Voice, this also means each environment (staging, production, a local dev instance) needs its own app registration, because the redirect URI (see step 4) is different for each one.
+**Every organization — and every Rudaca installation — configures its own Microsoft app registration.** There is no shared or default app registration. If you are self-hosting Rudaca Voice, this also means each environment needs its own app registration, because the redirect URI (see step 4) is different for each one.
 
 ## Before you start
 

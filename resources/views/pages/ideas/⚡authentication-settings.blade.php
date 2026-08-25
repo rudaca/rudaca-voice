@@ -459,9 +459,9 @@ new class extends Component
     <div class="space-y-6">
         {{-- Microsoft 365 Configuration --}}
         <div class="mt-3 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900" x-data="{ open: true }">
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-2">
-                    <flux:icon.microsoft class="size-6" />
+                    <flux:icon.microsoft class="size-6 shrink-0" />
                     <div>
                         <flux:heading size="lg" class="font-bold">{{ __('Microsoft 365 Configuration') }}</flux:heading>
                         <flux:subheading>{{ __('Microsoft Entra ID (Microsoft 365)') }}</flux:subheading>
@@ -478,8 +478,8 @@ new class extends Component
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <div class="text-right">
+                <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <div class="sm:text-right">
                         <flux:badge color="{{ $this->configurationStatus->color() }}" size="sm" data-test="microsoft-status-{{ $this->configurationStatus->value }}">
                             {{ $this->configurationStatus->label() }}
                         </flux:badge>

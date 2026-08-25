@@ -11,6 +11,9 @@ test('an owner can view the Microsoft SSO setup guide, including the redirect UR
 
     $response->assertOk();
     $response->assertSee(IdentityProvider::Microsoft->redirectUrl());
+    $response->assertSee(__('Organization'));
+    $response->assertSee(__('Authentication'));
+    $response->assertSee(__('Setup Guide'));
 });
 
 test('a manager without manage-authentication permission cannot view the setup guide', function () {

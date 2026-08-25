@@ -34,6 +34,14 @@ new #[Title('Microsoft SSO Setup Guide')] class extends Component
     }
 }; ?>
 
+@push('breadcrumbs')
+    <x-breadcrumbs :items="[
+        ['label' => __('Organization'), 'href' => route('ideas.settings', ['current_team' => $this->team->slug])],
+        ['label' => __('Authentication'), 'href' => route('ideas.settings', ['current_team' => $this->team->slug, 'tab' => 'authentication'])],
+        ['label' => __('Setup Guide'), 'href' => null],
+    ]" />
+@endpush
+
 <section class="mx-auto w-full space-y-8 px-3 pb-7 sm:px-6 lg:px-8" data-test="microsoft-sso-guide">
     <div>
         <flux:link :href="route('ideas.settings', ['current_team' => $this->team->slug, 'tab' => 'authentication'])" wire:navigate class="inline-flex items-center gap-1 text-sm">
@@ -49,9 +57,9 @@ new #[Title('Microsoft SSO Setup Guide')] class extends Component
         </flux:subheading>
     </div>
 
-    <div class="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-        <flux:text>
-            {{ __('Every organization — and every installation — configures its own Microsoft app registration. There is no shared or default app registration. If you are self-hosting, each environment (staging, production, a local dev instance) needs its own app registration too, because the redirect URI below is different for each one.') }}
+    <div class="rounded-lg border border-zinc-200 bg-gray-100 font-bold p-6 dark:border-zinc-700 dark:bg-zinc-900">
+        <flux:text class="font-extrabold">
+            {{ __('Every organization — and every installation — configures its own Microsoft app registration. There is no shared or default app registration. If you are self-hosting, each environment  needs its own app registration too, because the redirect URI below is different for each one.') }}
         </flux:text>
     </div>
 
