@@ -96,10 +96,7 @@ test('the organization login page hides the password form when Microsoft sign-in
     $response->assertOk()
         ->assertSeeText('Continue with Microsoft')
         ->assertDontSeeText('Forgot your password?');
-    expect($response->getContent())
-        ->not->toContain('name="password"')
-        ->toContain('data-test="microsoft-email-input"')
-        ->toContain('x-bind:disabled="true && (!emailIsValid || !domainIsAllowed)"');
+    expect($response->getContent())->not->toContain('name="password"');
 });
 
 test('the organization login page shows the password form when Microsoft sign-in is not required', function () {
@@ -114,13 +111,10 @@ test('the organization login page shows the password form when Microsoft sign-in
     $response = $this->get(route('org.login', $team));
 
     $response->assertOk();
-    expect($response->getContent())
-        ->toContain('name="password"')
-        ->toContain('x-bind:disabled="false && (!emailIsValid || !domainIsAllowed)"')
-        ->not->toContain('data-test="microsoft-email-input"');
+    expect($response->getContent())->toContain('name="password"');
 });
 
-test('the organization login page exposes the configured allowed domains for client-side validation', function () {
+test('the Microsoft button is immediately usable without typing an email first, even when sign-in is required', function () {
     ['team' => $team] = teamWithMember(TeamRole::Employee);
 
     TeamIdentityProvider::factory()->enabled()->create([
@@ -134,7 +128,6 @@ test('the organization login page exposes the configured allowed domains for cli
 
     $response->assertOk();
     expect($response->getContent())
-        ->toContain('allowedDomains:')
-        ->toContain('ellisontravel.com')
-        ->toContain('Email address domain is not allowed.');
+        ->not->toContain('x-bind:disabled')
+        ->not->toContain('type="email"');
 });

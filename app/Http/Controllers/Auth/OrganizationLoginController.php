@@ -25,7 +25,6 @@ class OrganizationLoginController extends Controller
             'team' => $team,
             'showMicrosoft' => $showMicrosoft,
             'enforceSso' => $showMicrosoft && $microsoftProvider->enforce_sso,
-            'allowedDomains' => $showMicrosoft ? $microsoftProvider->allowed_domains : [],
         ]);
     }
 }

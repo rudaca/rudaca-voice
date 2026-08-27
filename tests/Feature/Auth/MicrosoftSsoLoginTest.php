@@ -6,6 +6,7 @@ use App\Models\Team;
 use App\Models\TeamIdentityProvider;
 use App\Models\TeamIdentityProviderAudit;
 use App\Models\User;
+use App\Models\UserIdentityAccount;
 use App\Services\Microsoft\MicrosoftOAuthClientFactory;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -180,6 +181,121 @@ test('provisioning-disabled organizations reject an unrecognized microsoft accou
     $audit = TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first();
     expect($audit->action)->toBe(IdentityProviderAuditAction::LoginFailed)
         ->and($audit->changed_fields)->toBe(['unauthorized_account']);
+});
+
+test('auto-provisioning rejects an unrecognized microsoft account whose email domain is not allowed', function () {
+    $team = Team::factory()->create();
+    $provider = TeamIdentityProvider::factory()->enabled()->create([
+        'team_id' => $team->id,
+        'auto_provision_users' => true,
+        'default_role' => TeamRole::Employee,
+        'allowed_domains' => ['ellisontravel.com'],
+    ]);
+
+    $flow = startMicrosoftLogin($team);
+    $fixture = new MicrosoftOidcFixture;
+    $newEmail = 'new.member@not-allowed.example';
+
+    $idToken = $fixture->idToken(MicrosoftOidcFixture::baseClaims([
+        'tid' => $provider->tenant_id,
+        'aud' => $provider->client_id,
+        'nonce' => $flow['nonce'],
+        'email' => $newEmail,
+        'name' => 'New Member',
+    ]));
+
+    Http::fake(["login.microsoftonline.com/{$provider->tenant_id}/discovery/v2.0/keys" => Http::response($fixture->jwks())]);
+    bindMicrosoftTokenExchange($fixture, $idToken);
+
+    $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
+
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
+    $response->assertSessionHas('error');
+    $this->assertGuest();
+    expect(User::where('email', $newEmail)->exists())->toBeFalse();
+
+    $audit = TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first();
+    expect($audit->action)->toBe(IdentityProviderAuditAction::LoginFailed)
+        ->and($audit->changed_fields)->toBe(['domain_not_allowed']);
+});
+
+test('an existing member matched by email is rejected when their email domain is not allowed', function () {
+    $team = Team::factory()->create();
+    $member = User::factory()->create(['email' => 'member@not-allowed.example']);
+    $team->members()->attach($member, ['role' => TeamRole::Employee->value]);
+
+    $provider = TeamIdentityProvider::factory()->enabled()->create([
+        'team_id' => $team->id,
+        'allowed_domains' => ['ellisontravel.com'],
+    ]);
+
+    $flow = startMicrosoftLogin($team);
+    $fixture = new MicrosoftOidcFixture;
+
+    $idToken = $fixture->idToken(MicrosoftOidcFixture::baseClaims([
+        'tid' => $provider->tenant_id,
+        'aud' => $provider->client_id,
+        'nonce' => $flow['nonce'],
+        'email' => $member->email,
+        'name' => $member->name,
+    ]));
+
+    Http::fake(["login.microsoftonline.com/{$provider->tenant_id}/discovery/v2.0/keys" => Http::response($fixture->jwks())]);
+    bindMicrosoftTokenExchange($fixture, $idToken);
+
+    $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
+
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
+    $response->assertSessionHas('error');
+    $this->assertGuest();
+    expect(UserIdentityAccount::count())->toBe(0);
+
+    $audit = TeamIdentityProviderAudit::where('team_id', $team->id)->latest('id')->first();
+    expect($audit->action)->toBe(IdentityProviderAuditAction::LoginFailed)
+        ->and($audit->changed_fields)->toBe(['domain_not_allowed']);
+});
+
+test('an already-linked identity is rejected once the organization restricts sign-in to a domain it no longer matches', function () {
+    ['team' => $team, 'user' => $member] = teamWithMember(TeamRole::Employee);
+    $member->forceFill(['email' => 'member@not-allowed.example'])->save();
+
+    $provider = TeamIdentityProvider::factory()->enabled()->create([
+        'team_id' => $team->id,
+        'allowed_domains' => [],
+    ]);
+
+    UserIdentityAccount::factory()->create([
+        'user_id' => $member->id,
+        'team_id' => $team->id,
+        'provider_tenant_id' => $provider->tenant_id,
+        'provider_subject_id' => 'subject-1',
+        'email_at_link_time' => $member->email,
+    ]);
+
+    // The organization tightens its allow-list after the identity was
+    // already linked from an earlier, unrestricted login.
+    $provider->update(['allowed_domains' => ['ellisontravel.com']]);
+
+    $flow = startMicrosoftLogin($team);
+    $fixture = new MicrosoftOidcFixture;
+
+    $idToken = $fixture->idToken(MicrosoftOidcFixture::baseClaims([
+        'tid' => $provider->tenant_id,
+        'aud' => $provider->client_id,
+        'nonce' => $flow['nonce'],
+        'email' => $member->email,
+        'name' => $member->name,
+        'oid' => 'subject-1',
+    ]));
+
+    Http::fake(["login.microsoftonline.com/{$provider->tenant_id}/discovery/v2.0/keys" => Http::response($fixture->jwks())]);
+    bindMicrosoftTokenExchange($fixture, $idToken);
+
+    $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
+
+    assertMicrosoftBridgeTo($response, route('org.login', $team));
+    $response->assertSessionHas('error');
+    $this->assertGuest();
 });
 
 test('a missing or unknown state is rejected without ever resolving an organization', function () {

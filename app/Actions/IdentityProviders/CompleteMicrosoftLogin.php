@@ -85,6 +85,8 @@ class CompleteMicrosoftLogin
 
         $name = is_string($claims['name'] ?? null) ? $claims['name'] : $email;
 
+        $this->assertDomainAllowed($identityProvider, $email);
+
         $user = $this->resolveUser($team, $identityProvider, $claims, $email, $name);
 
         $this->audit($identityProvider, IdentityProviderAuditAction::LoginSucceeded, $user->id);
@@ -167,6 +169,31 @@ class CompleteMicrosoftLogin
     }
 
     /**
+     * Reject the login if the organization restricts sign-in to specific
+     * email domains and the authenticated email isn't one of them.
+     *
+     * Runs before the user is resolved by any path — an already-linked
+     * identity, an existing member matched by email, or a brand-new
+     * auto-provisioned account — so tightening the allow-list takes effect
+     * on every account's very next Microsoft sign-in, not just on ones that
+     * haven't signed in yet.
+     */
+    private function assertDomainAllowed(TeamIdentityProvider $identityProvider, string $email): void
+    {
+        $allowedDomains = $identityProvider->allowed_domains;
+
+        if (blank($allowedDomains)) {
+            return;
+        }
+
+        $domain = Str::lower(Str::after($email, '@'));
+
+        if (! in_array($domain, array_map(Str::lower(...), $allowedDomains), true)) {
+            $this->reject($identityProvider, 'domain_not_allowed', __('Your email domain is not authorized to sign in to this organization.'));
+        }
+    }
+
+    /**
      * Create the identity link for a user just matched (or provisioned) by
      * email, so subsequent logins locate them by tenant + subject instead.
      *
@@ -237,16 +264,6 @@ class CompleteMicrosoftLogin
 
         if (! $identityProvider->default_role) {
             $this->reject($identityProvider, 'misconfigured_default_role', __('Microsoft sign-in is not fully configured for this organization.'));
-        }
-
-        $allowedDomains = $identityProvider->allowed_domains;
-
-        if (filled($allowedDomains)) {
-            $domain = Str::lower(Str::after($email, '@'));
-
-            if (! in_array($domain, array_map(Str::lower(...), $allowedDomains), true)) {
-                $this->reject($identityProvider, 'domain_not_allowed', __('Your email domain is not authorized to sign in to this organization.'));
-            }
         }
 
         // Only the writes are transactional. The checks above throw (and
