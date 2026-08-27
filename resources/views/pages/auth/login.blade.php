@@ -5,10 +5,39 @@
         <!-- Session Status -->
         <x-auth-session-status class="text-center" :status="session('status')" />
 
+        @if (session('error'))
+            <div class="text-center text-sm font-medium text-red-600">
+                {{ session('error') }}
+            </div>
+        @endif
+
         @if ($teamInvitation)
             <x-team-invitation-alert :invitation="$teamInvitation" :action="__('Log in')" />
         @endif
 
+        <form method="POST" action="{{ route('login.microsoft.resolve') }}" class="flex flex-col gap-3">
+            @csrf
+
+            <flux:input
+                name="email"
+                :label="__('Work email address')"
+                type="email"
+                :value="old('email')"
+                required
+                autocomplete="email"
+                placeholder="email@ellisontravel.com"
+                data-test="microsoft-login-email"
+            />
+
+            <flux:button variant="primary" type="submit" class="w-full" data-test="microsoft-login-button">
+                <span class="flex items-center justify-center gap-2">
+                    <flux:icon.microsoft class="size-5" />
+                    {{ __('Continue with Microsoft') }}
+                </span>
+            </flux:button>
+        </form>
+
+        <flux:separator :text="__('or')" />
 
         <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
             @csrf

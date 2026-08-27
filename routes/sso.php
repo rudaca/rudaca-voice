@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\MicrosoftCallbackController;
+use App\Http\Controllers\Auth\MicrosoftLoginResolverController;
 use App\Http\Controllers\Auth\MicrosoftRedirectController;
 use App\Http\Controllers\Auth\OrganizationLoginController;
 use App\Http\Controllers\Auth\OwnerRecoveryController;
@@ -9,6 +10,11 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/o/{team:slug}/login', [OrganizationLoginController::class, 'show'])->name('org.login');
     Route::get('/o/{team:slug}/login/microsoft', MicrosoftRedirectController::class)->name('org.login.microsoft');
+
+    // Common (non-org-scoped) login's "Continue with Microsoft" entry point:
+    // resolves which organization(s) the typed email's domain belongs to,
+    // then hands off into the redirect above for that organization.
+    Route::post('/login/microsoft', [MicrosoftLoginResolverController::class, 'store'])->name('login.microsoft.resolve');
 
     // Owner-only fallback for when an organization has locked itself out of
     // both password login (enforce_sso) and Microsoft sign-in. Deliberately
