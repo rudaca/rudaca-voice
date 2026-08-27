@@ -629,7 +629,7 @@ new #[Title('System Users')] class extends Component {
             <flux:input wire:model="email" :label="__('Email')" type="email" required data-test="user-email-input" />
 
             <div class="space-y-2">
-                <flux:label>{{ __('Team') }}</flux:label>
+                <flux:label>{{ __('Default Organization') }}</flux:label>
 
                 @if ($teamId)
                     <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
