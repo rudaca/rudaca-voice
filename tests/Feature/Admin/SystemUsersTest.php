@@ -50,6 +50,7 @@ test('the sidebar only shows the System Users link to super admins', function ()
 
 test('a super admin can create a new user who can then log in', function () {
     $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $team = Team::factory()->create(['is_personal' => false]);
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
@@ -57,6 +58,7 @@ test('a super admin can create a new user who can then log in', function () {
         ->set('email', 'new-person@example.com')
         ->set('password', 'password123!A')
         ->set('password_confirmation', 'password123!A')
+        ->call('selectTeam', $team->id)
         ->call('saveUser')
         ->assertDispatched('modal-close', name: 'user');
 
@@ -64,16 +66,53 @@ test('a super admin can create a new user who can then log in', function () {
 
     expect($user->name)->toBe('New Person')
         ->and($user->is_active)->toBeTrue()
-        ->and($user->is_super_admin)->toBeFalse();
+        ->and($user->is_super_admin)->toBeFalse()
+        ->and($user->current_team_id)->toBe($team->id)
+        ->and($user->belongsToTeam($team))->toBeTrue();
 
     auth()->logout();
 
     $this->post(route('login'), [
         'email' => 'new-person@example.com',
         'password' => 'password123!A',
-    ])->assertRedirect();
+    ])->assertRedirect("/{$team->slug}/dashboard");
 
     $this->assertAuthenticatedAs($user);
+});
+
+test('creating a user without selecting a team fails validation', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->set('name', 'No Team Person')
+        ->set('email', 'no-team-person@example.com')
+        ->set('password', 'password123!A')
+        ->set('password_confirmation', 'password123!A')
+        ->call('saveUser')
+        ->assertHasErrors('teamId');
+
+    expect(User::where('email', 'no-team-person@example.com')->exists())->toBeFalse();
+});
+
+test('creating a user no longer auto-creates a personal team; only the selected team is assigned', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $team = Team::factory()->create(['name' => 'Chosen Org', 'is_personal' => false]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->set('name', 'Someone New')
+        ->set('email', 'someone-new@example.com')
+        ->set('password', 'password123!A')
+        ->set('password_confirmation', 'password123!A')
+        ->call('selectTeam', $team->id)
+        ->call('saveUser');
+
+    $user = User::where('email', 'someone-new@example.com')->firstOrFail();
+
+    expect($user->teams)->toHaveCount(1)
+        ->and($user->teams->first()->id)->toBe($team->id)
+        ->and(Team::where('name', "Someone New's Team")->exists())->toBeFalse();
 });
 
 test('a super admin can edit a user\'s name, email, and password', function () {
@@ -117,6 +156,68 @@ test('editing a user without a password leaves the existing password untouched',
         ->assertHasNoErrors();
 
     expect($user->fresh()->password)->toBe($originalHash);
+});
+
+test('the edit user modal pre-fills the Team field with the user\'s current default team', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('editUser', $user->id)
+        ->assertSet('teamId', $user->current_team_id)
+        ->assertSet('teamName', $user->currentTeam->name);
+});
+
+test('changing a user\'s Default Team in the edit user modal grants membership and switches their current team, without removing their old membership', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+    $oldTeam = $user->currentTeam;
+    $newTeam = Team::factory()->create(['is_personal' => false]);
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('editUser', $user->id)
+        ->call('selectTeam', $newTeam->id)
+        ->call('saveUser')
+        ->assertHasNoErrors();
+
+    $user->refresh();
+
+    expect($user->current_team_id)->toBe($newTeam->id)
+        ->and($user->belongsToTeam($newTeam))->toBeTrue()
+        ->and($user->belongsToTeam($oldTeam))->toBeTrue();
+});
+
+test('editing a user without changing their Default Team does not duplicate their existing membership', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $user = User::factory()->create();
+
+    Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('editUser', $user->id)
+        ->set('name', 'Unchanged Team')
+        ->call('saveUser')
+        ->assertHasNoErrors();
+
+    expect($user->fresh()->teams)->toHaveCount(1);
+});
+
+test('the Team picker searches teams by name', function () {
+    $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $match = Team::factory()->create(['name' => 'Findable Org', 'is_personal' => false]);
+    Team::factory()->create(['name' => 'Nobody Org', 'is_personal' => false]);
+
+    $component = Livewire::actingAs($superAdmin)
+        ->test('pages::admin.users')
+        ->call('newUser')
+        ->set('teamSearch', 'findable');
+
+    // The page's separate Organization filter dropdown always lists every
+    // team, so assertDontSee would false-positive on the non-matching team's
+    // name appearing there — scope the check to the picker's own results.
+    expect(substr_count($component->html(), 'data-test="searchable-team-option"'))->toBe(1);
+    $component->assertSee($match->name);
 });
 
 test('a super admin can assign and revoke super admin access', function () {
@@ -255,6 +356,7 @@ test('confirmAssignRole on your own row is rejected without opening the modal', 
 
 test('the Super Admin checkbox in the new user modal grants access on creation', function () {
     $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $team = Team::factory()->create(['is_personal' => false]);
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
@@ -263,6 +365,7 @@ test('the Super Admin checkbox in the new user modal grants access on creation',
         ->set('password', 'password123!A')
         ->set('password_confirmation', 'password123!A')
         ->set('isSuperAdmin', true)
+        ->call('selectTeam', $team->id)
         ->call('saveUser');
 
     expect(User::where('email', 'brand-new-admin@example.com')->firstOrFail()->is_super_admin)->toBeTrue();
@@ -308,6 +411,7 @@ test('the Super Admin and Active checkboxes are hidden when editing your own acc
 
 test('the Active checkbox in the new user modal creates an inactive user when unchecked', function () {
     $superAdmin = User::factory()->create(['is_super_admin' => true]);
+    $team = Team::factory()->create(['is_personal' => false]);
 
     Livewire::actingAs($superAdmin)
         ->test('pages::admin.users')
@@ -316,6 +420,7 @@ test('the Active checkbox in the new user modal creates an inactive user when un
         ->set('password', 'password123!A')
         ->set('password_confirmation', 'password123!A')
         ->set('isActive', false)
+        ->call('selectTeam', $team->id)
         ->call('saveUser');
 
     expect(User::where('email', 'inactive-from-birth@example.com')->firstOrFail()->is_active)->toBeFalse();

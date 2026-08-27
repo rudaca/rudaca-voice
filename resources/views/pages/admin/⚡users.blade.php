@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\Teams\CreateTeam;
+use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
 use Flux\Flux;
@@ -51,6 +51,14 @@ new #[Title('System Users')] class extends Component {
 
     public bool $isActive = true;
 
+    public string $teamSearch = '';
+
+    public ?int $teamId = null;
+
+    public string $teamName = '';
+
+    public string $teamRole = 'employee';
+
     // --- Role change confirmation ---
     public ?int $pendingRoleUserId = null;
 
@@ -91,6 +99,40 @@ new #[Title('System Users')] class extends Component {
             ->where('is_personal', false)
             ->orderBy('name')
             ->get(['id', 'name']);
+    }
+
+    /**
+     * Teams matching the current search term, for the Default Team picker in
+     * the Add/Edit modal. Unscoped across every team in the system — a Super
+     * Admin may assign any team as a user's default, including personal ones.
+     *
+     * @return Collection<int, Team>
+     */
+    #[Computed]
+    public function searchableTeams(): Collection
+    {
+        $search = trim($this->teamSearch);
+
+        if ($search === '') {
+            return new Collection;
+        }
+
+        return Team::query()
+            ->where('name', 'like', "%{$search}%")
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Roles assignable to a user being added to the selected Default Team.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    #[Computed]
+    public function assignableTeamRoles(): array
+    {
+        return TeamRole::assignable();
     }
 
     /**
@@ -141,7 +183,7 @@ new #[Title('System Users')] class extends Component {
 
     public function newUser(): void
     {
-        $this->reset('userId', 'name', 'email', 'password', 'password_confirmation', 'isSuperAdmin');
+        $this->reset('userId', 'name', 'email', 'password', 'password_confirmation', 'isSuperAdmin', 'teamSearch', 'teamId', 'teamName', 'teamRole');
         $this->isActive = true;
         $this->resetValidation();
         $this->dispatch('modal-show', name: 'user');
@@ -149,7 +191,7 @@ new #[Title('System Users')] class extends Component {
 
     public function editUser(int $id): void
     {
-        $user = User::findOrFail($id);
+        $user = User::with('currentTeam')->findOrFail($id);
 
         $this->userId = $user->id;
         $this->name = $user->name;
@@ -159,8 +201,27 @@ new #[Title('System Users')] class extends Component {
         $this->isSuperAdmin = $user->is_super_admin;
         $this->isActive = $user->is_active;
 
+        $this->teamSearch = '';
+        $this->teamId = $user->current_team_id;
+        $this->teamName = $user->currentTeam?->name ?? '';
+        $this->teamRole = $user->currentTeam ? ($user->teamRole($user->currentTeam)?->value ?? 'employee') : 'employee';
+
         $this->resetValidation();
         $this->dispatch('modal-show', name: 'user');
+    }
+
+    public function selectTeam(int $teamId): void
+    {
+        $team = Team::findOrFail($teamId);
+
+        $this->teamId = $team->id;
+        $this->teamName = $team->name;
+        $this->teamSearch = '';
+    }
+
+    public function clearSelectedTeam(): void
+    {
+        $this->reset('teamId', 'teamName');
     }
 
     public function saveUser(): void
@@ -169,7 +230,11 @@ new #[Title('System Users')] class extends Component {
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->userId)],
             'password' => [$this->userId ? 'nullable' : 'required', 'string', Password::default(), 'confirmed'],
+            'teamId' => ['required', 'integer', Rule::exists('teams', 'id')],
+            'teamRole' => ['required', 'string', Rule::enum(TeamRole::class)],
         ]);
+
+        $team = Team::findOrFail($validated['teamId']);
 
         if ($this->userId) {
             $user = User::findOrFail($this->userId);
@@ -202,13 +267,17 @@ new #[Title('System Users')] class extends Component {
             $user->is_active = $this->isActive;
             $user->is_super_admin = $this->isSuperAdmin;
             $user->save();
-
-            // Every user needs a personal team to log in against (Fortify's
-            // LoginResponse redirects into the current/personal team) — the
-            // normal registration flow creates one automatically, but this is
-            // the only other place accounts are created from scratch.
-            app(CreateTeam::class)->handle($user, __(":name's Team", ['name' => $user->name]), isPersonal: true);
         }
+
+        // EnsureTeamMembership 403s any non-super-admin user routed to a team
+        // they don't belong to, so the Super Admin's Default Team pick must
+        // grant membership rather than merely point current_team_id at it.
+        // An existing membership (e.g. unchanged on edit) is left untouched.
+        if (! $user->belongsToTeam($team)) {
+            $team->members()->attach($user->id, ['role' => TeamRole::from($validated['teamRole'])]);
+        }
+
+        $user->switchTeam($team);
 
         unset($this->users);
         $this->dispatch('modal-close', name: 'user');
@@ -558,6 +627,51 @@ new #[Title('System Users')] class extends Component {
 
             <flux:input wire:model="name" :label="__('Name')" required data-test="user-name-input" />
             <flux:input wire:model="email" :label="__('Email')" type="email" required data-test="user-email-input" />
+
+            <div class="space-y-2">
+                <flux:label>{{ __('Team') }}</flux:label>
+
+                @if ($teamId)
+                    <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
+                        <span class="font-medium text-slate-900 dark:text-slate-200" data-test="user-team-selected">{{ $teamName }}</span>
+                        <flux:button wire:click="clearSelectedTeam" variant="ghost" size="sm" data-test="change-team">{{ __('Change') }}</flux:button>
+                    </div>
+                @else
+                    <div class="relative">
+                        <flux:input
+                            wire:model.live.debounce.300ms="teamSearch"
+                            :placeholder="__('Search Organization...')"
+                            data-test="user-team-search-input"
+                        />
+                        <flux:error name="teamId" />
+
+                        @if (trim($teamSearch) !== '')
+                            <div class="absolute inset-x-0 top-full z-20 mt-1 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                                @forelse ($this->searchableTeams as $searchTeam)
+                                    <button
+                                        type="button"
+                                        wire:click="selectTeam({{ $searchTeam->id }})"
+                                        wire:key="searchable-team-{{ $searchTeam->id }}"
+                                        class="flex w-full items-center gap-3 rounded-md p-2 text-start hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                                        data-test="searchable-team-option"
+                                    >
+                                        <span class="truncate font-medium text-slate-900 dark:text-slate-200">{{ $searchTeam->name }}</span>
+                                    </button>
+                                @empty
+                                    <div class="p-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No matching teams found.') }}</div>
+                                @endforelse
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </div>
+
+            <flux:select wire:model="teamRole" :label="__('Default Role')" data-test="user-team-role-select">
+                @foreach ($this->assignableTeamRoles as $roleOption)
+                    <flux:select.option value="{{ $roleOption['value'] }}">{{ $roleOption['label'] }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
             <flux:input
                 wire:model="password"
                 :label="__('Password')"
