@@ -1394,12 +1394,12 @@ new #[Title('Idea')] class extends Component {
         <aside class="space-y-4">
             {{-- Manage idea status modal (owner/admin/manager only) --}}
             @if ($this->canManage)
-                <flux:modal name="manage-idea" class="max-w-xl" data-test="manage-idea-modal">
+                <flux:modal name="manage-idea" class="max-w-3xl" data-test="manage-idea-modal">
                     <div class="space-y-5">
                         <flux:heading size="lg">{{ __('Manage idea') }}</flux:heading>
 
                         <form wire:submit="updateManagement" id="manage-idea-form" class="space-y-4">
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="grid grid-cols-2 gap-6 sm:grid-cols-4">
                                 <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
                                     @foreach (IdeaStatus::meta() as $value => $statusMeta)
                                         <flux:select.option value="{{ $value }}">{{ $statusMeta['label'] }}</flux:select.option>
@@ -1428,7 +1428,7 @@ new #[Title('Idea')] class extends Component {
                             <flux:textarea
                                 wire:model="statusNote"
                                 :label="__('Status note (optional)')"
-                                rows="2"
+                                rows="4"
                                 :placeholder="__('Added to the activity log when the status changes')"
                                 class="w-full"
                                 data-test="manage-note"
