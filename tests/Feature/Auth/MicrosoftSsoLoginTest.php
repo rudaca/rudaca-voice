@@ -151,6 +151,49 @@ test('a valid callback provisions a new user when auto-provisioning is enabled',
         ->toBe([IdentityProviderAuditAction::UserProvisioned->value, IdentityProviderAuditAction::LoginSucceeded->value]);
 });
 
+test('a valid callback reuses an existing global account when auto-provisioning a user whose email already belongs to another organization', function () {
+    // Regression test: the users table enforces one account per email
+    // globally, so a user who already exists (as a member of a different
+    // organization here) must be reused as this team's member rather than
+    // provisioning attempting — and failing — to insert a second row with
+    // the same email.
+    ['team' => $otherTeam, 'user' => $existingUser] = teamWithMember(TeamRole::Employee);
+
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $provider = TeamIdentityProvider::factory()->enabled()->create([
+        'team_id' => $team->id,
+        'auto_provision_users' => true,
+        'default_role' => TeamRole::Employee,
+        'allowed_domains' => [],
+    ]);
+
+    $flow = startMicrosoftLogin($team);
+    $fixture = new MicrosoftOidcFixture;
+
+    $idToken = $fixture->idToken(MicrosoftOidcFixture::baseClaims([
+        'tid' => $provider->tenant_id,
+        'aud' => $provider->client_id,
+        'nonce' => $flow['nonce'],
+        'email' => $existingUser->email,
+        'name' => $existingUser->name,
+    ]));
+
+    Http::fake(["login.microsoftonline.com/{$provider->tenant_id}/discovery/v2.0/keys" => Http::response($fixture->jwks())]);
+    bindMicrosoftTokenExchange($fixture, $idToken);
+
+    $response = $this->get(route('auth.microsoft.callback', ['code' => 'test-code', 'state' => $flow['state']]));
+
+    assertMicrosoftBridgeTo($response, route('dashboard', ['current_team' => $team->slug]));
+
+    expect(User::where('email', $existingUser->email)->count())->toBe(1);
+    $this->assertAuthenticatedAs($existingUser->fresh());
+    expect($existingUser->fresh()->teamRole($team))->toBe(TeamRole::Employee);
+    expect($existingUser->fresh()->teamRole($otherTeam))->toBe(TeamRole::Employee);
+
+    expect(TeamIdentityProviderAudit::where('team_id', $team->id)->pluck('action')->map(fn ($action) => $action->value)->all())
+        ->toBe([IdentityProviderAuditAction::UserProvisioned->value, IdentityProviderAuditAction::LoginSucceeded->value]);
+});
+
 test('provisioning-disabled organizations reject an unrecognized microsoft account', function () {
     $team = Team::factory()->create();
     $provider = TeamIdentityProvider::factory()->enabled()->create([

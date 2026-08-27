@@ -243,6 +243,12 @@ class CompleteMicrosoftLogin
      * ambiguous match rather than picking one arbitrarily — the account's
      * database-level uniqueness is case-sensitive, so this can only happen
      * for genuinely distinct accounts differing only in email case.
+     *
+     * "Provisioning" here means adding this team's membership — the global
+     * user account itself is only created when no account with this email
+     * exists anywhere in the system yet. One already existing (e.g. as a
+     * member of another organization, or a standalone account) is reused,
+     * since the users table enforces a single account per email address.
      */
     private function locateOrProvisionUser(Team $team, TeamIdentityProvider $identityProvider, string $email, string $name): User
     {
@@ -266,9 +272,19 @@ class CompleteMicrosoftLogin
             $this->reject($identityProvider, 'misconfigured_default_role', __('Microsoft sign-in is not fully configured for this organization.'));
         }
 
+        // The email may already belong to a user account outside this team
+        // (e.g. a member of another organization, or a standalone account
+        // created via System Users) — the users table enforces one global
+        // account per email, so that account must be reused as this team's
+        // member rather than colliding with a second insert of the same
+        // address.
+        $existingUser = User::query()
+            ->whereRaw('LOWER(email) = ?', [Str::lower($email)])
+            ->first();
+
         // Only the writes are transactional. The checks above throw (and
         // audit) before this point, and must never be rolled back by it.
-        $user = DB::transaction(function () use ($team, $identityProvider, $email, $name) {
+        $user = DB::transaction(function () use ($team, $identityProvider, $email, $name, $existingUser) {
             // forceCreate: email_verified_at isn't mass-assignable (see
             // User's #[Fillable] attribute), but a Microsoft-authenticated
             // address is already verified by definition.
@@ -277,7 +293,7 @@ class CompleteMicrosoftLogin
             // in-memory model with the attributes given here — leaving it out
             // would make the assertActive() check below read a null (falsy)
             // is_active on the very user it just created.
-            $user = User::forceCreate([
+            $user = $existingUser ?? User::forceCreate([
                 'name' => $name,
                 'email' => $email,
                 'password' => Str::password(64),
