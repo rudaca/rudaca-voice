@@ -3,12 +3,39 @@
 use App\Models\Team;
 use App\Models\TeamIdentityProvider;
 
-test('the common login page offers a continue with microsoft option alongside the password form', function () {
+test('the common login page offers a continue with microsoft option alongside the password form when at least one organization has microsoft configured', function () {
+    $team = Team::factory()->create();
+    TeamIdentityProvider::factory()->enabled()->create([
+        'team_id' => $team->id,
+        'allowed_domains' => ['ellisontravel.com'],
+    ]);
+
     $response = $this->get(route('login'));
 
     $response->assertOk();
     $response->assertSee(route('login.microsoft.resolve'), false);
     $response->assertSee(route('login.store'), false);
+});
+
+test('the common login page hides the microsoft option when no organization has it configured', function () {
+    $response = $this->get(route('login'));
+
+    $response->assertOk();
+    $response->assertDontSee(route('login.microsoft.resolve'), false);
+    $response->assertSee(route('login.store'), false);
+});
+
+test('the common login page hides the microsoft option when the only configured provider is disabled', function () {
+    $team = Team::factory()->create();
+    TeamIdentityProvider::factory()->create([
+        'team_id' => $team->id,
+        'enabled' => false,
+        'allowed_domains' => ['ellisontravel.com'],
+    ]);
+
+    $response = $this->get(route('login'));
+
+    $response->assertDontSee(route('login.microsoft.resolve'), false);
 });
 
 test('an email matching exactly one organization redirects straight into that organization\'s microsoft sign-in', function () {

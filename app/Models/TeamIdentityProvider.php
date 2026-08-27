@@ -174,6 +174,24 @@ class TeamIdentityProvider extends Model
     }
 
     /**
+     * Whether any organization anywhere has an enabled, fully-configured
+     * identity provider for the given provider.
+     *
+     * Used to decide whether it's worth offering that provider's SSO option
+     * at all on a page — like the common login page — that isn't scoped to
+     * any one organization, so there's no single row's `enabled`/`isConfigurable()`
+     * to check directly.
+     */
+    public static function anyConfiguredFor(IdentityProvider $provider): bool
+    {
+        return static::query()
+            ->provider($provider)
+            ->where('enabled', true)
+            ->get()
+            ->contains(fn (self $identityProvider) => $identityProvider->isConfigurable());
+    }
+
+    /**
      * Whether a connection test has succeeded for the currently saved
      * configuration. Cleared by SaveTeamIdentityProvider whenever the tenant,
      * client id, or secret change, so this can never describe stale

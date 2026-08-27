@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Actions\Fortify\ResetUserPassword;
+use App\Enums\IdentityProvider;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\LogoutResponse;
 use App\Http\Responses\VerifyEmailResponse;
+use App\Models\TeamIdentityProvider;
 use App\Models\TeamInvitation;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -79,6 +81,7 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::loginView(fn (Request $request) => view('pages::auth.login', [
             'teamInvitation' => $this->teamInvitation($request),
+            'showMicrosoft' => TeamIdentityProvider::anyConfiguredFor(IdentityProvider::Microsoft),
         ]));
         Fortify::verifyEmailView(fn () => view('pages::auth.verify-email'));
         Fortify::resetPasswordView(fn () => view('pages::auth.reset-password'));

@@ -15,29 +15,43 @@
             <x-team-invitation-alert :invitation="$teamInvitation" :action="__('Log in')" />
         @endif
 
-        <form method="POST" action="{{ route('login.microsoft.resolve') }}" class="flex flex-col gap-3">
-            @csrf
+        @if ($showMicrosoft)
+            <form
+                method="POST"
+                action="{{ route('login.microsoft.resolve') }}"
+                class="flex flex-col gap-3"
+                x-data="{ email: @js(old('email', '')) }"
+            >
+                @csrf
 
-            <flux:input
-                name="email"
-                :label="__('Work email address')"
-                type="email"
-                :value="old('email')"
-                required
-                autocomplete="email"
-                placeholder="email@ellisontravel.com"
-                data-test="microsoft-login-email"
-            />
+                <flux:input
+                    name="email"
+                    :label="__('Work email address')"
+                    type="email"
+                    x-model="email"
+                    required
+                    autocomplete="email"
+                    placeholder="email@ellisontravel.com"
+                    data-test="microsoft-login-email"
+                />
 
-            <flux:button variant="primary" type="submit" class="w-full" data-test="microsoft-login-button">
-                <span class="flex items-center justify-center gap-2">
-                    <flux:icon.microsoft class="size-5" />
-                    {{ __('Continue with Microsoft') }}
-                </span>
-            </flux:button>
-        </form>
+                <flux:button
+                    variant="primary"
+                    type="submit"
+                    class="w-full"
+                    data-test="microsoft-login-button"
+                    :loading="false"
+                    x-bind:disabled="!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)"
+                >
+                    <span class="flex items-center justify-center gap-2">
+                        <flux:icon.microsoft class="size-5" />
+                        {{ __('Continue with Microsoft') }}
+                    </span>
+                </flux:button>
+            </form>
 
-        <flux:separator :text="__('or')" />
+            <flux:separator :text="__('or')" />
+        @endif
 
         <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
             @csrf
