@@ -96,6 +96,14 @@ new #[Title('Organization Settings')] class extends Component {
     // --- Organization settings form (Settings tab) ---
     public string $orgTeamName = '';
 
+    public string $orgSlug = '';
+
+    /**
+     * Whether the slug field has been unlocked for editing via the "Replace"
+     * button. The slug never tracks name changes on its own.
+     */
+    public bool $orgSlugEditing = false;
+
     public bool $orgAllowAnonymousIdeas = true;
 
     public bool $orgLimitOneActiveVotePerBoard = false;
@@ -117,6 +125,7 @@ new #[Title('Organization Settings')] class extends Component {
     public function mount(): void
     {
         $this->orgTeamName = $this->team->name;
+        $this->orgSlug = $this->team->slug;
         $this->orgAllowAnonymousIdeas = $this->team->allowsAnonymousIdeas();
         $this->orgLimitOneActiveVotePerBoard = $this->team->limitsOneActiveVotePerBoard();
 
@@ -320,27 +329,92 @@ new #[Title('Organization Settings')] class extends Component {
             'quickCategoryName' => __('name'),
             'quickCategoryBoardId' => __('board'),
             'orgTeamName' => __('organization name'),
+            'orgSlug' => __('slug'),
             'memberUserId' => __('user'),
         ];
     }
 
     // ----- Organization settings -----
 
+    /**
+     * Unlock the slug field and suggest a fresh slug regenerated from the
+     * current name. Purely a UI-side suggestion — nothing is persisted until
+     * the settings form is saved (and confirmed, if the slug changed).
+     */
+    public function replaceOrgSlug(): void
+    {
+        $this->orgSlugEditing = true;
+        $this->orgSlug = $this->team->suggestSlugFrom($this->orgTeamName);
+    }
+
     public function saveTeamSettings(): void
     {
-        $validated = $this->validate([
+        $validated = $this->validateTeamSettings();
+
+        if ($validated['orgSlug'] !== $this->team->slug) {
+            $this->dispatch('modal-show', name: 'confirm-slug-change');
+
+            return;
+        }
+
+        $this->persistTeamSettings($validated);
+    }
+
+    /**
+     * Called from the "confirm slug change" modal once the admin has
+     * acknowledged that previously shared URLs using the old slug will break.
+     */
+    public function confirmSlugChangeAndSave(): void
+    {
+        $this->persistTeamSettings($this->validateTeamSettings());
+
+        $this->dispatch('modal-close', name: 'confirm-slug-change');
+    }
+
+    /**
+     * Back out of the pending slug change: revert the field to the
+     * currently persisted slug and re-lock it, rather than leaving the
+     * rejected value sitting in the (still-editable) field.
+     */
+    public function cancelSlugChange(): void
+    {
+        $this->orgSlug = $this->team->slug;
+        $this->orgSlugEditing = false;
+        $this->resetErrorBag('orgSlug');
+
+        $this->dispatch('modal-close', name: 'confirm-slug-change');
+    }
+
+    /**
+     * @return array{orgTeamName: string, orgSlug: string, orgAllowAnonymousIdeas: bool, orgLimitOneActiveVotePerBoard: bool}
+     */
+    private function validateTeamSettings(): array
+    {
+        $this->orgSlug = Str::slug($this->orgSlug !== '' ? $this->orgSlug : $this->orgTeamName);
+
+        return $this->validate([
             'orgTeamName' => ['required', 'string', 'max:255', new TeamName],
+            'orgSlug' => ['required', 'string', 'max:255', Rule::unique('teams', 'slug')->ignore($this->team->id)],
             'orgAllowAnonymousIdeas' => ['boolean'],
             'orgLimitOneActiveVotePerBoard' => ['boolean'],
         ]);
+    }
 
+    /**
+     * @param  array{orgTeamName: string, orgSlug: string, orgAllowAnonymousIdeas: bool, orgLimitOneActiveVotePerBoard: bool}  $validated
+     */
+    private function persistTeamSettings(array $validated): void
+    {
         $team = $this->team;
 
         $team->update([
             'name' => $validated['orgTeamName'],
+            'slug' => $validated['orgSlug'],
             'allow_anonymous_ideas' => $this->orgAllowAnonymousIdeas,
             'limit_one_active_vote_per_board' => $this->orgLimitOneActiveVotePerBoard,
         ]);
+
+        $this->orgSlugEditing = false;
 
         Flux::toast(variant: 'success', text: __('Organization settings saved.'));
 
@@ -1184,6 +1258,23 @@ new #[Title('Organization Settings')] class extends Component {
                     data-test="org-team-name-input"
                 />
 
+                <flux:field>
+                    <flux:label>{{ __('Slug') }}</flux:label>
+                    <flux:input.group>
+                        <flux:input.group.prefix>{{ rtrim(config('app.url'), '/') }}/</flux:input.group.prefix>
+                        <flux:input wire:model="orgSlug" :readonly="! $orgSlugEditing" data-test="org-slug-input" />
+                        <flux:tooltip :content="__('Replace slug')">
+                            <flux:button
+                                icon="arrow-left-right"
+                                wire:click="replaceOrgSlug"
+                                aria-label="{{ __('Replace slug') }}"
+                                data-test="org-slug-replace-button"
+                            />
+                        </flux:tooltip>
+                    </flux:input.group>
+                    <flux:description>{{ __('Used in shared board URLs.') }}</flux:description>
+                </flux:field>
+
                 <flux:checkbox
                     wire:model="orgAllowAnonymousIdeas"
                     :label="__('Allow anonymous posting of ideas')"
@@ -1204,6 +1295,27 @@ new #[Title('Organization Settings')] class extends Component {
             </form>
         </div>
     @endif
+
+    {{-- Confirm slug change modal --}}
+    <flux:modal name="confirm-slug-change" class="max-w-lg" :dismissible="false" data-test="confirm-slug-change-modal">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Update the organization slug?') }}</flux:heading>
+                <flux:subheading>
+                    {{ __('Changing the slug from ":old" to ":new" will break any previously shared board URLs that used the old slug.', ['old' => $this->team->slug, 'new' => $orgSlug]) }}
+                </flux:subheading>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="cancelSlugChange" variant="filled" data-test="cancel-slug-change-button">
+                    {{ __('Cancel') }}
+                </flux:button>
+                <flux:button wire:click="confirmSlugChangeAndSave" variant="danger" data-test="confirm-slug-change-button">
+                    {{ __('Update slug') }}
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
 
     {{-- Authentication --}}
     @if ($tab === 'authentication' && $this->canManageAuthentication)

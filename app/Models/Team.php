@@ -55,12 +55,16 @@ class Team extends Model
                 $team->slug = static::generateUniqueTeamSlug($team->name);
             }
         });
+    }
 
-        static::updating(function (Team $team) {
-            if ($team->isDirty('name')) {
-                $team->slug = static::generateUniqueTeamSlug($team->name, $team->id);
-            }
-        });
+    /**
+     * Suggest a fresh, unique slug for this team derived from the given name.
+     * Purely advisory — it does not touch the persisted slug. Used to offer a
+     * regenerated slug when an admin explicitly opts to replace it.
+     */
+    public function suggestSlugFrom(string $name): string
+    {
+        return static::generateUniqueTeamSlug($name, $this->id);
     }
 
     /**

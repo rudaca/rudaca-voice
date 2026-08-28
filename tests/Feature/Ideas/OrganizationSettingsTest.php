@@ -302,23 +302,27 @@ test('a non-owner cannot revoke a member\'s access', function () {
     expect($manager->fresh()->belongsToTeam($team))->toBeTrue();
 });
 
-test('the Settings tab lets an admin update the team name and anonymous ideas preference', function () {
+test('the Settings tab lets an admin update the team name and anonymous ideas preference without touching the slug', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $originalSlug = $team->slug;
 
     Livewire::actingAs($admin)
         ->test('pages::ideas.settings')
         ->set('tab', 'settings')
         ->assertSet('orgTeamName', $team->name)
+        ->assertSet('orgSlug', $originalSlug)
         ->assertSet('orgAllowAnonymousIdeas', true)
         ->set('orgTeamName', 'Renamed Team')
         ->set('orgAllowAnonymousIdeas', false)
         ->call('saveTeamSettings')
-        ->assertHasNoErrors();
+        ->assertHasNoErrors()
+        ->assertNotDispatched('modal-show');
 
     $team = Team::find($team->id);
 
     expect($team->name)->toBe('Renamed Team')
-        ->and($team->allowsAnonymousIdeas())->toBeFalse();
+        ->and($team->allowsAnonymousIdeas())->toBeFalse()
+        ->and($team->slug)->toBe($originalSlug);
 });
 
 test('the Settings tab requires a team name', function () {
@@ -332,6 +336,98 @@ test('the Settings tab requires a team name', function () {
         ->assertHasErrors(['orgTeamName']);
 
     expect($team->fresh()->name)->toBe($team->name);
+});
+
+test('the slug field is read-only until the Replace button is clicked', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'settings')
+        ->assertSet('orgSlugEditing', false)
+        ->assertSeeHtml('readonly')
+        ->call('replaceOrgSlug')
+        ->assertSet('orgSlugEditing', true)
+        ->assertSet('orgSlug', $team->suggestSlugFrom($team->name));
+});
+
+test('clicking Replace regenerates the slug from the current name without persisting it', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $originalSlug = $team->slug;
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'settings')
+        ->set('orgTeamName', 'Brand New Name')
+        ->call('replaceOrgSlug')
+        ->assertSet('orgSlug', 'brand-new-name');
+
+    expect($team->fresh()->slug)->toBe($originalSlug);
+});
+
+test('saving with a changed slug shows a confirmation modal instead of saving immediately', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $originalSlug = $team->slug;
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'settings')
+        ->call('replaceOrgSlug')
+        ->set('orgSlug', 'a-brand-new-slug')
+        ->call('saveTeamSettings')
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-show', name: 'confirm-slug-change');
+
+    expect($team->fresh()->slug)->toBe($originalSlug);
+});
+
+test('confirming the slug change modal persists the new slug', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'settings')
+        ->call('replaceOrgSlug')
+        ->set('orgSlug', 'a-brand-new-slug')
+        ->call('confirmSlugChangeAndSave')
+        ->assertHasNoErrors()
+        ->assertDispatched('modal-close', name: 'confirm-slug-change');
+
+    expect($team->fresh()->slug)->toBe('a-brand-new-slug');
+});
+
+test('canceling the slug change modal reverts the slug and re-locks the field', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $originalSlug = $team->slug;
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'settings')
+        ->call('replaceOrgSlug')
+        ->set('orgSlug', 'a-brand-new-slug')
+        ->call('saveTeamSettings')
+        ->assertDispatched('modal-show', name: 'confirm-slug-change')
+        ->call('cancelSlugChange')
+        ->assertSet('orgSlug', $originalSlug)
+        ->assertSet('orgSlugEditing', false)
+        ->assertDispatched('modal-close', name: 'confirm-slug-change');
+
+    expect($team->fresh()->slug)->toBe($originalSlug);
+});
+
+test('a duplicate slug is rejected', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    Team::factory()->create(['slug' => 'taken-slug']);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'settings')
+        ->call('replaceOrgSlug')
+        ->set('orgSlug', 'taken-slug')
+        ->call('saveTeamSettings')
+        ->assertHasErrors(['orgSlug']);
+
+    expect($team->fresh()->slug)->not->toBe('taken-slug');
 });
 
 test('the new board group modal auto-fills the slug as the admin types the name', function () {
