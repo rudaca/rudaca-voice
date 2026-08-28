@@ -859,6 +859,7 @@ new #[Title('Idea')] class extends Component {
                         @if ($this->canRespondOfficially)
                             <flux:menu.item
                                 icon="check-badge"
+                                class="[&_[data-flux-menu-item-icon]]:text-zinc-800! dark:[&_[data-flux-menu-item-icon]]:text-white!"
                                 wire:click="{{ $this->officialResponse ? 'openEditOfficialResponse' : 'openAddOfficialResponse' }}"
                                 data-test="official-response-menu-item"
                             >
@@ -868,15 +869,34 @@ new #[Title('Idea')] class extends Component {
 
                         @if ($this->canManage)
                             <flux:modal.trigger name="manage-idea">
-                                <flux:menu.item icon="light-bulb" data-test="manage-idea-status-menu-item">
+                                <flux:menu.item
+                                    icon="adjustments-horizontal"
+                                    class="[&_[data-flux-menu-item-icon]]:text-zinc-800! dark:[&_[data-flux-menu-item-icon]]:text-white!"
+                                    data-test="manage-idea-status-menu-item"
+                                >
                                     {{ __('Manage Idea Status') }}
                                 </flux:menu.item>
                             </flux:modal.trigger>
 
                             <flux:menu.separator />
 
-                            <flux:menu.item icon="document-duplicate" wire:click="openMarkDuplicate" data-test="mark-duplicate-menu-item">
+                            <flux:menu.item
+                                icon="document-duplicate"
+                                class="[&_[data-flux-menu-item-icon]]:text-zinc-800! dark:[&_[data-flux-menu-item-icon]]:text-white!"
+                                wire:click="openMarkDuplicate"
+                                data-test="mark-duplicate-menu-item"
+                            >
                                 {{ __('Mark as Duplicate') }}
+                            </flux:menu.item>
+
+                            <flux:menu.item
+                                icon="clipboard"
+                                class="[&_[data-flux-menu-item-icon]]:text-zinc-800! dark:[&_[data-flux-menu-item-icon]]:text-white!"
+                                x-data="{ copied: false }"
+                                x-on:click="copyIdeaLink(@js(route('ideas.show', ['idea' => $this->ideaModel->slug]))).then(() => { copied = true; setTimeout(() => copied = false, 2000) })"
+                                data-test="copy-idea-link-menu-item"
+                            >
+                                <span x-text="copied ? @js(__('Copied')) : @js(__('Copy Link'))"></span>
                             </flux:menu.item>
 
                             @if ($this->canDelete)
@@ -1483,13 +1503,17 @@ new #[Title('Idea')] class extends Component {
             @endif
 
             {{-- More details --}}
-            <div class="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900" data-test="more-details-panel">
+            <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900" data-test="more-details-panel">
                 <div class="flex items-center gap-1.5">
                     <flux:icon.information-circle class="size-4 shrink-0 text-slate-700" />
                     <flux:heading size="sm">{{ __('More details') }}</flux:heading>
                 </div>
 
-                <dl class="mt-4 space-y-3 text-sm">
+                <dl class="mt-3 space-y-2 text-sm">
+                    <div class="flex items-center justify-between">
+                        <dt class="text-slate-600 dark:text-slate-500">{{ __('Status') }}</dt>
+                        <dd><flux:badge size="sm" :color="$meta['color']" class="{{ $meta['class'] ?? '' }}" data-test="more-details-status">{{ $meta['label'] }}</flux:badge></dd>
+                    </div>
                     <div class="flex items-center justify-between">
                         <dt class="text-slate-600 dark:text-slate-500">{{ __('Priority') }}</dt>
                         <dd><flux:badge size="sm" :color="$this->levelColor($idea->priority)" data-test="more-details-priority">{{ self::PRIORITY_OPTIONS[$idea->priority] ?? $idea->priority }}</flux:badge></dd>

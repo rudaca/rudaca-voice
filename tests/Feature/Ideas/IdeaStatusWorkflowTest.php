@@ -3,6 +3,7 @@
 use App\Enums\TeamRole;
 use App\Models\IdeaStatusHistory;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Js;
 use Livewire\Livewire;
 
 test('a manager can update status and a history record is created', function () {
@@ -27,6 +28,26 @@ test('a manager can update status and a history record is created', function () 
         ->and($history->new_status)->toBe('planned')
         ->and($history->note)->toBe('Approved for Q3')
         ->and($history->created_at)->not->toBeNull();
+});
+
+test('the More details panel shows the idea\'s status above priority, impact and effort', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team, ['status' => 'planned']);
+
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertSeeHtml('data-test="more-details-status"')
+        ->assertSeeInOrder(['Status', 'Planned', 'Priority', 'Impact', 'Effort']);
+});
+
+test('a manager sees a Copy Link action in the idea menu wired to the idea\'s URL', function () {
+    ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team, ['status' => 'new']);
+
+    Livewire::actingAs($manager)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertSeeHtml('data-test="copy-idea-link-menu-item"')
+        ->assertSeeHtml('copyIdeaLink('.Js::from(route('ideas.show', ['idea' => $idea->slug]))->toHtml().')');
 });
 
 test('a legacy Under Review history entry displays as Approved', function () {

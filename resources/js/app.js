@@ -140,3 +140,33 @@ function initStatCounter(el, target) {
 (window.__pendingStatCounters || []).forEach(([el, target]) => initStatCounter(el, target));
 delete window.__pendingStatCounters;
 window.initStatCounter = initStatCounter;
+
+// Copies a URL to the clipboard for the idea detail page's "Copy Link" menu
+// item (see resources/views/pages/ideas/show.blade.php). The async Clipboard
+// API needs a secure context and isn't available in every browser/embedded
+// webview, so it falls back to the legacy execCommand approach — without
+// this, clicking the menu item silently did nothing in those environments.
+window.copyIdeaLink = async function (text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(text);
+
+            return;
+        } catch (e) {
+            // Fall through to the legacy approach below.
+        }
+    }
+
+    let textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+        document.execCommand('copy');
+    } finally {
+        document.body.removeChild(textarea);
+    }
+};
