@@ -19,4 +19,18 @@ return [
 
     'hosting_mode' => env('ORGANIZATIONS_HOSTING_MODE', 'self-hosted'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Default Organization Slug
+    |--------------------------------------------------------------------------
+    |
+    | For deployments permanently scoped to a single organization, set this
+    | to that organization's slug to send the common `/login` page straight
+    | to its organization-specific login page instead of asking for a work
+    | email first. Leave unset for multi-tenant deployments.
+    |
+    */
+
+    'default_slug' => env('DEFAULT_ORGANIZATION_SLUG'),
+
 ];

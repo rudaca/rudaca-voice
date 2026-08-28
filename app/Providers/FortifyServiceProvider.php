@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Actions\Auth\RedirectToDefaultOrganizationLogin;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Enums\IdentityProvider;
 use App\Http\Responses\LoginResponse;
@@ -79,10 +80,16 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn (Request $request) => view('pages::auth.login', [
-            'teamInvitation' => $this->teamInvitation($request),
-            'showMicrosoft' => TeamIdentityProvider::anyConfiguredFor(IdentityProvider::Microsoft),
-        ]));
+        Fortify::loginView(function (Request $request) {
+            if ($url = app(RedirectToDefaultOrganizationLogin::class)->handle()) {
+                return redirect($url);
+            }
+
+            return view('pages::auth.login', [
+                'teamInvitation' => $this->teamInvitation($request),
+                'showMicrosoft' => TeamIdentityProvider::anyConfiguredFor(IdentityProvider::Microsoft),
+            ]);
+        });
         Fortify::verifyEmailView(fn () => view('pages::auth.verify-email'));
         Fortify::resetPasswordView(fn () => view('pages::auth.reset-password'));
         Fortify::requestPasswordResetLinkView(fn () => view('pages::auth.forgot-password'));
