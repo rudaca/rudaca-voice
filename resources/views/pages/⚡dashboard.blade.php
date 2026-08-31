@@ -639,17 +639,10 @@ new #[Title('Dashboard')] class extends Component {
 
                                 <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 dark:text-slate-500">
                                     <flux:tooltip :content="__('Idea submitted by :name', ['name' => $authorName])">
-                                        @if ($idea->submitted_by_user_id)
-                                            <a href="{{ route('ideas.index', ['author' => $idea->submitted_by_user_id]) }}" wire:navigate class="flex items-center gap-1.5 hover:underline">
-                                                <flux:avatar size="xs" class="size-5" :name="$authorName" />
-                                                <span>{{ $authorName }}</span>
-                                            </a>
-                                        @else
-                                            <div class="flex items-center gap-1.5">
-                                                <flux:avatar size="xs" class="size-5" :name="$authorName" />
-                                                <span>{{ $authorName }}</span>
-                                            </div>
-                                        @endif
+                                        <div class="flex items-center gap-1.5">
+                                            <flux:avatar size="xs" class="size-5" :name="$authorName" />
+                                            <span>{{ $authorName }}</span>
+                                        </div>
                                     </flux:tooltip>
 
                                     <span aria-hidden="true" class="text-base leading-none">·</span>
