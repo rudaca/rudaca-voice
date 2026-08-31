@@ -85,7 +85,7 @@ new #[Title('Idea')] class extends Component {
             ->where('team_id', $team->id)
             ->where('slug', $idea)
             ->visibleTo(Auth::user()->teamRole($team), Auth::id())
-            ->with(['boardGroup:id,name', 'board:id,name,team_id', 'category:id,name', 'submittedBy:id,name'])
+            ->with(['boardGroup:id,name', 'board:id,name,team_id', 'category:id,name', 'submittedBy:id,name', 'enteredBy:id,name'])
             ->firstOrFail();
 
         $this->status = $this->ideaModel->status;
@@ -1149,6 +1149,12 @@ new #[Title('Idea')] class extends Component {
                             · {{ $idea->created_at->forUser()->format('M j, Y g:i A') }}
                         </span>
                     </div>
+
+                    @if ($this->canManage && $idea->entered_by_user_id !== $idea->submitted_by_user_id)
+                        <div class="mt-0.5 text-xs text-slate-500 dark:text-slate-600" data-test="idea-entered-by">
+                            {{ __('Entered by :name', ['name' => $idea->enteredBy?->name ?? __('Unknown')]) }}
+                        </div>
+                    @endif
                 </div>
             </div>
 

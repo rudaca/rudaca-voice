@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\TeamPermission;
 use App\Models\Idea;
 use App\Models\IdeaBoard;
 use App\Models\IdeaStatusHistory;
 use App\Models\Team;
+use App\Models\User;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +29,16 @@ new #[Title('Submit idea')] class extends Component {
     public bool $is_anonymous = false;
 
     public bool $is_private = false;
+
+    /**
+     * The user this idea is being submitted for, when a permitted user is
+     * entering it on someone else's behalf. Null means "Myself".
+     */
+    public ?int $on_behalf_of_user_id = null;
+
+    public string $on_behalf_of_user_name = '';
+
+    public string $on_behalf_of_search = '';
 
     /**
      * Whether the board group and board were inherited from a specific board's context
@@ -166,6 +178,68 @@ new #[Title('Submit idea')] class extends Component {
     }
 
     /**
+     * Whether the authenticated user may submit this idea on behalf of
+     * another member of the current team.
+     */
+    #[Computed]
+    public function canSubmitOnBehalf(): bool
+    {
+        return Auth::user()->hasTeamPermission($this->team, TeamPermission::SubmitIdeaOnBehalf);
+    }
+
+    /**
+     * Active team members matching the current "on behalf of" search term,
+     * excluding the authenticated user. Empty unless the user is permitted
+     * to submit ideas on behalf of others and has typed a search term.
+     *
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function onBehalfOfCandidates(): Collection
+    {
+        $search = trim($this->on_behalf_of_search);
+
+        if (! $this->canSubmitOnBehalf || $search === '') {
+            return new Collection;
+        }
+
+        return $this->team->members()
+            ->where('users.id', '!=', Auth::id())
+            ->where('users.is_active', true)
+            ->where(fn ($query) => $query
+                ->where('users.name', 'like', "%{$search}%")
+                ->orWhere('users.email', 'like', "%{$search}%"))
+            ->orderBy('users.name')
+            ->limit(10)
+            ->get(['users.id', 'users.name', 'users.email']);
+    }
+
+    /**
+     * Select the team member this idea is being submitted on behalf of.
+     */
+    public function selectOnBehalfOfUser(int $userId): void
+    {
+        abort_unless($this->canSubmitOnBehalf, 403);
+
+        $user = $this->team->members()
+            ->where('users.id', $userId)
+            ->where('users.is_active', true)
+            ->firstOrFail();
+
+        $this->on_behalf_of_user_id = $user->id;
+        $this->on_behalf_of_user_name = $user->name;
+        $this->on_behalf_of_search = '';
+    }
+
+    /**
+     * Revert the "submit on behalf of" selection back to Myself.
+     */
+    public function clearOnBehalfOfSelection(): void
+    {
+        $this->reset('on_behalf_of_user_id', 'on_behalf_of_user_name');
+    }
+
+    /**
      * Active board groups for the current team.
      *
      * @return Collection<int, \App\Models\IdeaBoardGroup>
@@ -249,6 +323,30 @@ new #[Title('Submit idea')] class extends Component {
             ],
             'is_anonymous' => ['boolean'],
             'is_private' => ['boolean'],
+            'on_behalf_of_user_id' => [
+                'nullable',
+                'integer',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === null) {
+                        return;
+                    }
+
+                    if (! $this->canSubmitOnBehalf) {
+                        $fail(__('You are not authorized to submit an idea on behalf of another user.'));
+
+                        return;
+                    }
+
+                    $isEligible = $this->team->members()
+                        ->where('users.id', $value)
+                        ->where('users.is_active', true)
+                        ->exists();
+
+                    if (! $isEligible) {
+                        $fail(__('Select an active member of your organization.'));
+                    }
+                },
+            ],
         ];
     }
 
@@ -279,12 +377,16 @@ new #[Title('Submit idea')] class extends Component {
         $team = $this->team;
         $board = IdeaBoard::whereKey($validated['board_id'])->where('team_id', $team->id)->firstOrFail();
 
+        $enteredByUserId = Auth::id();
+        $submittedByUserId = $validated['on_behalf_of_user_id'] ?? $enteredByUserId;
+
         $idea = Idea::create([
             'team_id' => $team->id,
             'board_group_id' => $board->board_group_id,
             'board_id' => $board->id,
             'category_id' => $validated['category_id'],
-            'submitted_by_user_id' => Auth::id(),
+            'submitted_by_user_id' => $submittedByUserId,
+            'entered_by_user_id' => $enteredByUserId,
             'title' => $validated['title'],
             'slug' => $this->uniqueSlug($validated['title'], $team->id),
             'description' => $validated['description'],
@@ -295,9 +397,15 @@ new #[Title('Submit idea')] class extends Component {
 
         IdeaStatusHistory::create([
             'idea_id' => $idea->id,
-            'changed_by_user_id' => Auth::id(),
+            'changed_by_user_id' => $enteredByUserId,
             'old_status' => 'new',
             'new_status' => 'new',
+            'note' => $submittedByUserId !== $enteredByUserId
+                ? __('Entered by :entered on behalf of :submitted.', [
+                    'entered' => Auth::user()->name,
+                    'submitted' => User::whereKey($submittedByUserId)->value('name'),
+                ])
+                : null,
         ]);
 
         Flux::toast(variant: 'success', text: __('Idea submitted.'));
@@ -370,6 +478,60 @@ new #[Title('Submit idea')] class extends Component {
                 :placeholder="__('Summarize your idea in one line')"
                 data-test="idea-title"
             />
+
+            @if ($this->canSubmitOnBehalf)
+                <div class="space-y-2" data-test="idea-on-behalf-of">
+                    <flux:label>{{ __('Submit on behalf of') }}</flux:label>
+                    <flux:text class="text-sm text-slate-600 dark:text-slate-500">
+                        {{ __("Enter someone else's idea while your name is kept as the person who logged it.") }}
+                    </flux:text>
+
+                    @if ($on_behalf_of_user_id)
+                        <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800" data-test="on-behalf-selected">
+                            <div class="flex items-center gap-3">
+                                <flux:avatar :name="$on_behalf_of_user_name" size="xs" />
+                                <span class="font-medium text-slate-900 dark:text-slate-200">{{ $on_behalf_of_user_name }}</span>
+                            </div>
+                            <flux:button wire:click="clearOnBehalfOfSelection" variant="ghost" size="sm" data-test="change-on-behalf">
+                                {{ __('Change') }}
+                            </flux:button>
+                        </div>
+                    @else
+                        <div class="relative">
+                            <flux:input
+                                wire:model.live.debounce.300ms="on_behalf_of_search"
+                                :placeholder="__('Leave blank to submit as yourself, or search for a colleague...')"
+                                data-test="on-behalf-search-input"
+                            />
+                            <flux:error name="on_behalf_of_user_id" />
+
+                            @if (trim($on_behalf_of_search) !== '')
+                                <div class="mt-1 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-1 dark:border-zinc-700" data-test="on-behalf-results">
+                                    @forelse ($this->onBehalfOfCandidates as $candidate)
+                                        <button
+                                            type="button"
+                                            wire:click="selectOnBehalfOfUser({{ $candidate->id }})"
+                                            wire:key="on-behalf-candidate-{{ $candidate->id }}"
+                                            class="flex w-full items-center gap-3 rounded-md p-2 text-start hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                            data-test="on-behalf-option"
+                                        >
+                                            <flux:avatar :name="$candidate->name" size="xs" />
+                                            <div class="min-w-0">
+                                                <div class="truncate font-medium text-slate-900 dark:text-slate-200">{{ $candidate->name }}</div>
+                                                <div class="truncate text-sm text-slate-600 dark:text-slate-500">{{ $candidate->email }}</div>
+                                            </div>
+                                        </button>
+                                    @empty
+                                        <div class="p-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No matching members found.') }}</div>
+                                    @endforelse
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+
+                <flux:separator variant="subtle" />
+            @endif
 
             @if ($this->boardLocked)
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" data-test="idea-board-context">

@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property int $board_id
  * @property int|null $category_id
  * @property int $submitted_by_user_id
+ * @property int|null $entered_by_user_id
  * @property string $title
  * @property string $slug
  * @property string $description
@@ -40,6 +41,7 @@ use Illuminate\Support\Carbon;
  * @property-read IdeaBoard $board
  * @property-read IdeaCategory|null $category
  * @property-read User $submittedBy
+ * @property-read User|null $enteredBy
  * @property-read Idea|null $duplicateOf
  * @property-read Collection<int, Idea> $duplicates
  * @property-read Collection<int, IdeaVote> $votes
@@ -55,6 +57,7 @@ use Illuminate\Support\Carbon;
     'board_id',
     'category_id',
     'submitted_by_user_id',
+    'entered_by_user_id',
     'title',
     'slug',
     'description',
@@ -119,6 +122,17 @@ class Idea extends Model
     public function submittedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'submitted_by_user_id');
+    }
+
+    /**
+     * Get the user who actually entered the idea into Voice. Equal to
+     * submittedBy() unless the idea was submitted on someone else's behalf.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function enteredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'entered_by_user_id');
     }
 
     /**

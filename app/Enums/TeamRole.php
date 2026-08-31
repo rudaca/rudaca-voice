@@ -93,6 +93,7 @@ enum TeamRole: string
                 __('Review ideas'),
                 __('Change statuses'),
                 __('Moderate comments'),
+                __('Submit ideas on behalf of other members'),
             ],
             self::Manager => [
                 __('View ideas'),
@@ -124,8 +125,9 @@ enum TeamRole: string
         return match ($this) {
             self::Owner => TeamPermission::cases(),
             // Admins are trusted with the organization's operational settings, which
-            // includes its external sign-in configuration.
-            self::Admin => [TeamPermission::ManageAuthentication],
+            // includes its external sign-in configuration and entering ideas on
+            // behalf of other members (e.g. from a call or a meeting).
+            self::Admin => [TeamPermission::ManageAuthentication, TeamPermission::SubmitIdeaOnBehalf],
             self::Manager, self::Employee, self::Viewer, self::Member => [],
         };
     }

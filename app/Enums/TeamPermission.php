@@ -15,4 +15,6 @@ enum TeamPermission: string
     case CancelInvitation = 'invitation:cancel';
 
     case ManageAuthentication = 'authentication:manage';
+
+    case SubmitIdeaOnBehalf = 'idea:submit_on_behalf';
 }

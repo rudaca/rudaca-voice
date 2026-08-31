@@ -284,7 +284,7 @@ new #[Title('Review Queue')] class extends Component {
     public function ideas(): LengthAwarePaginator
     {
         $query = $this->applyFilters($this->queueQuery())
-            ->with(['board:id,name', 'submittedBy:id,name'])
+            ->with(['board:id,name', 'submittedBy:id,name', 'enteredBy:id,name'])
             ->withCount([
                 'votes',
                 'comments as comments_count' => fn ($query) => $query->visibleTo($this->authorizedPrivateNoteBoardIds),
@@ -762,6 +762,13 @@ new #[Title('Review Queue')] class extends Component {
                             <flux:avatar size="xs" class="size-5" :name="$authorName" />
                             <span>{{ $authorName }}</span>
                         </div>
+
+                        @if ($idea->entered_by_user_id !== $idea->submitted_by_user_id)
+                            <span aria-hidden="true" class="text-base leading-none">&middot;</span>
+                            <span class="text-slate-500 dark:text-slate-600" data-test="idea-entered-by">
+                                {{ __('Entered by :name', ['name' => $idea->enteredBy?->name ?? __('Unknown')]) }}
+                            </span>
+                        @endif
 
                         <span aria-hidden="true" class="text-base leading-none">&middot;</span>
 

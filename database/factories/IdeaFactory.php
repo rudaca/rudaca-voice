@@ -29,6 +29,7 @@ class IdeaFactory extends Factory
             'board_group_id' => fn (array $attributes) => IdeaBoard::find($attributes['board_id'])->board_group_id,
             'category_id' => null,
             'submitted_by_user_id' => User::factory(),
+            'entered_by_user_id' => fn (array $attributes) => $attributes['submitted_by_user_id'],
             'title' => $title,
             'slug' => Str::slug($title).'-'.fake()->unique()->numberBetween(1, 999999),
             'description' => fake()->paragraphs(2, true),
@@ -71,6 +72,17 @@ class IdeaFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'status' => $status,
+        ]);
+    }
+
+    /**
+     * Indicate that the idea was entered by someone other than the person
+     * whose idea it is.
+     */
+    public function enteredBy(User $enteredBy): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'entered_by_user_id' => $enteredBy->id,
         ]);
     }
 }
