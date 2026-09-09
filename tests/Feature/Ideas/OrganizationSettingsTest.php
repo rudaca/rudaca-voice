@@ -592,24 +592,32 @@ test('editing a board pre-selects its assigned group in the dropdown rather than
     $zulu = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'name' => 'Zulu', 'is_active' => true]);
     $board = IdeaBoard::factory()->create(['team_id' => $team->id, 'board_group_id' => $zulu->id, 'created_by_user_id' => $admin->id]);
 
-    Livewire::actingAs($admin)
+    // Flux's <flux:select.option> renders the attribute bag (where `selected`
+    // lives) and `value="..."` on separate lines, so a plain
+    // assertSeeHtml() substring check (which assumes a single space) never
+    // matches — hence the regex with \s+ between them.
+    $html = Livewire::actingAs($admin)
         ->test('pages::ideas.settings')
         ->set('tab', 'boards')
         ->call('editBoard', $board->id)
         ->assertSet('boardGroupId', (string) $zulu->id)
-        ->assertSeeHtml('selected="selected" value="'.$zulu->id.'"')
-        ->assertDontSeeHtml('selected="selected" value="'.$alpha->id.'"');
+        ->html();
+
+    expect($html)->toMatch('/selected="selected"\s+value="'.$zulu->id.'"/')
+        ->and($html)->not->toMatch('/selected="selected"\s+value="'.$alpha->id.'"/');
 });
 
 test('the new board modal does not pre-select any board group', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
     $group = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'is_active' => true]);
 
-    Livewire::actingAs($admin)
+    $html = Livewire::actingAs($admin)
         ->test('pages::ideas.settings')
         ->set('tab', 'boards')
         ->call('newBoard')
-        ->assertDontSeeHtml('selected="selected" value="'.$group->id.'"');
+        ->html();
+
+    expect($html)->not->toMatch('/selected="selected"\s+value="'.$group->id.'"/');
 });
 
 test('the boards list can be filtered by board group, defaulting to All Groups', function () {
