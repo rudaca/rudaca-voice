@@ -522,6 +522,7 @@ test('the new board modal shows a read-only auto-generated slug alongside name a
 
 test('the auto-generated slug is suffixed to stay unique when two boards share a name', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $group = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id]);
     IdeaBoard::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'name' => 'Support', 'slug' => 'support']);
 
     Livewire::actingAs($admin)
@@ -530,6 +531,7 @@ test('the auto-generated slug is suffixed to stay unique when two boards share a
         ->call('newBoard')
         ->set('boardName', 'Support')
         ->assertSet('boardSlug', 'support-2')
+        ->set('boardGroupId', (string) $group->id)
         ->call('saveBoard')
         ->assertHasNoErrors();
 
@@ -538,6 +540,7 @@ test('the auto-generated slug is suffixed to stay unique when two boards share a
 
 test('the read-only slug cannot be tampered with — the server always recomputes it from the name', function () {
     ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $group = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id]);
 
     Livewire::actingAs($admin)
         ->test('pages::ideas.settings')
@@ -545,12 +548,27 @@ test('the read-only slug cannot be tampered with — the server always recompute
         ->call('newBoard')
         ->set('boardName', 'Support')
         ->set('boardSlug', 'not-what-the-server-would-generate')
+        ->set('boardGroupId', (string) $group->id)
         ->call('saveBoard')
         ->assertHasNoErrors();
 
     $board = IdeaBoard::where('name', 'Support')->firstOrFail();
 
     expect($board->slug)->toBe('support');
+});
+
+test('a board cannot be saved without a board group', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'boards')
+        ->call('newBoard')
+        ->set('boardName', 'Support')
+        ->call('saveBoard')
+        ->assertHasErrors(['boardGroupId' => 'required']);
+
+    expect(IdeaBoard::where('team_id', $team->id)->where('name', 'Support')->exists())->toBeFalse();
 });
 
 test('editing an existing board exposes slug, description, visibility and active fields', function () {
@@ -565,6 +583,33 @@ test('editing an existing board exposes slug, description, visibility and active
         ->assertSeeHtml('wire:model="boardDescription"')
         ->assertSet('boardVisibility', $stack['board']->visibility)
         ->assertSet('boardIsActive', $stack['board']->is_active ? '1' : '0');
+});
+
+test('editing a board pre-selects its assigned group in the dropdown rather than the first group', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+
+    $alpha = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'name' => 'Alpha', 'is_active' => true]);
+    $zulu = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'name' => 'Zulu', 'is_active' => true]);
+    $board = IdeaBoard::factory()->create(['team_id' => $team->id, 'board_group_id' => $zulu->id, 'created_by_user_id' => $admin->id]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'boards')
+        ->call('editBoard', $board->id)
+        ->assertSet('boardGroupId', (string) $zulu->id)
+        ->assertSeeHtml('selected="selected" value="'.$zulu->id.'"')
+        ->assertDontSeeHtml('selected="selected" value="'.$alpha->id.'"');
+});
+
+test('the new board modal does not pre-select any board group', function () {
+    ['team' => $team, 'user' => $admin] = teamWithMember(TeamRole::Admin);
+    $group = IdeaBoardGroup::factory()->create(['team_id' => $team->id, 'created_by_user_id' => $admin->id, 'is_active' => true]);
+
+    Livewire::actingAs($admin)
+        ->test('pages::ideas.settings')
+        ->set('tab', 'boards')
+        ->call('newBoard')
+        ->assertDontSeeHtml('selected="selected" value="'.$group->id.'"');
 });
 
 test('the boards list can be filtered by board group, defaulting to All Groups', function () {

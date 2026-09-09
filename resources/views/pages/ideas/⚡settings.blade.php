@@ -62,7 +62,7 @@ new #[Title('Organization Settings')] class extends Component {
 
     public string $boardDescription = '';
 
-    public ?string $boardGroupId = null;
+    public string $boardGroupId = '';
 
     public string $boardVisibility = 'internal';
 
@@ -514,7 +514,7 @@ new #[Title('Organization Settings')] class extends Component {
         $this->boardName = $board->name;
         $this->boardSlug = $board->slug;
         $this->boardDescription = $board->description ?? '';
-        $this->boardGroupId = $board->board_group_id ? (string) $board->board_group_id : null;
+        $this->boardGroupId = $board->board_group_id ? (string) $board->board_group_id : '';
         $this->boardVisibility = $board->visibility;
         $this->boardIsActive = $board->is_active ? '1' : '0';
 
@@ -555,13 +555,12 @@ new #[Title('Organization Settings')] class extends Component {
         // even if a request tampers with the value or arrives out of order with the
         // live "updatedBoardName" recompute.
         $this->boardSlug = $this->nextAvailableBoardSlug($this->boardName, $this->boardId);
-        $this->boardGroupId = $this->boardGroupId !== '' ? $this->boardGroupId : null;
 
         $validated = $this->validate([
             'boardName' => ['required', 'string', 'max:255'],
             'boardSlug' => ['required', 'string', 'max:255', Rule::unique('idea_boards', 'slug')->where('team_id', $teamId)->ignore($this->boardId)],
             'boardDescription' => ['nullable', 'string', 'max:1000'],
-            'boardGroupId' => ['nullable', Rule::exists('idea_board_groups', 'id')->where('team_id', $teamId)],
+            'boardGroupId' => ['required', Rule::exists('idea_board_groups', 'id')->where('team_id', $teamId)],
             'boardVisibility' => ['required', Rule::in(array_keys(self::VISIBILITY_OPTIONS))],
             'boardIsActive' => ['required', Rule::in(['1', '0'])],
         ]);
@@ -570,7 +569,7 @@ new #[Title('Organization Settings')] class extends Component {
             'name' => $validated['boardName'],
             'slug' => $validated['boardSlug'],
             'description' => $validated['boardDescription'] !== '' ? $validated['boardDescription'] : null,
-            'board_group_id' => $validated['boardGroupId'] ?: null,
+            'board_group_id' => $validated['boardGroupId'],
             'visibility' => $validated['boardVisibility'],
             'is_active' => $this->boardIsActive === '1',
         ];
@@ -1344,9 +1343,9 @@ new #[Title('Organization Settings')] class extends Component {
         <form wire:submit="saveBoard" class="space-y-5">
             <flux:heading size="lg">{{ $boardId ? __('Edit board') : __('New board') }}</flux:heading>
             <flux:input wire:model.live="boardName" :label="__('Name')" required data-test="board-name-input" />
-            <flux:select wire:model="boardGroupId" :label="__('Board group')" :placeholder="__('No group')" data-test="board-group-select">
+            <flux:select wire:model="boardGroupId" :label="__('Board group')" :placeholder="__('Choose a board group')" required data-test="board-group-select">
                 @foreach ($this->assignableBoardGroups as $group)
-                    <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
+                    <flux:select.option value="{{ $group->id }}" :selected="$boardGroupId === (string) $group->id">{{ $group->name }}</flux:select.option>
                 @endforeach
             </flux:select>
             <flux:input wire:model="boardSlug" :label="__('Slug')" :description="__('Automatically generated from the name.')" readonly data-test="board-slug-input" />
