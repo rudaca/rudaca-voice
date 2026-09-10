@@ -25,7 +25,7 @@ return [
     |
     */
 
-    'max_file_size_kb' => env('IDEA_ATTACHMENTS_MAX_FILE_SIZE_KB', 51200), // 50MB
+    'max_file_size_kb' => env('IDEA_ATTACHMENTS_MAX_FILE_SIZE_KB', 15360), // 15MB
 
     /*
     |--------------------------------------------------------------------------

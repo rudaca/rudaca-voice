@@ -133,7 +133,7 @@ return [
         // Raised to match config('idea_attachments.max_file_size_kb') — the default
         // 12MB cap would otherwise reject idea attachments before our own upload
         // validation even runs. Uses the same env var so the two stay in sync.
-        'rules' => ['required', 'file', 'max:'.env('IDEA_ATTACHMENTS_MAX_FILE_SIZE_KB', 51200)],
+        'rules' => ['required', 'file', 'max:'.env('IDEA_ATTACHMENTS_MAX_FILE_SIZE_KB', 15360)],
         'directory' => null,                                  // Example: 'tmp'                     | Default: 'livewire-tmp'
         'middleware' => null,                                 // Example: 'throttle:5,1'            | Default: 'throttle:60,1'
         'preview_mimes' => [                                  // Supported file types for temporary pre-signed file URLs...
