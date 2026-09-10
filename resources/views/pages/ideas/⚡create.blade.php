@@ -701,7 +701,7 @@ new #[Title('Submit idea')] class extends Component {
                     wire:model="newAttachments"
                     multiple
                     :label="__('Attachments')"
-                    :description="__('Images, PDFs, and Office documents up to :size each.', ['size' => Number::fileSize(config('idea_attachments.max_file_size_kb') * 1024)])"
+                    :description="__('You can select multiple files at once. Images, PDFs, and Office documents up to :size each.', ['size' => Number::fileSize(config('idea_attachments.max_file_size_kb') * 1024)])"
                     data-test="idea-attachments"
                 />
                 @error('newAttachments')

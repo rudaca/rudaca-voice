@@ -20,6 +20,7 @@ test('the board and group count badges render as rolling-number odometers', func
 test('the two copies of the boards tree namespace their odometers separately', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
     $stack = boardStack($team);
+    makeIdea($team, ['board_id' => $stack['board']->id, 'board_group_id' => $stack['group']->id]);
 
     // The tree renders twice - expanded in the sidebar and again inside the
     // collapsed sidebar's dropdown - and each digit column's wire:key has to
@@ -31,7 +32,7 @@ test('the two copies of the boards tree namespace their odometers separately', f
         ->assertOk()
         ->getContent();
 
-    $key = fn (string $scope) => 'wire:key="rolling-'.$scope.'-board-'.$stack['board']->id.'-0-0"';
+    $key = fn (string $scope) => 'wire:key="rolling-'.$scope.'-board-'.$stack['board']->id.'-0-1"';
 
     expect(substr_count($content, $key('sidebar')))->toBe(1)
         ->and(substr_count($content, $key('dropdown')))->toBe(1);
