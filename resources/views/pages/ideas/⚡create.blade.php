@@ -2,6 +2,8 @@
 
 use App\Enums\TeamPermission;
 use App\Models\Idea;
+use App\Models\IdeaAttachment;
+use App\Models\IdeaAttachmentHistory;
 use App\Models\IdeaBoard;
 use App\Models\IdeaStatusHistory;
 use App\Models\Team;
@@ -9,16 +11,29 @@ use App\Models\User;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithFileUploads;
+use Stevebauman\Purify\Facades\Purify;
 
 new #[Title('Submit idea')] class extends Component {
+    use WithFileUploads;
+
     public string $title = '';
 
     public string $description = '';
+
+    /**
+     * Files staged for upload alongside the idea, as Livewire temporary
+     * uploads (see rules() for the mime/size/count limits enforced on them).
+     *
+     * @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>
+     */
+    public array $newAttachments = [];
 
     public string $board_group_id = '';
 
@@ -39,6 +54,13 @@ new #[Title('Submit idea')] class extends Component {
     public string $on_behalf_of_user_name = '';
 
     public string $on_behalf_of_search = '';
+
+    /**
+     * Whether the "submit on behalf of" section is expanded. Off by default
+     * to keep the form compact for the common case (submitting for
+     * yourself); purely a UI toggle, not persisted or validated.
+     */
+    public bool $showOnBehalfOf = false;
 
     /**
      * Whether the board group and board were inherited from a specific board's context
@@ -302,7 +324,15 @@ new #[Title('Submit idea')] class extends Component {
 
         return [
             'title' => ['required', 'string', 'max:255'],
-            'description' => ['required', 'string'],
+            // Raw Quill HTML — generous, this is a DoS guard only; the real
+            // business-rule length check runs post-sanitization in save().
+            'description' => ['required', 'string', 'max:100000'],
+            'newAttachments' => ['array', 'max:'.config('idea_attachments.max_attachments_per_idea')],
+            'newAttachments.*' => [
+                'file',
+                'max:'.config('idea_attachments.max_file_size_kb'),
+                'mimes:'.implode(',', config('idea_attachments.allowed_extensions')),
+            ],
             'board_group_id' => [
                 'required',
                 Rule::exists('idea_board_groups', 'id')->where('team_id', $teamId)->where('is_active', true),
@@ -374,6 +404,14 @@ new #[Title('Submit idea')] class extends Component {
 
         $validated = $this->validate();
 
+        $cleanDescription = Purify::config('idea_rich_text')->clean($validated['description']);
+
+        if (mb_strlen(strip_tags($cleanDescription)) > 20000) {
+            $this->addError('description', __('Description is too long.'));
+
+            return;
+        }
+
         $team = $this->team;
         $board = IdeaBoard::whereKey($validated['board_id'])->where('team_id', $team->id)->firstOrFail();
 
@@ -389,7 +427,8 @@ new #[Title('Submit idea')] class extends Component {
             'entered_by_user_id' => $enteredByUserId,
             'title' => $validated['title'],
             'slug' => $this->uniqueSlug($validated['title'], $team->id),
-            'description' => $validated['description'],
+            'description' => $cleanDescription,
+            'description_format' => 'html',
             'status' => 'new',
             'is_anonymous' => $team->allowsAnonymousIdeas() && $this->is_anonymous,
             'is_private' => $this->is_private,
@@ -408,9 +447,44 @@ new #[Title('Submit idea')] class extends Component {
                 : null,
         ]);
 
+        $this->storeAttachments($idea, $enteredByUserId);
+
         Flux::toast(variant: 'success', text: __('Idea submitted.'));
 
         $this->redirectRoute('ideas.show', ['idea' => $idea->slug], navigate: true);
+    }
+
+    /**
+     * Store any staged attachment uploads against the newly created idea and
+     * record an audit-trail entry for each.
+     */
+    private function storeAttachments(Idea $idea, int $actorUserId): void
+    {
+        foreach ($this->newAttachments as $file) {
+            $extension = strtolower($file->getClientOriginalExtension());
+            $storedName = (string) Str::uuid().'.'.$extension;
+            $disk = config('idea_attachments.disk');
+            $path = $file->storeAs("idea-attachments/{$idea->team_id}/{$idea->id}", $storedName, $disk);
+
+            $attachment = IdeaAttachment::create([
+                'idea_id' => $idea->id,
+                'uploaded_by_user_id' => $actorUserId,
+                'disk' => $disk,
+                'path' => $path,
+                'original_filename' => Str::limit(basename($file->getClientOriginalName()), 255, ''),
+                'extension' => $extension,
+                'mime_type' => $file->getMimeType(),
+                'size_bytes' => $file->getSize(),
+            ]);
+
+            IdeaAttachmentHistory::create([
+                'idea_id' => $idea->id,
+                'idea_attachment_id' => $attachment->id,
+                'actor_user_id' => $actorUserId,
+                'action' => IdeaAttachmentHistory::ACTION_ADDED,
+                'original_filename' => $attachment->original_filename,
+            ]);
+        }
     }
 
     /**
@@ -453,7 +527,7 @@ new #[Title('Submit idea')] class extends Component {
     ]" />
 @endpush
 
-<section class="mx-auto w-full container px-3 py-7 sm:px-6 lg:px-8">
+<section class="mx-auto w-full container px-3 pb-7 sm:px-6 lg:px-8">
     <flux:link as="button" x-data x-on:click="window.history.back()" variant="subtle" class="inline-flex items-center gap-1 text-sm">
         <flux:icon.arrow-left class="size-4" />
         {{ __('Back') }}
@@ -480,54 +554,63 @@ new #[Title('Submit idea')] class extends Component {
             />
 
             @if ($this->canSubmitOnBehalf)
-                <div class="space-y-2" data-test="idea-on-behalf-of">
-                    <flux:label>{{ __('Submit on behalf of') }}</flux:label>
-                    <flux:text class="text-sm text-slate-600 dark:text-slate-500">
-                        {{ __("Enter someone else's idea while your name is kept as the person who logged it.") }}
+                <div>
+                    <div class="flex items-center gap-3">
+                        <flux:switch wire:model.live="showOnBehalfOf" data-test="toggle-on-behalf" />
+                        <flux:label>{{ __('Submit idea on behalf') }}</flux:label>
+                    </div>
+                    <flux:text class="mt-1 text-sm text-slate-600 dark:text-slate-500">
+                        {{ __('Enter someone else\'s idea while your name is kept as the person who logged it.') }}
                     </flux:text>
 
-                    @if ($on_behalf_of_user_id)
-                        <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800" data-test="on-behalf-selected">
-                            <div class="flex items-center gap-3">
-                                <flux:avatar :name="$on_behalf_of_user_name" size="xs" />
-                                <span class="font-medium text-slate-900 dark:text-slate-200">{{ $on_behalf_of_user_name }}</span>
-                            </div>
-                            <flux:button wire:click="clearOnBehalfOfSelection" variant="ghost" size="sm" data-test="change-on-behalf">
-                                {{ __('Change') }}
-                            </flux:button>
-                        </div>
-                    @else
-                        <div class="relative">
-                            <flux:input
-                                wire:model.live.debounce.300ms="on_behalf_of_search"
-                                :placeholder="__('Leave blank to submit as yourself, or search for a colleague...')"
-                                data-test="on-behalf-search-input"
-                            />
-                            <flux:error name="on_behalf_of_user_id" />
+                    <div class="grid transition-[grid-template-rows] duration-300 ease-in-out {{ $showOnBehalfOf ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]' }}">
+                        <div class="overflow-hidden">
+                            <div class="space-y-2 pt-3" data-test="idea-on-behalf-of">
+                                @if ($on_behalf_of_user_id)
+                                    <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800" data-test="on-behalf-selected">
+                                        <div class="flex items-center gap-3">
+                                            <flux:avatar :name="$on_behalf_of_user_name" size="xs" />
+                                            <span class="font-medium text-slate-900 dark:text-slate-200">{{ $on_behalf_of_user_name }}</span>
+                                        </div>
+                                        <flux:button wire:click="clearOnBehalfOfSelection" variant="ghost" size="sm" data-test="change-on-behalf">
+                                            {{ __('Change') }}
+                                        </flux:button>
+                                    </div>
+                                @else
+                                    <div class="relative">
+                                        <flux:input
+                                            wire:model.live.debounce.300ms="on_behalf_of_search"
+                                            :placeholder="__('Leave blank to submit as yourself, or search for a colleague...')"
+                                            data-test="on-behalf-search-input"
+                                        />
+                                        <flux:error name="on_behalf_of_user_id" />
 
-                            @if (trim($on_behalf_of_search) !== '')
-                                <div class="mt-1 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-1 dark:border-zinc-700" data-test="on-behalf-results">
-                                    @forelse ($this->onBehalfOfCandidates as $candidate)
-                                        <button
-                                            type="button"
-                                            wire:click="selectOnBehalfOfUser({{ $candidate->id }})"
-                                            wire:key="on-behalf-candidate-{{ $candidate->id }}"
-                                            class="flex w-full items-center gap-3 rounded-md p-2 text-start hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                                            data-test="on-behalf-option"
-                                        >
-                                            <flux:avatar :name="$candidate->name" size="xs" />
-                                            <div class="min-w-0">
-                                                <div class="truncate font-medium text-slate-900 dark:text-slate-200">{{ $candidate->name }}</div>
-                                                <div class="truncate text-sm text-slate-600 dark:text-slate-500">{{ $candidate->email }}</div>
+                                        @if (trim($on_behalf_of_search) !== '')
+                                            <div class="mt-1 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-1 dark:border-zinc-700" data-test="on-behalf-results">
+                                                @forelse ($this->onBehalfOfCandidates as $candidate)
+                                                    <button
+                                                        type="button"
+                                                        wire:click="selectOnBehalfOfUser({{ $candidate->id }})"
+                                                        wire:key="on-behalf-candidate-{{ $candidate->id }}"
+                                                        class="flex w-full items-center gap-3 rounded-md p-2 text-start hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                                        data-test="on-behalf-option"
+                                                    >
+                                                        <flux:avatar :name="$candidate->name" size="xs" />
+                                                        <div class="min-w-0">
+                                                            <div class="truncate font-medium text-slate-900 dark:text-slate-200">{{ $candidate->name }}</div>
+                                                            <div class="truncate text-sm text-slate-600 dark:text-slate-500">{{ $candidate->email }}</div>
+                                                        </div>
+                                                    </button>
+                                                @empty
+                                                    <div class="p-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No matching members found.') }}</div>
+                                                @endforelse
                                             </div>
-                                        </button>
-                                    @empty
-                                        <div class="p-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No matching members found.') }}</div>
-                                    @endforelse
-                                </div>
-                            @endif
+                                        @endif
+                                    </div>
+                                @endif
+                            </div>
                         </div>
-                    @endif
+                    </div>
                 </div>
 
                 <flux:separator variant="subtle" />
@@ -599,15 +682,35 @@ new #[Title('Submit idea')] class extends Component {
                 </div>
             @endif
 
-            <flux:textarea
-                wire:model="description"
-                :label="__('Description')"
-                rows="6"
-                required
-                :placeholder="__('What is the problem, and how would your idea improve things?')"
-                :description="__('Include who it affects and the outcome you\'d expect. The more context, the easier it is to prioritize.')"
-                data-test="idea-description"
-            />
+            <div>
+                <flux:label>{{ __('Description') }}</flux:label>
+                <div wire:ignore x-data x-init="initRichTextEditor($refs.editor, $wire, 'description')">
+                    <div x-ref="editor" data-test="idea-description"></div>
+                </div>
+                <flux:text class="mt-1 text-sm text-slate-500 dark:text-slate-500">
+                    {{ __('Include who it affects and the outcome you\'d expect. The more context, the easier it is to prioritize.') }}
+                </flux:text>
+                @error('description')
+                    <flux:text class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                @enderror
+            </div>
+
+            <div>
+                <flux:input
+                    type="file"
+                    wire:model="newAttachments"
+                    multiple
+                    :label="__('Attachments')"
+                    :description="__('Images, PDFs, and Office documents up to :size each.', ['size' => Number::fileSize(config('idea_attachments.max_file_size_kb') * 1024)])"
+                    data-test="idea-attachments"
+                />
+                @error('newAttachments')
+                    <flux:text class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                @enderror
+                @error('newAttachments.*')
+                    <flux:text class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                @enderror
+            </div>
 
             <flux:separator variant="subtle" />
 
@@ -631,7 +734,7 @@ new #[Title('Submit idea')] class extends Component {
                 />
             </div>
 
-            <div class="flex items-center justify-end gap-3">
+            <div class="sticky bottom-0 -mx-6 -mb-6 flex items-center justify-end gap-3 rounded-b-xl border-t border-zinc-200 bg-white px-6 py-4 dark:border-white/10 dark:bg-zinc-900">
                 <flux:button :href="route('ideas.index')" wire:navigate variant="ghost">
                     {{ __('Cancel') }}
                 </flux:button>

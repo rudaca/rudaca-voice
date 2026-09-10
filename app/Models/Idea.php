@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property string $title
  * @property string $slug
  * @property string $description
+ * @property string $description_format
  * @property string $status
  * @property string $priority
  * @property string $impact
@@ -50,6 +51,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, IdeaGithubLink> $githubLinks
  * @property-read IdeaOfficialResponse|null $officialResponse
  * @property-read Collection<int, IdeaOfficialResponseHistory> $officialResponseHistory
+ * @property-read Collection<int, IdeaAttachment> $attachments
+ * @property-read Collection<int, IdeaAttachmentHistory> $attachmentHistory
  */
 #[Fillable([
     'team_id',
@@ -61,6 +64,7 @@ use Illuminate\Support\Carbon;
     'title',
     'slug',
     'description',
+    'description_format',
     'status',
     'priority',
     'impact',
@@ -216,6 +220,26 @@ class Idea extends Model
     public function officialResponseHistory(): HasMany
     {
         return $this->hasMany(IdeaOfficialResponseHistory::class);
+    }
+
+    /**
+     * Get the file attachments for the idea.
+     *
+     * @return HasMany<IdeaAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(IdeaAttachment::class);
+    }
+
+    /**
+     * Get the full add/remove audit trail for the idea's attachments, newest first.
+     *
+     * @return HasMany<IdeaAttachmentHistory, $this>
+     */
+    public function attachmentHistory(): HasMany
+    {
+        return $this->hasMany(IdeaAttachmentHistory::class);
     }
 
     /**

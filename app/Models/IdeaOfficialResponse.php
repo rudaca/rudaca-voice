@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property int $idea_id
  * @property int $responded_by_user_id
  * @property string $body
+ * @property string $body_format
  * @property Carbon $published_at
  * @property Carbon|null $deleted_at
  * @property Carbon|null $created_at
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
  * @property-read Idea $idea
  * @property-read User $respondedBy
  */
-#[Fillable(['idea_id', 'responded_by_user_id', 'body', 'published_at'])]
+#[Fillable(['idea_id', 'responded_by_user_id', 'body', 'body_format', 'published_at'])]
 class IdeaOfficialResponse extends Model
 {
     /** @use HasFactory<IdeaOfficialResponseFactory> */

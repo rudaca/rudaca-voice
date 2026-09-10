@@ -1,3 +1,42 @@
+// Rich-text editor for idea descriptions and official responses (see
+// resources/views/pages/ideas/⚡create.blade.php and ⚡show.blade.php). Its
+// stylesheet is imported from app.css instead of here, so it loads before —
+// and is safely overridden by — the styles below.
+import Quill from 'quill';
+
+// Restricted to what config/purify.php's `idea_rich_text` profile allows
+// through server-side (paragraphs, bold, italic, headings 1-3, lists,
+// links) — offering a control here that produces markup the sanitizer would
+// just strip back out is confusing, not permissive.
+const RICH_TEXT_TOOLBAR = [
+    [{header: [1, 2, 3, false]}],
+    ['bold', 'italic'],
+    [{list: 'ordered'}, {list: 'bullet'}],
+    ['link'],
+];
+
+// Mounts a Quill editor into `el` and keeps it in sync with a Livewire
+// property, without fighting Livewire over the DOM: the caller wraps `el` in
+// `wire:ignore` (Quill fully owns this subtree once initialized), and this
+// function pushes changes out to the given property via `$wire.set(...,
+// false)` (deferred — included in the next request rather than an immediate
+// round-trip) instead of relying on a hidden-input `wire:model` + synthetic
+// event, which several browsers/timing orders don't reliably deliver.
+window.initRichTextEditor = function (el, $wire, property, initialContent) {
+    let quill = new Quill(el, {
+        theme: 'snow',
+        modules: {toolbar: RICH_TEXT_TOOLBAR},
+    });
+
+    if (initialContent) {
+        quill.clipboard.dangerouslyPasteHTML(initialContent);
+    }
+
+    quill.on('text-change', () => $wire.set(property, quill.root.innerHTML, false));
+
+    return quill;
+};
+
 // Carry the current dark/light class straight through a wire:navigate swap,
 // before the browser paints. Without this, there's a brief window where the
 // outgoing <body> is gone and the incoming one hasn't rendered yet, which can

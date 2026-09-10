@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Ideas\IdeaAttachmentDownloadController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,8 @@ Route::prefix('{current_team}')
             ->middleware(EnsureTeamMembership::class.':admin')
             ->name('ideas.moderate-comments');
         Route::livewire('ideas/{idea}', 'pages::ideas.show')->name('ideas.show');
+        Route::get('ideas/{idea}/attachments/{attachment}/download', IdeaAttachmentDownloadController::class)
+            ->name('ideas.attachments.download');
     });
 
 Route::middleware(['auth'])->group(function () {

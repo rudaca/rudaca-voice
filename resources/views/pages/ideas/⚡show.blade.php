@@ -3,6 +3,8 @@
 use App\Enums\IdeaStatus;
 use App\Enums\TeamRole;
 use App\Models\Idea;
+use App\Models\IdeaAttachment;
+use App\Models\IdeaAttachmentHistory;
 use App\Models\IdeaComment;
 use App\Models\IdeaOfficialResponse;
 use App\Models\IdeaOfficialResponseHistory;
@@ -17,14 +19,20 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
+use Livewire\WithFileUploads;
+use Stevebauman\Purify\Facades\Purify;
 
 new #[Title('Idea')] class extends Component {
+    use WithFileUploads;
+
     /** @var array<string, string> */
     public const PRIORITY_OPTIONS = ['low' => 'Low', 'medium' => 'Medium', 'high' => 'High'];
 
@@ -63,6 +71,22 @@ new #[Title('Idea')] class extends Component {
     public ?int $pendingMoveFromIdeaId = null;
 
     public string $officialResponseBody = '';
+
+    /**
+     * Bumped each time the official-response modal is (re)opened, forcing a
+     * fresh Quill mount with the current server-rendered value — the editor
+     * element is wire:ignore'd (see the Blade markup below) so Livewire never
+     * touches it in place, and this modal is reused for both Add and Edit.
+     */
+    public int $officialResponseEditorKey = 0;
+
+    /**
+     * Files staged for upload onto this idea (see rules() in addAttachments()
+     * for the mime/size/count limits enforced on them).
+     *
+     * @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile>
+     */
+    public array $newAttachments = [];
 
     /**
      * @return array<string, string>
@@ -147,6 +171,16 @@ new #[Title('Idea')] class extends Component {
     public function canRespondOfficially(): bool
     {
         return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Admin) ?? false;
+    }
+
+    /**
+     * Whether the current user may add or remove this idea's attachments
+     * (manager and above, or the person who originally submitted it).
+     */
+    #[Computed]
+    public function canManageAttachments(): bool
+    {
+        return $this->canManage || Auth::id() === $this->ideaModel->submitted_by_user_id;
     }
 
     /**
@@ -275,6 +309,7 @@ new #[Title('Idea')] class extends Component {
 
         $this->reset('officialResponseBody');
         $this->resetValidation();
+        $this->officialResponseEditorKey++;
         $this->dispatch('modal-show', name: 'official-response-form');
     }
 
@@ -287,6 +322,7 @@ new #[Title('Idea')] class extends Component {
 
         $this->officialResponseBody = $this->officialResponse?->body ?? '';
         $this->resetValidation();
+        $this->officialResponseEditorKey++;
         $this->dispatch('modal-show', name: 'official-response-form');
     }
 
@@ -301,8 +337,18 @@ new #[Title('Idea')] class extends Component {
         abort_unless($this->canRespondOfficially, 403);
 
         $validated = $this->validate([
-            'officialResponseBody' => ['required', 'string', 'max:5000'],
+            // Raw Quill HTML — generous, this is a DoS guard only; the real
+            // 5000-character business rule is checked below, post-sanitization.
+            'officialResponseBody' => ['required', 'string', 'max:20000'],
         ]);
+
+        $cleanBody = Purify::config('idea_rich_text')->clean($validated['officialResponseBody']);
+
+        if (mb_strlen(strip_tags($cleanBody)) > 5000) {
+            $this->addError('officialResponseBody', __('Official response is too long.'));
+
+            return;
+        }
 
         $existing = $this->ideaModel->officialResponse()->first();
         $isNewResponse = $existing === null;
@@ -311,11 +357,12 @@ new #[Title('Idea')] class extends Component {
             $response = IdeaOfficialResponse::create([
                 'idea_id' => $this->ideaModel->id,
                 'responded_by_user_id' => Auth::id(),
-                'body' => $validated['officialResponseBody'],
+                'body' => $cleanBody,
+                'body_format' => 'html',
                 'published_at' => now(),
             ]);
         } else {
-            $existing->update(['body' => $validated['officialResponseBody']]);
+            $existing->update(['body' => $cleanBody, 'body_format' => 'html']);
             $response = $existing;
         }
 
@@ -366,6 +413,94 @@ new #[Title('Idea')] class extends Component {
         $this->dispatch('modal-close', name: 'confirm-remove-official-response');
 
         Flux::toast(variant: 'success', text: __('Official response removed.'));
+    }
+
+    /**
+     * Upload the staged files as attachments on this idea.
+     */
+    public function addAttachments(): void
+    {
+        abort_unless($this->canManageAttachments, 403);
+
+        $validated = $this->validate([
+            'newAttachments' => ['array', 'min:1'],
+            'newAttachments.*' => [
+                'file',
+                'max:'.config('idea_attachments.max_file_size_kb'),
+                'mimes:'.implode(',', config('idea_attachments.allowed_extensions')),
+            ],
+        ]);
+
+        $maxAttachments = config('idea_attachments.max_attachments_per_idea');
+        $existingCount = $this->ideaModel->attachments()->count();
+
+        if ($existingCount + count($validated['newAttachments']) > $maxAttachments) {
+            $this->addError('newAttachments', __('An idea can have at most :max attachments.', ['max' => $maxAttachments]));
+
+            return;
+        }
+
+        $actorUserId = Auth::id();
+        $disk = config('idea_attachments.disk');
+
+        foreach ($validated['newAttachments'] as $file) {
+            $extension = strtolower($file->getClientOriginalExtension());
+            $storedName = (string) Str::uuid().'.'.$extension;
+            $path = $file->storeAs("idea-attachments/{$this->ideaModel->team_id}/{$this->ideaModel->id}", $storedName, $disk);
+
+            $attachment = IdeaAttachment::create([
+                'idea_id' => $this->ideaModel->id,
+                'uploaded_by_user_id' => $actorUserId,
+                'disk' => $disk,
+                'path' => $path,
+                'original_filename' => Str::limit(basename($file->getClientOriginalName()), 255, ''),
+                'extension' => $extension,
+                'mime_type' => $file->getMimeType(),
+                'size_bytes' => $file->getSize(),
+            ]);
+
+            IdeaAttachmentHistory::create([
+                'idea_id' => $this->ideaModel->id,
+                'idea_attachment_id' => $attachment->id,
+                'actor_user_id' => $actorUserId,
+                'action' => IdeaAttachmentHistory::ACTION_ADDED,
+                'original_filename' => $attachment->original_filename,
+            ]);
+        }
+
+        $this->reset('newAttachments');
+        unset($this->attachments, $this->attachmentHistory, $this->activityTimeline);
+        $this->dispatch('modal-close', name: 'add-attachments');
+
+        Flux::toast(variant: 'success', text: __('Attachment added.'));
+    }
+
+    /**
+     * Delete an attachment: removes the stored file, the database row, and
+     * records a removal entry in the attachment history before the row
+     * (and its foreign key) is gone.
+     */
+    public function removeAttachment(int $attachmentId): void
+    {
+        abort_unless($this->canManageAttachments, 403);
+
+        $attachment = $this->ideaModel->attachments()->whereKey($attachmentId)->firstOrFail();
+
+        IdeaAttachmentHistory::create([
+            'idea_id' => $this->ideaModel->id,
+            'idea_attachment_id' => $attachment->id,
+            'actor_user_id' => Auth::id(),
+            'action' => IdeaAttachmentHistory::ACTION_REMOVED,
+            'original_filename' => $attachment->original_filename,
+        ]);
+
+        Storage::disk($attachment->disk)->delete($attachment->path);
+        $attachment->delete();
+
+        unset($this->attachments, $this->attachmentHistory, $this->activityTimeline);
+        $this->dispatch('modal-close', name: "confirm-remove-attachment-{$attachmentId}");
+
+        Flux::toast(variant: 'success', text: __('Attachment removed.'));
     }
 
     /**
@@ -691,6 +826,36 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
+     * The idea's file attachments, oldest first.
+     *
+     * @return Collection<int, IdeaAttachment>
+     */
+    #[Computed]
+    public function attachments(): Collection
+    {
+        return $this->ideaModel->attachments()
+            ->with('uploadedBy:id,name')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Attachment add/remove history, newest first.
+     *
+     * @return Collection<int, IdeaAttachmentHistory>
+     */
+    #[Computed]
+    public function attachmentHistory(): Collection
+    {
+        return $this->ideaModel->attachmentHistory()
+            ->with('actor:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
      * The idea's current official response, if one exists and hasn't been removed.
      */
     #[Computed]
@@ -766,7 +931,28 @@ new #[Title('Idea')] class extends Component {
             ];
         });
 
+        $attachmentEntries = $this->attachmentHistory->map(function (IdeaAttachmentHistory $entry) {
+            $isRemoved = $entry->action === IdeaAttachmentHistory::ACTION_REMOVED;
+            $color = $isRemoved ? 'red' : 'zinc';
+
+            return (object) [
+                'key' => 'attachment-'.$entry->id,
+                'color' => $color,
+                'dotColor' => $color,
+                'badgeClass' => '',
+                'icon' => $isRemoved ? 'x-circle' : 'paper-clip',
+                'iconClass' => $isRemoved ? 'text-red-500 dark:text-red-400' : '',
+                'label' => $isRemoved
+                    ? __(':name removed', ['name' => $entry->original_filename])
+                    : __(':name added', ['name' => $entry->original_filename]),
+                'note' => null,
+                'actorName' => $entry->actor?->name ?? __('Unknown'),
+                'createdAt' => $entry->created_at,
+            ];
+        });
+
         return $statusEntries->concat($responseEntries)
+            ->concat($attachmentEntries)
             ->sortByDesc('createdAt')
             ->values();
     }
@@ -1158,7 +1344,128 @@ new #[Title('Idea')] class extends Component {
                 </div>
             </div>
 
-            <div class="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
+            @if ($idea->description_format === 'html')
+                <div class="idea-rich-text mt-4 text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{!! $idea->description !!}</div>
+            @else
+                <div class="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
+            @endif
+
+            {{-- Attachments --}}
+            <div class="mt-6" data-test="attachments-section">
+                @if ($this->attachments->isNotEmpty() || $this->canManageAttachments)
+                    <div class="flex items-center justify-between">
+                        <flux:text class="text-sm font-medium text-slate-800 dark:text-slate-400">
+                            {{ __('Attachments') }} @if ($this->attachments->isNotEmpty()) ({{ $this->attachments->count() }}) @endif
+                        </flux:text>
+
+                        @if ($this->canManageAttachments)
+                            <flux:button
+                                size="sm"
+                                variant="ghost"
+                                icon="paper-clip"
+                                x-on:click="$dispatch('modal-show', { name: 'add-attachments' })"
+                                data-test="add-attachments-trigger"
+                            >
+                                {{ __('Add') }}
+                            </flux:button>
+                        @endif
+                    </div>
+
+                    @foreach ($this->attachments as $attachment)
+                        <div class="mt-2 flex items-center gap-3 rounded-lg border border-zinc-200 p-2 dark:border-zinc-700" data-test="attachment-row-{{ $attachment->id }}">
+                            @if ($attachment->isImage())
+                                <img
+                                    src="{{ route('ideas.attachments.download', ['current_team' => $this->team->slug, 'idea' => $idea->slug, 'attachment' => $attachment->id]) }}"
+                                    class="size-10 shrink-0 rounded object-cover"
+                                    alt=""
+                                >
+                            @else
+                                <flux:icon
+                                    :name="match ($attachment->extension) {
+                                        'pdf' => 'document-text',
+                                        'doc', 'docx' => 'document-text',
+                                        'xls', 'xlsx' => 'table-cells',
+                                        'ppt', 'pptx' => 'presentation-chart-bar',
+                                        default => 'paper-clip',
+                                    }"
+                                    class="size-8 shrink-0 text-zinc-500"
+                                />
+                            @endif
+
+                            <div class="min-w-0 flex-1">
+                                <div class="truncate text-sm font-medium text-slate-800 dark:text-slate-300">{{ $attachment->original_filename }}</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-500">
+                                    {{ Number::fileSize($attachment->size_bytes) }}
+                                    · {{ __('Uploaded by') }} {{ $attachment->uploadedBy?->name ?? __('Unknown') }}
+                                    · {{ $attachment->created_at->forUser()->format('M j, Y') }}
+                                </div>
+                            </div>
+
+                            <flux:button
+                                size="sm"
+                                variant="ghost"
+                                icon="arrow-down-tray"
+                                :href="route('ideas.attachments.download', ['current_team' => $this->team->slug, 'idea' => $idea->slug, 'attachment' => $attachment->id])"
+                                data-test="attachment-download-{{ $attachment->id }}"
+                            />
+
+                            @if ($this->canManageAttachments)
+                                <flux:button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="x-circle"
+                                    x-on:click="$dispatch('modal-show', { name: 'confirm-remove-attachment-{{ $attachment->id }}' })"
+                                    data-test="attachment-remove-trigger-{{ $attachment->id }}"
+                                />
+
+                                <flux:modal name="confirm-remove-attachment-{{ $attachment->id }}" class="max-w-lg" :dismissible="false" data-test="confirm-remove-attachment-modal-{{ $attachment->id }}">
+                                    <div class="space-y-5">
+                                        <div>
+                                            <flux:heading size="lg">{{ __('Remove attachment?') }}</flux:heading>
+                                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                                {{ __(':name will be permanently deleted. This action is recorded in the activity log.', ['name' => $attachment->original_filename]) }}
+                                            </flux:text>
+                                        </div>
+                                        <div class="flex justify-end gap-2">
+                                            <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                                            <flux:button wire:click="removeAttachment({{ $attachment->id }})" variant="danger" data-test="confirm-remove-attachment-yes-{{ $attachment->id }}">
+                                                {{ __('Remove') }}
+                                            </flux:button>
+                                        </div>
+                                    </div>
+                                </flux:modal>
+                            @endif
+                        </div>
+                    @endforeach
+                @endif
+            </div>
+
+            @if ($this->canManageAttachments)
+                {{-- Add attachments modal --}}
+                <flux:modal name="add-attachments" class="max-w-lg" data-test="add-attachments-modal">
+                    <form wire:submit="addAttachments" class="space-y-5">
+                        <flux:heading size="lg">{{ __('Add attachments') }}</flux:heading>
+                        <flux:input
+                            type="file"
+                            wire:model="newAttachments"
+                            multiple
+                            :label="__('Files')"
+                            :description="__('Images, PDFs, and Office documents up to :size each.', ['size' => Number::fileSize(config('idea_attachments.max_file_size_kb') * 1024)])"
+                            data-test="show-idea-attachments-input"
+                        />
+                        @error('newAttachments')
+                            <flux:text class="text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                        @enderror
+                        @error('newAttachments.*')
+                            <flux:text class="text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                        @enderror
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button variant="primary" type="submit" data-test="save-attachments">{{ __('Upload') }}</flux:button>
+                        </div>
+                    </form>
+                </flux:modal>
+            @endif
 
             {{-- Official response --}}
             @if ($this->officialResponse)
@@ -1202,9 +1509,15 @@ new #[Title('Idea')] class extends Component {
                         @endif
                     </div>
 
-                    <div class="mt-1 whitespace-pre-line text-sm leading-relaxed text-indigo-800 dark:text-indigo-300" data-test="official-response-body">
-                        {{ $this->officialResponse->body }}
-                    </div>
+                    @if ($this->officialResponse->body_format === 'html')
+                        <div class="idea-rich-text mt-1 text-sm leading-relaxed text-indigo-800 dark:text-indigo-300" data-test="official-response-body">
+                            {!! $this->officialResponse->body !!}
+                        </div>
+                    @else
+                        <div class="mt-1 whitespace-pre-line text-sm leading-relaxed text-indigo-800 dark:text-indigo-300" data-test="official-response-body">
+                            {{ $this->officialResponse->body }}
+                        </div>
+                    @endif
                 </div>
 
                 {{-- Confirm remove official response modal --}}
@@ -1226,7 +1539,7 @@ new #[Title('Idea')] class extends Component {
 
             @if ($this->canRespondOfficially)
                 {{-- Add/edit official response modal --}}
-                <flux:modal name="official-response-form" class="max-w-lg" data-test="official-response-form-modal">
+                <flux:modal name="official-response-form" class="max-w-2xl lg:min-w-4xl" data-test="official-response-form-modal">
                     <form wire:submit="saveOfficialResponse" class="space-y-5">
                         <div>
                             <flux:heading size="lg">{{ $this->officialResponse ? __('Edit official response') : __('Add official response') }}</flux:heading>
@@ -1234,13 +1547,20 @@ new #[Title('Idea')] class extends Component {
                                 {{ __('This is shown prominently on the idea, separate from comments.') }}
                             </flux:text>
                         </div>
-                        <flux:textarea
-                            wire:model="officialResponseBody"
-                            rows="5"
-                            :label="__('Response')"
-                            :placeholder="__('Share the organization\'s official position on this idea…')"
-                            data-test="official-response-textarea"
-                        />
+                        <div>
+                            <flux:label>{{ __('Response') }}</flux:label>
+                            <div
+                                wire:ignore
+                                wire:key="official-response-editor-{{ $officialResponseEditorKey }}"
+                                x-data
+                                x-init="initRichTextEditor($refs.editor, $wire, 'officialResponseBody', @js($officialResponseBody))"
+                            >
+                                <div x-ref="editor" data-test="official-response-textarea"></div>
+                            </div>
+                            @error('officialResponseBody')
+                                <flux:text class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                            @enderror
+                        </div>
                         <div class="flex justify-end gap-2">
                             <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
                             <flux:button variant="primary" type="submit" data-test="save-official-response">
