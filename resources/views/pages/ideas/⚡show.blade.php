@@ -5,7 +5,10 @@ use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaAttachment;
 use App\Models\IdeaAttachmentHistory;
+use App\Models\IdeaBoard;
+use App\Models\IdeaCategory;
 use App\Models\IdeaComment;
+use App\Models\IdeaEditHistory;
 use App\Models\IdeaOfficialResponse;
 use App\Models\IdeaOfficialResponseHistory;
 use App\Models\IdeaStatusHistory;
@@ -63,6 +66,33 @@ new #[Title('Idea')] class extends Component {
 
     public string $duplicateNote = '';
 
+    public string $editTitle = '';
+
+    public string $editDescription = '';
+
+    public string $editBoardGroupId = '';
+
+    public string $editBoardId = '';
+
+    public string $editCategoryId = '';
+
+    /**
+     * The idea's Author/Submitted-by user (ideas.submitted_by_user_id) as
+     * staged in the edit form. Distinct from entered_by_user_id, which
+     * records who actually logged the idea and is never changed here.
+     */
+    public ?int $editAuthorUserId = null;
+
+    public string $editAuthorName = '';
+
+    public string $editAuthorSearch = '';
+
+    /**
+     * Bumped each time the edit-idea modal is opened, forcing a fresh Quill
+     * mount with the current description — see officialResponseEditorKey.
+     */
+    public int $editDescriptionEditorKey = 0;
+
     /**
      * The idea id a pending vote move would come from, set by toggleVote()
      * when the team limits members to one active vote per board and the
@@ -95,6 +125,12 @@ new #[Title('Idea')] class extends Component {
     {
         return [
             'duplicateOfId' => __('original idea'),
+            'editTitle' => __('title'),
+            'editDescription' => __('description'),
+            'editBoardGroupId' => __('board group'),
+            'editBoardId' => __('board'),
+            'editCategoryId' => __('category'),
+            'editAuthorUserId' => __('author'),
         ];
     }
 
@@ -116,6 +152,12 @@ new #[Title('Idea')] class extends Component {
         $this->priority = $this->ideaModel->priority;
         $this->impact = $this->ideaModel->impact;
         $this->effort = $this->ideaModel->effort;
+
+        // Supports the "Edit idea" quick action on the ideas list
+        // (ideas/{idea}?edit=1), which deep-links straight into this modal.
+        if (request()->boolean('edit') && $this->canEditIdea) {
+            $this->openEditIdea();
+        }
     }
 
     /**
@@ -143,6 +185,28 @@ new #[Title('Idea')] class extends Component {
     public function canDelete(): bool
     {
         return Auth::user()->teamRole($this->team)?->isAtLeast(TeamRole::Owner) ?? false;
+    }
+
+    /**
+     * Whether the current user may edit this idea: any role except
+     * Employee/Viewer (canManage), or the idea's original author.
+     */
+    #[Computed]
+    public function canEditIdea(): bool
+    {
+        return $this->canManage || Auth::id() === $this->ideaModel->submitted_by_user_id;
+    }
+
+    /**
+     * Whether the current user may delete this idea: any role except
+     * Employee/Viewer (canManage), or the idea's original author. Distinct
+     * from canDelete, which additionally gates comment deletion and stays
+     * owner-only.
+     */
+    #[Computed]
+    public function canDeleteIdea(): bool
+    {
+        return $this->canManage || Auth::id() === $this->ideaModel->submitted_by_user_id;
     }
 
     /**
@@ -233,11 +297,11 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
-     * Soft-delete this idea (owner only) and return to the idea list.
+     * Soft-delete this idea and return to the idea list.
      */
     public function deleteIdea(): void
     {
-        abort_unless($this->canDelete, 403);
+        abort_unless($this->canDeleteIdea, 403);
 
         $this->ideaModel->delete();
 
@@ -298,6 +362,294 @@ new #[Title('Idea')] class extends Component {
         $this->dispatch('modal-close', name: 'mark-duplicate');
 
         Flux::toast(variant: 'success', text: __('Marked as duplicate.'));
+    }
+
+    /**
+     * Open the edit-idea form pre-filled with the idea's current values.
+     */
+    public function openEditIdea(): void
+    {
+        abort_unless($this->canEditIdea, 403);
+
+        $idea = $this->ideaModel;
+
+        $this->editTitle = $idea->title;
+        $this->editDescription = $idea->description;
+        $this->editBoardGroupId = (string) $idea->board_group_id;
+        $this->editBoardId = (string) $idea->board_id;
+        $this->editCategoryId = (string) $idea->category_id;
+        $this->editAuthorUserId = $idea->submitted_by_user_id;
+        $this->editAuthorName = $idea->submittedBy?->name ?? '';
+        $this->editAuthorSearch = '';
+
+        $this->resetValidation();
+        $this->editDescriptionEditorKey++;
+        $this->dispatch('modal-show', name: 'edit-idea');
+    }
+
+    /**
+     * Reset the chosen board and category when the edit form's board group
+     * changes (categories are board-specific).
+     */
+    public function updatedEditBoardGroupId(): void
+    {
+        $this->editBoardId = '';
+        $this->editCategoryId = '';
+    }
+
+    /**
+     * Reset the chosen category when the edit form's board changes.
+     */
+    public function updatedEditBoardId(): void
+    {
+        $this->editCategoryId = '';
+    }
+
+    /**
+     * Active team members matching the current edit-form author search term.
+     * Empty until a search term is typed.
+     *
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function editAuthorCandidates(): Collection
+    {
+        $search = trim($this->editAuthorSearch);
+
+        if (! $this->canEditIdea || $search === '') {
+            return new Collection;
+        }
+
+        return $this->team->members()
+            ->where('users.is_active', true)
+            ->where(fn ($query) => $query
+                ->where('users.name', 'like', "%{$search}%")
+                ->orWhere('users.email', 'like', "%{$search}%"))
+            ->orderBy('users.name')
+            ->limit(10)
+            ->get(['users.id', 'users.name', 'users.email']);
+    }
+
+    /**
+     * Select the Author (ideas.submitted_by_user_id) to attribute this idea
+     * to. Distinct from entered_by_user_id, which is left untouched.
+     */
+    public function selectEditAuthor(int $userId): void
+    {
+        abort_unless($this->canEditIdea, 403);
+
+        $user = $this->team->members()
+            ->where('users.id', $userId)
+            ->where('users.is_active', true)
+            ->firstOrFail();
+
+        $this->editAuthorUserId = $user->id;
+        $this->editAuthorName = $user->name;
+        $this->editAuthorSearch = '';
+    }
+
+    /**
+     * Clear the staged Author selection so the edit form's search box
+     * reappears, letting the user pick a different one.
+     */
+    public function clearEditAuthorSelection(): void
+    {
+        abort_unless($this->canEditIdea, 403);
+
+        $this->reset('editAuthorUserId', 'editAuthorName');
+    }
+
+    /**
+     * Active board groups for the current team, for the edit-idea form.
+     *
+     * @return Collection<int, \App\Models\IdeaBoardGroup>
+     */
+    #[Computed]
+    public function editBoardGroups(): Collection
+    {
+        return $this->team->boardGroups()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Active boards within the edit-idea form's selected board group.
+     *
+     * @return Collection<int, IdeaBoard>
+     */
+    #[Computed]
+    public function editBoards(): Collection
+    {
+        if ($this->editBoardGroupId === '') {
+            return new Collection;
+        }
+
+        return $this->team->boards()
+            ->where('is_active', true)
+            ->where('board_group_id', $this->editBoardGroupId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Active categories for the edit-idea form's selected board.
+     *
+     * @return Collection<int, \App\Models\IdeaCategory>
+     */
+    #[Computed]
+    public function editCategories(): Collection
+    {
+        if ($this->editBoardId === '') {
+            return new Collection;
+        }
+
+        return $this->team->categories()
+            ->where('is_active', true)
+            ->where('board_id', $this->editBoardId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Update the idea's title, description, board/category, and Author.
+     * Reassigning the Author (ideas.submitted_by_user_id) behaves like any
+     * other field edit — it never touches entered_by_user_id and triggers no
+     * notification or approval step — but, like every other field changed
+     * here, it is recorded in the Activity timeline via IdeaEditHistory for
+     * transparency.
+     */
+    public function updateIdea(): void
+    {
+        abort_unless($this->canEditIdea, 403);
+
+        $teamId = $this->team->id;
+
+        $validated = $this->validate([
+            'editTitle' => ['required', 'string', 'max:255'],
+            // Raw Quill HTML — generous, this is a DoS guard only; the real
+            // business-rule length check runs post-sanitization below.
+            'editDescription' => ['required', 'string', 'max:100000'],
+            'editBoardGroupId' => [
+                'required',
+                Rule::exists('idea_board_groups', 'id')->where('team_id', $teamId)->where('is_active', true),
+            ],
+            'editBoardId' => [
+                'required',
+                Rule::exists('idea_boards', 'id')
+                    ->where('team_id', $teamId)
+                    ->where('board_group_id', $this->editBoardGroupId)
+                    ->where('is_active', true),
+            ],
+            'editCategoryId' => [
+                'required',
+                Rule::exists('idea_categories', 'id')
+                    ->where('team_id', $teamId)
+                    ->where('board_id', $this->editBoardId)
+                    ->where('is_active', true),
+            ],
+            'editAuthorUserId' => [
+                'required',
+                'integer',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $isEligible = $this->team->members()
+                        ->where('users.id', $value)
+                        ->where('users.is_active', true)
+                        ->exists();
+
+                    if (! $isEligible) {
+                        $fail(__('Select an active member of your organization.'));
+                    }
+                },
+            ],
+        ]);
+
+        $cleanDescription = Purify::config('idea_rich_text')->clean($validated['editDescription']);
+
+        if (mb_strlen(strip_tags($cleanDescription)) > 20000) {
+            $this->addError('editDescription', __('Description is too long.'));
+
+            return;
+        }
+
+        $board = IdeaBoard::whereKey($validated['editBoardId'])->where('team_id', $teamId)->firstOrFail();
+
+        $changes = $this->summarizeIdeaEdits($validated, $cleanDescription, $board);
+
+        $this->ideaModel->update([
+            'title' => $validated['editTitle'],
+            'description' => $cleanDescription,
+            'description_format' => 'html',
+            'board_group_id' => $board->board_group_id,
+            'board_id' => $board->id,
+            'category_id' => $validated['editCategoryId'],
+            'submitted_by_user_id' => $validated['editAuthorUserId'],
+        ]);
+
+        if ($changes !== []) {
+            IdeaEditHistory::create([
+                'idea_id' => $this->ideaModel->id,
+                'actor_user_id' => Auth::id(),
+                'summary' => implode(' ', $changes),
+            ]);
+
+            unset($this->editHistory, $this->activityTimeline);
+        }
+
+        $this->ideaModel->load(['boardGroup:id,name', 'board:id,name,team_id', 'category:id,name', 'submittedBy:id,name', 'enteredBy:id,name']);
+
+        $this->dispatch('modal-close', name: 'edit-idea');
+
+        Flux::toast(variant: 'success', text: __('Idea updated.'));
+    }
+
+    /**
+     * Build a human-readable, one-sentence-per-field summary of what an
+     * edit-form submission actually changed on the idea, comparing against
+     * its pre-update values. Returns an empty array when nothing changed
+     * (e.g. the form was opened and saved without edits), so callers can
+     * skip writing a no-op history entry.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<int, string>
+     */
+    private function summarizeIdeaEdits(array $validated, string $cleanDescription, IdeaBoard $newBoard): array
+    {
+        $idea = $this->ideaModel;
+        $changes = [];
+
+        if ($idea->title !== $validated['editTitle']) {
+            $changes[] = __('Title updated.');
+        }
+
+        // Compared as plain text, not raw HTML: Quill re-serializing untouched
+        // content (or re-running Purify on already-clean HTML) can shuffle
+        // markup without changing what the description actually says, and
+        // that shouldn't be reported as an edit.
+        if (trim(strip_tags($idea->description)) !== trim(strip_tags($cleanDescription))) {
+            $changes[] = __('Description updated.');
+        }
+
+        if ((int) $idea->board_id !== $newBoard->id) {
+            $changes[] = __('Board changed to :board.', ['board' => $newBoard->name]);
+        }
+
+        $newCategoryId = (int) $validated['editCategoryId'];
+
+        if ((int) $idea->category_id !== $newCategoryId) {
+            $newCategoryName = IdeaCategory::whereKey($newCategoryId)->value('name') ?? __('Unknown');
+            $changes[] = __('Category changed to :category.', ['category' => $newCategoryName]);
+        }
+
+        $newAuthorId = (int) $validated['editAuthorUserId'];
+
+        if ($idea->submitted_by_user_id !== $newAuthorId) {
+            $oldAuthorName = $idea->submittedBy?->name ?? __('Unknown');
+            $newAuthorName = User::whereKey($newAuthorId)->value('name') ?? __('Unknown');
+            $changes[] = __('Author changed from :old to :new.', ['old' => $oldAuthorName, 'new' => $newAuthorName]);
+        }
+
+        return $changes;
     }
 
     /**
@@ -856,6 +1208,22 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
+     * The audit trail of "Edit idea" saves (title/description/board/category/
+     * Author changes), newest first.
+     *
+     * @return Collection<int, IdeaEditHistory>
+     */
+    #[Computed]
+    public function editHistory(): Collection
+    {
+        return $this->ideaModel->editHistory()
+            ->with('actor:id,name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
      * The idea's current official response, if one exists and hasn't been removed.
      */
     #[Computed]
@@ -951,8 +1319,24 @@ new #[Title('Idea')] class extends Component {
             ];
         });
 
+        $editEntries = $this->editHistory->map(function (IdeaEditHistory $entry) {
+            return (object) [
+                'key' => 'edit-'.$entry->id,
+                'color' => 'indigo',
+                'dotColor' => 'indigo',
+                'badgeClass' => '',
+                'icon' => 'pencil-line',
+                'iconClass' => 'text-indigo-500 dark:text-indigo-400',
+                'label' => __('Idea edited'),
+                'note' => $entry->summary,
+                'actorName' => $entry->actor?->name ?? __('Unknown'),
+                'createdAt' => $entry->created_at,
+            ];
+        });
+
         return $statusEntries->concat($responseEntries)
             ->concat($attachmentEntries)
+            ->concat($editEntries)
             ->sortByDesc('createdAt')
             ->values();
     }
@@ -1028,7 +1412,7 @@ new #[Title('Idea')] class extends Component {
         </flux:link>
 
         <div class="flex items-center gap-2">
-            @if ($this->canRespondOfficially || $this->canManage)
+            @if ($this->canRespondOfficially || $this->canEditIdea || $this->canDeleteIdea)
                 <flux:dropdown position="bottom" align="end">
                     <flux:button
                         size="sm"
@@ -1042,6 +1426,19 @@ new #[Title('Idea')] class extends Component {
                     ></flux:button>
 
                     <flux:menu>
+                        @if ($this->canEditIdea)
+                            <flux:menu.item
+                                icon="pencil-line"
+                                class="text-indigo-700! [&_[data-flux-menu-item-icon]]:text-indigo-700! dark:text-indigo-400! dark:[&_[data-flux-menu-item-icon]]:text-indigo-400!"
+                                wire:click="openEditIdea"
+                                data-test="edit-idea-menu-item"
+                            >
+                                {{ __('Edit Idea') }}
+                            </flux:menu.item>
+
+                            <flux:menu.separator />
+                        @endif
+
                         @if ($this->canRespondOfficially)
                             <flux:menu.item
                                 icon="check-badge"
@@ -1084,20 +1481,20 @@ new #[Title('Idea')] class extends Component {
                             >
                                 <span x-text="copied ? @js(__('Copied')) : @js(__('Copy Link'))"></span>
                             </flux:menu.item>
+                        @endif
 
-                            @if ($this->canDelete)
-                                <flux:menu.separator />
+                        @if ($this->canDeleteIdea)
+                            <flux:menu.separator />
 
-                                <flux:modal.trigger name="delete-idea">
-                                    <flux:menu.item
-                                        icon="trash"
-                                        class="text-red-500! data-active:bg-red-50! [&_[data-flux-menu-item-icon]]:text-red-500! dark:text-red-400! dark:data-active:bg-red-400/10! dark:[&_[data-flux-menu-item-icon]]:text-red-400!"
-                                        data-test="delete-idea-menu-item"
-                                    >
-                                        {{ __('Delete Idea') }}
-                                    </flux:menu.item>
-                                </flux:modal.trigger>
-                            @endif
+                            <flux:modal.trigger name="delete-idea">
+                                <flux:menu.item
+                                    icon="trash"
+                                    class="text-red-500! data-active:bg-red-50! [&_[data-flux-menu-item-icon]]:text-red-500! dark:text-red-400! dark:data-active:bg-red-400/10! dark:[&_[data-flux-menu-item-icon]]:text-red-400!"
+                                    data-test="delete-idea-menu-item"
+                                >
+                                    {{ __('Delete Idea') }}
+                                </flux:menu.item>
+                            </flux:modal.trigger>
                         @endif
                     </flux:menu>
                 </flux:dropdown>
@@ -1401,22 +1798,28 @@ new #[Title('Idea')] class extends Component {
                                 </div>
                             </div>
 
-                            <flux:button
-                                size="sm"
-                                variant="ghost"
-                                icon="arrow-down-tray"
-                                :href="route('ideas.attachments.download', ['current_team' => $this->team->slug, 'idea' => $idea->slug, 'attachment' => $attachment->id])"
-                                data-test="attachment-download-{{ $attachment->id }}"
-                            />
-
-                            @if ($this->canManageAttachments)
+                            <flux:tooltip content="{{ __('Download') }}">
                                 <flux:button
                                     size="sm"
                                     variant="ghost"
-                                    icon="x-circle"
-                                    x-on:click="$dispatch('modal-show', { name: 'confirm-remove-attachment-{{ $attachment->id }}' })"
-                                    data-test="attachment-remove-trigger-{{ $attachment->id }}"
+                                    icon="arrow-down-tray"
+                                    :href="route('ideas.attachments.download', ['current_team' => $this->team->slug, 'idea' => $idea->slug, 'attachment' => $attachment->id])"
+                                    aria-label="{{ __('Download') }}"
+                                    data-test="attachment-download-{{ $attachment->id }}"
                                 />
+                            </flux:tooltip>
+
+                            @if ($this->canManageAttachments)
+                                <flux:tooltip content="{{ __('Remove') }}">
+                                    <flux:button
+                                        size="sm"
+                                        variant="ghost"
+                                        icon="x-circle"
+                                        x-on:click="$dispatch('modal-show', { name: 'confirm-remove-attachment-{{ $attachment->id }}' })"
+                                        aria-label="{{ __('Remove') }}"
+                                        data-test="attachment-remove-trigger-{{ $attachment->id }}"
+                                    />
+                                </flux:tooltip>
 
                                 <flux:modal name="confirm-remove-attachment-{{ $attachment->id }}" class="max-w-lg" :dismissible="false" data-test="confirm-remove-attachment-modal-{{ $attachment->id }}">
                                     <div class="space-y-5">
@@ -1738,6 +2141,132 @@ new #[Title('Idea')] class extends Component {
 
         {{-- Right rail --}}
         <aside class="space-y-4">
+            {{-- Edit idea modal --}}
+            @if ($this->canEditIdea)
+                <flux:modal name="edit-idea" class="max-w-2xl lg:min-w-4xl" data-test="edit-idea-modal">
+                    <form wire:submit="updateIdea" class="space-y-5">
+                        <flux:heading size="lg">{{ __('Edit idea') }}</flux:heading>
+
+                        <flux:input
+                            wire:model="editTitle"
+                            :label="__('Title')"
+                            type="text"
+                            required
+                            maxlength="255"
+                            data-test="edit-idea-title"
+                        />
+
+                        <div>
+                            <flux:label>{{ __('Author') }}</flux:label>
+                            <flux:text class="mt-0.5 text-xs text-slate-600 dark:text-slate-500">
+                                {{ __('Who this idea is attributed to. Change this to reassign an idea logged on someone\'s behalf once they have an account.') }}
+                            </flux:text>
+
+                            <div class="mt-1.5 space-y-2" data-test="edit-idea-author">
+                                @if ($editAuthorUserId)
+                                    <div class="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800" data-test="edit-author-selected">
+                                        <div class="flex items-center gap-3">
+                                            <flux:avatar :name="$editAuthorName" size="xs" />
+                                            <span class="font-medium text-slate-900 dark:text-slate-200">{{ $editAuthorName }}</span>
+                                        </div>
+                                        <flux:button wire:click="clearEditAuthorSelection" variant="ghost" size="sm" data-test="change-edit-author">
+                                            {{ __('Change') }}
+                                        </flux:button>
+                                    </div>
+                                @else
+                                    <div class="relative">
+                                        <flux:input
+                                            wire:model.live.debounce.300ms="editAuthorSearch"
+                                            :placeholder="__('Search for a colleague...')"
+                                            data-test="edit-author-search-input"
+                                        />
+                                        <flux:error name="editAuthorUserId" />
+
+                                        @if (trim($editAuthorSearch) !== '')
+                                            <div class="mt-1 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-1 dark:border-zinc-700" data-test="edit-author-results">
+                                                @forelse ($this->editAuthorCandidates as $candidate)
+                                                    <button
+                                                        type="button"
+                                                        wire:click="selectEditAuthor({{ $candidate->id }})"
+                                                        wire:key="edit-author-candidate-{{ $candidate->id }}"
+                                                        class="flex w-full items-center gap-3 rounded-md p-2 text-start hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                                        data-test="edit-author-option"
+                                                    >
+                                                        <flux:avatar :name="$candidate->name" size="xs" />
+                                                        <div class="min-w-0">
+                                                            <div class="truncate font-medium text-slate-900 dark:text-slate-200">{{ $candidate->name }}</div>
+                                                            <div class="truncate text-sm text-slate-600 dark:text-slate-500">{{ $candidate->email }}</div>
+                                                        </div>
+                                                    </button>
+                                                @empty
+                                                    <div class="p-2 text-sm text-slate-600 dark:text-slate-500">{{ __('No matching members found.') }}</div>
+                                                @endforelse
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+
+                        <flux:select wire:model.live="editBoardGroupId" :label="__('Board group')" :placeholder="__('Choose a board group')" required data-test="edit-idea-board-group">
+                            @foreach ($this->editBoardGroups as $group)
+                                <flux:select.option value="{{ $group->id }}">{{ $group->name }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <flux:select
+                                wire:model.live="editBoardId"
+                                :label="__('Board')"
+                                :placeholder="$editBoardGroupId === '' ? __('Select a board group first') : __('Choose a board')"
+                                :disabled="$editBoardGroupId === ''"
+                                required
+                                data-test="edit-idea-board"
+                            >
+                                @foreach ($this->editBoards as $board)
+                                    <flux:select.option value="{{ $board->id }}">{{ $board->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+
+                            <flux:select
+                                wire:model="editCategoryId"
+                                :label="__('Category')"
+                                :placeholder="$editBoardId === '' ? __('Select a board first') : __('Choose a category')"
+                                :disabled="$editBoardId === ''"
+                                required
+                                data-test="edit-idea-category"
+                            >
+                                @foreach ($this->editCategories as $category)
+                                    <flux:select.option value="{{ $category->id }}">{{ $category->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                        </div>
+
+                        <div>
+                            <flux:label>{{ __('Description') }}</flux:label>
+                            <div
+                                wire:ignore
+                                wire:key="edit-idea-description-editor-{{ $editDescriptionEditorKey }}"
+                                x-data
+                                x-init="initRichTextEditor($refs.editor, $wire, 'editDescription', @js($editDescription))"
+                            >
+                                <div x-ref="editor" data-test="edit-idea-description"></div>
+                            </div>
+                            @error('editDescription')
+                                <flux:text class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                            @enderror
+                        </div>
+
+                        <div class="flex justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                            <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button variant="primary" type="submit" wire:loading.attr="disabled" data-test="edit-idea-save">
+                                {{ __('Save changes') }}
+                            </flux:button>
+                        </div>
+                    </form>
+                </flux:modal>
+            @endif
+
             {{-- Manage idea status modal (owner/admin/manager only) --}}
             @if ($this->canManage)
                 <flux:modal name="manage-idea" class="max-w-3xl" data-test="manage-idea-modal">
@@ -1789,24 +2318,6 @@ new #[Title('Idea')] class extends Component {
                     </div>
                 </flux:modal>
 
-                @if ($this->canDelete)
-                    {{-- Delete idea modal --}}
-                    <flux:modal name="delete-idea" class="max-w-lg" :dismissible="false" data-test="delete-idea-modal">
-                        <div class="space-y-5">
-                            <div>
-                                <flux:heading size="lg">{{ __('Delete this idea?') }}</flux:heading>
-                                <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
-                                    {{ __('This will remove ":title" and its comments from the idea list. This cannot be undone from the UI.', ['title' => $idea->title]) }}
-                                </flux:text>
-                            </div>
-                            <div class="flex justify-end gap-2">
-                                <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
-                                <flux:button wire:click="deleteIdea" variant="danger" data-test="confirm-delete-idea">{{ __('Delete idea') }}</flux:button>
-                            </div>
-                        </div>
-                    </flux:modal>
-                @endif
-
                 {{-- Mark as duplicate modal --}}
                 <flux:modal name="mark-duplicate" class="max-w-lg" :dismissible="false" data-test="mark-duplicate-modal">
                     <form wire:submit="markDuplicate" class="space-y-5">
@@ -1825,6 +2336,24 @@ new #[Title('Idea')] class extends Component {
                             <flux:button variant="primary" type="submit" data-test="confirm-duplicate">{{ __('Mark as duplicate') }}</flux:button>
                         </div>
                     </form>
+                </flux:modal>
+            @endif
+
+            {{-- Delete idea modal --}}
+            @if ($this->canDeleteIdea)
+                <flux:modal name="delete-idea" class="max-w-lg" :dismissible="false" data-test="delete-idea-modal">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">{{ __('Delete this idea?') }}</flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('This will remove ":title" and its comments from the idea list. This cannot be undone from the UI.', ['title' => $idea->title]) }}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                            <flux:button wire:click="deleteIdea" variant="danger" data-test="confirm-delete-idea">{{ __('Delete idea') }}</flux:button>
+                        </div>
+                    </div>
                 </flux:modal>
             @endif
 

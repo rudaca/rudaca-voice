@@ -44,7 +44,7 @@ test('a deleted idea 404s on direct access', function () {
         ->assertNotFound();
 });
 
-test('an admin cannot delete an idea', function () {
+test('an admin can delete any idea', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $idea = makeIdea($team);
 
@@ -55,12 +55,12 @@ test('an admin cannot delete an idea', function () {
     Livewire::actingAs($admin)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->call('deleteIdea')
-        ->assertStatus(403);
+        ->assertHasNoErrors();
 
-    $this->assertDatabaseHas('ideas', ['id' => $idea->id, 'deleted_at' => null]);
+    $this->assertSoftDeleted('ideas', ['id' => $idea->id]);
 });
 
-test('a manager cannot delete an idea', function () {
+test('a manager can delete any idea', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $idea = makeIdea($team);
 
@@ -71,12 +71,28 @@ test('a manager cannot delete an idea', function () {
     Livewire::actingAs($manager)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->call('deleteIdea')
+        ->assertHasNoErrors();
+
+    $this->assertSoftDeleted('ideas', ['id' => $idea->id]);
+});
+
+test('an employee who did not submit the idea cannot delete it', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $idea = makeIdea($team);
+
+    $employee = User::factory()->create();
+    $team->members()->attach($employee, ['role' => TeamRole::Employee->value]);
+    $employee->switchTeam($team);
+
+    Livewire::actingAs($employee)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->call('deleteIdea')
         ->assertStatus(403);
 
     $this->assertDatabaseHas('ideas', ['id' => $idea->id, 'deleted_at' => null]);
 });
 
-test('the delete idea action is hidden from non owners', function () {
+test('the delete idea action is visible to a manager on any idea', function () {
     ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
     $idea = makeIdea($team);
 
@@ -85,6 +101,19 @@ test('the delete idea action is hidden from non owners', function () {
     $manager->switchTeam($team);
 
     Livewire::actingAs($manager)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertSeeHtml('data-test="delete-idea-menu-item"');
+});
+
+test('the delete idea action is hidden from an employee who did not submit the idea', function () {
+    ['team' => $team, 'user' => $owner] = teamWithMember(TeamRole::Owner);
+    $idea = makeIdea($team);
+
+    $employee = User::factory()->create();
+    $team->members()->attach($employee, ['role' => TeamRole::Employee->value]);
+    $employee->switchTeam($team);
+
+    Livewire::actingAs($employee)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->assertDontSeeHtml('data-test="delete-idea-menu-item"');
 });

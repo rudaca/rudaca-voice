@@ -53,6 +53,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, IdeaOfficialResponseHistory> $officialResponseHistory
  * @property-read Collection<int, IdeaAttachment> $attachments
  * @property-read Collection<int, IdeaAttachmentHistory> $attachmentHistory
+ * @property-read Collection<int, IdeaEditHistory> $editHistory
  */
 #[Fillable([
     'team_id',
@@ -240,6 +241,16 @@ class Idea extends Model
     public function attachmentHistory(): HasMany
     {
         return $this->hasMany(IdeaAttachmentHistory::class);
+    }
+
+    /**
+     * Get the audit trail of edits made via the "Edit idea" form, newest first.
+     *
+     * @return HasMany<IdeaEditHistory, $this>
+     */
+    public function editHistory(): HasMany
+    {
+        return $this->hasMany(IdeaEditHistory::class);
     }
 
     /**

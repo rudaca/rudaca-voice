@@ -247,6 +247,23 @@ new class extends Component {
         Flux::toast(variant: 'success', text: __('Your vote has been moved to this idea.'));
     }
 
+    /**
+     * Soft-delete an idea directly from the list.
+     */
+    public function deleteIdea(int $ideaId): void
+    {
+        $idea = Idea::where('team_id', $this->team->id)->findOrFail($ideaId);
+
+        abort_unless($this->canManageIdea($idea), 403);
+
+        $idea->delete();
+
+        unset($this->ideas);
+        $this->dispatch('modal-close', name: "confirm-delete-idea-{$ideaId}");
+
+        Flux::toast(variant: 'success', text: __('Idea deleted.'));
+    }
+
     #[Computed]
     public function team(): Team
     {
@@ -269,6 +286,25 @@ new class extends Component {
     public function canParticipate(): bool
     {
         return $this->role?->isAtLeast(TeamRole::Employee) ?? false;
+    }
+
+    /**
+     * Whether the current user may manage ideas in general (owner/admin/manager).
+     */
+    #[Computed]
+    public function canManage(): bool
+    {
+        return $this->role?->isAtLeast(TeamRole::Manager) ?? false;
+    }
+
+    /**
+     * Whether the current user may edit or delete the given idea from the
+     * list: any role except Employee/Viewer (canManage), or the idea's
+     * original author.
+     */
+    public function canManageIdea(Idea $idea): bool
+    {
+        return $this->canManage || $idea->submitted_by_user_id === Auth::id();
     }
 
     /**
@@ -853,7 +889,7 @@ new class extends Component {
             @forelse ($this->ideas as $idea)
                 @php($meta = $this->statusMeta($idea->status))
                 <div
-                    class="flex gap-1 md:gap-2 rounded-xl border border-zinc-200 bg-white p-3 transition hover:border-indigo-200 hover:bg-gray-50 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60 dark:hover:bg-gray-800/40"
+                    class="group/idea-row flex gap-1 md:gap-2 rounded-xl border border-zinc-200 bg-white p-3 transition hover:border-indigo-200 hover:bg-gray-50 hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-indigo-900/60 dark:hover:bg-gray-800/40"
                     wire:key="idea-{{ $idea->id }}"
                     data-test="idea-row"
                 >
@@ -1019,6 +1055,53 @@ new class extends Component {
                             </flux:tooltip>
                         </div>
                     </div>
+
+                    @if ($this->canManageIdea($idea))
+                        {{-- Row actions: hover/focus-revealed on large screens only; always shown below that --}}
+                        <div class="flex shrink-0 items-start gap-1 self-start transition-opacity lg:opacity-0 lg:group-hover/idea-row:opacity-100 lg:focus-within:opacity-100" data-test="idea-row-actions">
+                            <flux:tooltip content="{{ __('Edit idea') }}">
+                                <flux:button
+                                    href="{{ route('ideas.show', ['idea' => $idea->slug, 'edit' => 1]) }}"
+                                    wire:navigate
+                                    variant="ghost"
+                                    size="sm"
+                                    icon="pencil-line"
+                                    class="text-indigo-700! hover:bg-indigo-50! dark:text-indigo-400! dark:hover:bg-indigo-500/10!"
+                                    aria-label="{{ __('Edit idea') }}"
+                                    data-test="idea-row-edit"
+                                />
+                            </flux:tooltip>
+
+                            <flux:tooltip content="{{ __('Delete idea') }}">
+                                <flux:modal.trigger name="confirm-delete-idea-{{ $idea->id }}">
+                                    <flux:button
+                                        variant="ghost"
+                                        size="sm"
+                                        icon="trash"
+                                        class="text-red-600! hover:bg-red-50! dark:text-red-400! dark:hover:bg-red-500/10!"
+                                        aria-label="{{ __('Delete idea') }}"
+                                        data-test="idea-row-delete"
+                                    />
+                                </flux:modal.trigger>
+                            </flux:tooltip>
+                        </div>
+
+                        {{-- Confirm delete modal --}}
+                        <flux:modal name="confirm-delete-idea-{{ $idea->id }}" class="max-w-lg" :dismissible="false" data-test="confirm-delete-idea-modal">
+                            <div class="space-y-5">
+                                <div>
+                                    <flux:heading size="lg">{{ __('Delete this idea?') }}</flux:heading>
+                                    <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                        {{ __('This will remove ":title" and its comments from the idea list. This cannot be undone from the UI.', ['title' => $idea->title]) }}
+                                    </flux:text>
+                                </div>
+                                <div class="flex justify-end gap-2">
+                                    <flux:modal.close><flux:button variant="ghost" data-test="confirm-delete-idea-cancel">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                                    <flux:button wire:click="deleteIdea({{ $idea->id }})" variant="danger" data-test="confirm-delete-idea-yes">{{ __('Delete idea') }}</flux:button>
+                                </div>
+                            </div>
+                        </flux:modal>
+                    @endif
                 </div>
             @empty
                 <div class="rounded-xl border border-dashed border-zinc-300 py-14 text-center dark:border-zinc-700" data-test="ideas-empty">
