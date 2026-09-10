@@ -1752,6 +1752,7 @@ new #[Title('Idea')] class extends Component {
             </div>
 
             <div
+                wire:key="idea-description-{{ $idea->id }}-{{ $idea->updated_at->timestamp }}"
                 class="mt-4"
                 x-data="{
                     expanded: false,
