@@ -173,3 +173,7 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Do NOT delete tests without approval.
 
 </laravel-boost-guidelines>
+
+## Idea Domain Rules
+
+- Idea ownership vs. attribution: `submitted_by_user_id` is the idea's owner of record and is what permission checks (e.g. `canManageAttachments()`) key off; `entered_by_user_id` is only who physically logged it ("Submit idea on behalf") and must never be used to gate a permission. See [docs/idea-concept.md](docs/idea-concept.md) for the full model before adding any new idea permission or ownership-related feature.

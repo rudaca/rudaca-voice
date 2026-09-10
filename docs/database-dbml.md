@@ -142,10 +142,12 @@ Table ideas {
   board_group_id bigint [null]
   board_id bigint
   category_id bigint [null]
-  submitted_by_user_id bigint
+  submitted_by_user_id bigint // the idea's owner/author of record — governs edit/attachment permission (see note below)
+  entered_by_user_id bigint [null] // who physically logged it via "Submit idea on behalf"; defaults to submitted_by_user_id when not on behalf of someone else. Display/attribution only — never used for permission checks.
   title varchar
   slug varchar // added for clean idea URLs
   description text
+  description_format varchar [default: 'plain'] // 'plain' (legacy, rendered as-is) or 'html' (sanitized rich text via stevebauman/purify)
   status varchar // new, under_review, planned, in_progress, released, not_doing, duplicate
   priority varchar // low, medium, high
   impact varchar // low, medium, high
@@ -164,9 +166,16 @@ Table ideas {
     board_id
     category_id
     submitted_by_user_id
+    entered_by_user_id
     status
   }
 }
+
+// PERMISSION NOTE: "who may manage this idea" (edit fields, official response,
+// add/remove attachments) is Manager/Admin/Owner team role, OR
+// Auth::id() === ideas.submitted_by_user_id (the idea's owner), regardless of
+// role. entered_by_user_id is attribution only ("logged by X on behalf of Y")
+// and never grants management rights.
 
 Table idea_votes {
   id bigint [pk, increment]
@@ -292,6 +301,7 @@ Ref: ideas.board_group_id > idea_board_groups.id
 Ref: ideas.board_id > idea_boards.id
 Ref: ideas.category_id > idea_categories.id
 Ref: ideas.submitted_by_user_id > users.id
+Ref: ideas.entered_by_user_id > users.id
 Ref: ideas.duplicate_of_idea_id > ideas.id
 
 // Votes
