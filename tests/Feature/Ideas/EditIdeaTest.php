@@ -36,23 +36,23 @@ test('an owner can edit any idea regardless of who submitted it', function () {
         ->assertDispatched('modal-show', name: 'edit-idea');
 });
 
-test('the edit idea menu item is visible to managers and above, and to the idea\'s own author', function () {
+test('the edit idea button is visible to managers and above, and to the idea\'s own author', function () {
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
     $idea = makeIdea($team);
 
     Livewire::actingAs($manager)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
-        ->assertSeeHtml('data-test="edit-idea-menu-item"');
+        ->assertSeeHtml('data-test="edit-idea-button"');
 
     ['team' => $employeeTeam, 'user' => $author] = teamWithMember(TeamRole::Employee);
     $ownIdea = makeIdea($employeeTeam, ['submitted_by_user_id' => $author->id]);
 
     Livewire::actingAs($author)
         ->test('pages::ideas.show', ['idea' => $ownIdea->slug])
-        ->assertSeeHtml('data-test="edit-idea-menu-item"');
+        ->assertSeeHtml('data-test="edit-idea-button"');
 });
 
-test('the edit idea menu item is hidden from a regular employee viewing someone else\'s idea', function () {
+test('the edit idea button is hidden from a regular employee viewing someone else\'s idea', function () {
     ['team' => $team, 'user' => $employee] = teamWithMember(TeamRole::Employee);
     $otherAuthor = User::factory()->create();
     $team->members()->attach($otherAuthor, ['role' => TeamRole::Employee->value]);
@@ -60,7 +60,7 @@ test('the edit idea menu item is hidden from a regular employee viewing someone 
 
     Livewire::actingAs($employee)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
-        ->assertDontSeeHtml('data-test="edit-idea-menu-item"');
+        ->assertDontSeeHtml('data-test="edit-idea-button"');
 });
 
 test('a manager can update title, description, board, category, and reassign the author', function () {

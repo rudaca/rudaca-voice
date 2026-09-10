@@ -36,9 +36,11 @@
                     data-test="sidebar-board-link"
                 >
                     <span class="min-w-0 flex-1 truncate">{{ $board->name }}</span>
-                    <span class="inline-flex h-5 min-w-8 shrink-0 items-center justify-center rounded-sm bg-zinc-400/15 px-1 text-xs font-medium text-zinc-700 dark:bg-zinc-400/40 dark:text-zinc-200">
-                        <x-rolling-number name="{{ $scope }}-board-{{ $board->id }}" :value="$board->ideas_count" />
-                    </span>
+                    @if ($board->ideas_count > 0)
+                        <span class="inline-flex h-5 min-w-8 shrink-0 items-center justify-center rounded-sm bg-zinc-400/15 px-1 text-xs font-medium text-zinc-700 dark:bg-zinc-400/40 dark:text-zinc-200">
+                            <x-rolling-number name="{{ $scope }}-board-{{ $board->id }}" :value="$board->ideas_count" />
+                        </span>
+                    @endif
                 </a>
             @endforeach
         </x-sidebar-nav-group>
@@ -56,9 +58,11 @@
             data-test="sidebar-board-link"
         >
             <span class="min-w-0 flex-1 truncate">{{ $board->name }}</span>
-            <span class="inline-flex h-5 min-w-8 shrink-0 items-center justify-center rounded-sm bg-zinc-400/15 px-1 text-xs font-medium text-zinc-700 dark:bg-zinc-400/40 dark:text-zinc-200">
-                <x-rolling-number name="{{ $scope }}-board-{{ $board->id }}" :value="$board->ideas_count" />
-            </span>
+            @if ($board->ideas_count > 0)
+                <span class="inline-flex h-5 min-w-8 shrink-0 items-center justify-center rounded-sm bg-zinc-400/15 px-1 text-xs font-medium text-zinc-700 dark:bg-zinc-400/40 dark:text-zinc-200">
+                    <x-rolling-number name="{{ $scope }}-board-{{ $board->id }}" :value="$board->ideas_count" />
+                </span>
+            @endif
         </a>
     @endforeach
 </div>

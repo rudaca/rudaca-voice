@@ -1201,7 +1201,7 @@ new #[Title('Idea')] class extends Component {
     public function attachmentHistory(): Collection
     {
         return $this->ideaModel->attachmentHistory()
-            ->with('actor:id,name')
+            ->with(['actor:id,name', 'attachment:id'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
@@ -1254,7 +1254,7 @@ new #[Title('Idea')] class extends Component {
      * response events for the Activity panel. Kept as plain objects so the
      * Blade template can render both entry types identically.
      *
-     * @return SupportCollection<int, object{key: string, color: string, dotColor: string, badgeClass: string, label: string, note: ?string, actorName: string, createdAt: \Illuminate\Support\Carbon}>
+     * @return SupportCollection<int, object{key: string, color: string, dotColor: string, badgeClass: string, label: string, note: ?string, attachmentUrl: ?string, actorName: string, createdAt: \Illuminate\Support\Carbon}>
      */
     #[Computed]
     public function activityTimeline(): SupportCollection
@@ -1271,6 +1271,7 @@ new #[Title('Idea')] class extends Component {
                 'iconClass' => '',
                 'label' => $meta['label'],
                 'note' => $entry->note,
+                'attachmentUrl' => null,
                 'actorName' => $entry->changedBy?->name ?? __('Unknown'),
                 'createdAt' => $entry->created_at,
             ];
@@ -1294,6 +1295,7 @@ new #[Title('Idea')] class extends Component {
                     default => __('Official response changed'),
                 },
                 'note' => null,
+                'attachmentUrl' => null,
                 'actorName' => $entry->actor?->name ?? __('Unknown'),
                 'createdAt' => $entry->created_at,
             ];
@@ -1309,11 +1311,12 @@ new #[Title('Idea')] class extends Component {
                 'dotColor' => $color,
                 'badgeClass' => '',
                 'icon' => $isRemoved ? 'x-circle' : 'paper-clip',
-                'iconClass' => $isRemoved ? 'text-red-500 dark:text-red-400' : '',
-                'label' => $isRemoved
-                    ? __(':name removed', ['name' => $entry->original_filename])
-                    : __(':name added', ['name' => $entry->original_filename]),
+                'iconClass' => trim('mt-1 '.($isRemoved ? 'text-red-500 dark:text-red-400' : '')),
+                'label' => $isRemoved ? __('File removed') : __('File added'),
                 'note' => null,
+                'attachmentUrl' => (! $isRemoved && $entry->attachment)
+                    ? route('ideas.attachments.download', ['current_team' => $this->team->slug, 'idea' => $this->ideaModel->slug, 'attachment' => $entry->attachment->id])
+                    : null,
                 'actorName' => $entry->actor?->name ?? __('Unknown'),
                 'createdAt' => $entry->created_at,
             ];
@@ -1329,6 +1332,7 @@ new #[Title('Idea')] class extends Component {
                 'iconClass' => 'text-indigo-500 dark:text-indigo-400',
                 'label' => __('Idea edited'),
                 'note' => $entry->summary,
+                'attachmentUrl' => null,
                 'actorName' => $entry->actor?->name ?? __('Unknown'),
                 'createdAt' => $entry->created_at,
             ];
@@ -1405,6 +1409,12 @@ new #[Title('Idea')] class extends Component {
 @endpush
 
 <section class="mx-auto w-full px-3 pb-7 sm:px-6 lg:px-8">
+    <div
+        class="sticky top-14 z-10 -mx-3 border-b border-transparent bg-white px-3 py-3 transition-colors duration-300 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 dark:bg-zinc-800"
+        x-data="{ scrolled: false }"
+        x-init="let onScroll = () => scrolled = window.scrollY > 8; onScroll(); window.addEventListener('scroll', onScroll, { passive: true })"
+        x-bind:class="scrolled ? 'border-zinc-200 dark:border-zinc-700' : ''"
+    >
     <div class="flex items-center justify-between gap-3">
         <flux:link as="button" x-data x-on:click="window.history.back()" variant="subtle" class="inline-flex items-center gap-1 text-sm">
             <flux:icon.arrow-left class="size-4" />
@@ -1412,6 +1422,18 @@ new #[Title('Idea')] class extends Component {
         </flux:link>
 
         <div class="flex items-center gap-2">
+            @if ($this->canEditIdea)
+                <flux:button
+                    size="sm"
+                    icon="pencil-line"
+                    wire:click="openEditIdea"
+                    class="border-indigo-800! text-indigo-700! hover:bg-indigo-50! dark:border-indigo-500! dark:text-indigo-400! dark:hover:bg-indigo-500/10!"
+                    data-test="edit-idea-button"
+                >
+                    {{ __('Edit Idea') }}
+                </flux:button>
+            @endif
+
             @if ($this->canRespondOfficially || $this->canEditIdea || $this->canDeleteIdea)
                 <flux:dropdown position="bottom" align="end">
                     <flux:button
@@ -1426,19 +1448,6 @@ new #[Title('Idea')] class extends Component {
                     ></flux:button>
 
                     <flux:menu>
-                        @if ($this->canEditIdea)
-                            <flux:menu.item
-                                icon="pencil-line"
-                                class="text-indigo-700! [&_[data-flux-menu-item-icon]]:text-indigo-700! dark:text-indigo-400! dark:[&_[data-flux-menu-item-icon]]:text-indigo-400!"
-                                wire:click="openEditIdea"
-                                data-test="edit-idea-menu-item"
-                            >
-                                {{ __('Edit Idea') }}
-                            </flux:menu.item>
-
-                            <flux:menu.separator />
-                        @endif
-
                         @if ($this->canRespondOfficially)
                             <flux:menu.item
                                 icon="check-badge"
@@ -1542,6 +1551,7 @@ new #[Title('Idea')] class extends Component {
                 </flux:dropdown>
             @endif
         </div>
+    </div>
     </div>
 
     <div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
@@ -1741,11 +1751,74 @@ new #[Title('Idea')] class extends Component {
                 </div>
             </div>
 
-            @if ($idea->description_format === 'html')
-                <div class="idea-rich-text mt-4 text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{!! $idea->description !!}</div>
-            @else
-                <div class="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-slate-800 dark:text-slate-400">{{ $idea->description }}</div>
-            @endif
+            <div
+                class="mt-4"
+                x-data="{
+                    expanded: false,
+                    overflowing: false,
+                    collapsedHeight: '12rem',
+                    toggle() {
+                        let el = $refs.descriptionContent;
+
+                        // Pin to the current rendered height first (can't transition
+                        // from/to 'none', so this gives the browser a concrete
+                        // starting point to animate from either direction).
+                        el.style.maxHeight = el.scrollHeight + 'px';
+
+                        if (this.expanded) {
+                            requestAnimationFrame(() => requestAnimationFrame(() => {
+                                el.style.maxHeight = this.collapsedHeight;
+                            }));
+                        }
+
+                        this.expanded = ! this.expanded;
+                    },
+                }"
+                x-init="$nextTick(() => overflowing = $refs.descriptionContent.scrollHeight > $refs.descriptionContent.clientHeight)"
+            >
+                <div class="relative">
+                    @if ($idea->description_format === 'html')
+                        <div
+                            x-ref="descriptionContent"
+                            x-on:transitionend="$event.propertyName === 'max-height' && expanded && ($el.style.maxHeight = 'none')"
+                            style="max-height: 12rem"
+                            class="idea-rich-text overflow-hidden text-[15px] leading-relaxed text-slate-800 transition-[max-height] duration-300 ease-in-out motion-reduce:transition-none dark:text-slate-400"
+                        >{!! $idea->description !!}</div>
+                    @else
+                        <div
+                            x-ref="descriptionContent"
+                            x-on:transitionend="$event.propertyName === 'max-height' && expanded && ($el.style.maxHeight = 'none')"
+                            style="max-height: 12rem"
+                            class="overflow-hidden whitespace-pre-line text-[15px] leading-relaxed text-slate-800 transition-[max-height] duration-300 ease-in-out motion-reduce:transition-none dark:text-slate-400"
+                        >{{ $idea->description }}</div>
+                    @endif
+
+                    <div
+                        x-show="overflowing && !expanded"
+                        x-transition.opacity.duration.200ms
+                        x-cloak
+                        class="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white from-15% to-transparent dark:from-zinc-800"
+                    ></div>
+                </div>
+
+                <flux:tooltip>
+                    <flux:link
+                        as="button"
+                        x-show="overflowing"
+                        x-on:click="toggle()"
+                        variant="subtle"
+                        class="mt-1.5 inline-flex items-center gap-1 text-sm"
+                        data-test="idea-description-toggle"
+                    >
+                        <span x-text="expanded ? @js(__('Less')) : @js(__('More'))"></span>
+                        <flux:icon.chevron-down x-bind:class="expanded ? 'rotate-180' : ''" class="size-4 transition-transform duration-200" />
+                    </flux:link>
+                    <flux:tooltip.content>
+                        <span x-text="expanded ? @js(__('Less info')) : @js(__('More info'))"></span>
+                    </flux:tooltip.content>
+                </flux:tooltip>
+            </div>
+
 
             {{-- Attachments --}}
             <div class="mt-6" data-test="attachments-section">
@@ -1756,15 +1829,17 @@ new #[Title('Idea')] class extends Component {
                         </flux:text>
 
                         @if ($this->canManageAttachments)
-                            <flux:button
-                                size="sm"
-                                variant="ghost"
-                                icon="paper-clip"
-                                x-on:click="$dispatch('modal-show', { name: 'add-attachments' })"
-                                data-test="add-attachments-trigger"
-                            >
-                                {{ __('Add') }}
-                            </flux:button>
+                            <flux:tooltip content="{{ __('Add Attachment..') }}">
+                                <flux:button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="paper-clip"
+                                    x-on:click="$dispatch('modal-show', { name: 'add-attachments' })"
+                                    data-test="add-attachments-trigger"
+                                >
+                                    {{ __('Add') }}
+                                </flux:button>
+                            </flux:tooltip>
                         @endif
                     </div>
 
@@ -2143,9 +2218,11 @@ new #[Title('Idea')] class extends Component {
         <aside class="space-y-4">
             {{-- Edit idea modal --}}
             @if ($this->canEditIdea)
-                <flux:modal name="edit-idea" class="max-w-2xl lg:min-w-4xl" data-test="edit-idea-modal">
-                    <form wire:submit="updateIdea" class="space-y-5">
-                        <flux:heading size="lg">{{ __('Edit idea') }}</flux:heading>
+                <flux:modal name="edit-idea" class="flex max-h-[85vh] max-w-2xl flex-col lg:min-w-4xl" data-test="edit-idea-modal">
+                    <form wire:submit="updateIdea" class="flex min-h-0 flex-1 flex-col">
+                        <flux:heading size="lg" class="shrink-0 border-b border-zinc-200 pb-4 dark:border-zinc-700">{{ __('Edit idea') }}</flux:heading>
+
+                        <div class="mt-5 min-h-0 flex-1 space-y-5 overflow-y-auto">
 
                         <flux:input
                             wire:model="editTitle"
@@ -2257,7 +2334,9 @@ new #[Title('Idea')] class extends Component {
                             @enderror
                         </div>
 
-                        <div class="flex justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                        </div>
+
+                        <div class="mt-5 flex shrink-0 justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
                             <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
                             <flux:button variant="primary" type="submit" wire:loading.attr="disabled" data-test="edit-idea-save">
                                 {{ __('Save changes') }}
@@ -2412,9 +2491,15 @@ new #[Title('Idea')] class extends Component {
                                         @endunless
                                     </div>
                                     <div class="min-w-0 flex-1 {{ $loop->last ? '' : 'pb-4' }}">
-                                        <flux:badge :color="$entry->color" size="sm" class="{{ $entry->badgeClass }}">{{ $entry->label }}</flux:badge>
+                                        @if ($entry->attachmentUrl)
+                                            <a href="{{ $entry->attachmentUrl }}" class="inline-block">
+                                                <flux:badge :color="$entry->color" size="sm" class="{{ $entry->badgeClass }} cursor-pointer hover:underline">{{ $entry->label }}</flux:badge>
+                                            </a>
+                                        @else
+                                            <flux:badge :color="$entry->color" size="sm" class="{{ $entry->badgeClass }}">{{ $entry->label }}</flux:badge>
+                                        @endif
                                         @if ($entry->note)
-                                            <p class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{{ $entry->note }}</p>
+                                            <p class="mt-0.5 text-xs text-slate-600 dark:text-slate-400">{{ $entry->note }}</p>
                                         @endif
                                         <p class="mt-1 text-xs text-slate-700">
                                             {{ $entry->actorName }}
