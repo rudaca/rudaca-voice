@@ -14,7 +14,7 @@ test('a manager can update status and a history record is created', function () 
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->set('status', 'planned')
         ->set('statusNote', 'Approved for Q3')
-        ->call('updateManagement')
+        ->call('attemptUpdateManagement')
         ->assertHasNoErrors();
 
     expect($idea->refresh()->status)->toBe('planned');
@@ -82,7 +82,7 @@ test('a manager can update priority, impact and effort without a status change',
         ->set('priority', 'high')
         ->set('impact', 'high')
         ->set('effort', 'large')
-        ->call('updateManagement')
+        ->call('attemptUpdateManagement')
         ->assertHasNoErrors();
 
     $idea->refresh();
@@ -102,7 +102,7 @@ test('owner, admin and manager can update an idea status', function (TeamRole $r
     Livewire::actingAs($user)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->set('status', 'in_progress')
-        ->call('updateManagement')
+        ->call('attemptUpdateManagement')
         ->assertHasNoErrors();
 
     expect($idea->refresh()->status)->toBe('in_progress')
@@ -120,7 +120,7 @@ test('employee and viewer cannot update an idea status', function (TeamRole $rol
     Livewire::actingAs($user)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->set('status', 'planned')
-        ->call('updateManagement')
+        ->call('attemptUpdateManagement')
         ->assertStatus(403);
 
     expect($idea->refresh()->status)->toBe('new')

@@ -129,7 +129,7 @@ test('a status transition into each terminal status releases the vote for use el
         Livewire::actingAs($manager)
             ->test('pages::ideas.show', ['idea' => $ideaA->slug])
             ->set('status', $terminalStatus)
-            ->call('updateManagement')
+            ->call('attemptUpdateManagement')
             ->assertHasNoErrors();
     }
 
@@ -254,7 +254,7 @@ test('the board-vote-status header updates immediately after a vote is created, 
     Livewire::actingAs($manager)
         ->test('pages::ideas.show', ['idea' => $ideaB->slug])
         ->set('status', 'released')
-        ->call('updateManagement');
+        ->call('attemptUpdateManagement');
 
     Livewire::actingAs($manager)
         ->test('pages::ideas.show', ['idea' => $ideaA->slug])

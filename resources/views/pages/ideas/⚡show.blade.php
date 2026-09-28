@@ -15,6 +15,7 @@ use App\Models\IdeaStatusHistory;
 use App\Models\IdeaVote;
 use App\Models\Team;
 use App\Models\User;
+use App\Notifications\Ideas\IdeaCompleted;
 use App\Notifications\Ideas\OfficialResponsePublished;
 use App\Notifications\Ideas\OfficialResponseUpdated;
 use Flux\Flux;
@@ -61,6 +62,14 @@ new #[Title('Idea')] class extends Component {
     public string $effort = '';
 
     public string $statusNote = '';
+
+    /**
+     * Validated "Manage idea" values staged by attemptUpdateManagement()
+     * while the confirm-before-notifying modal is open.
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $pendingManagementUpdate = null;
 
     public string $duplicateOfId = '';
 
@@ -248,9 +257,12 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
-     * Update the idea's triage fields. Records a status-history entry only when the status changes.
+     * Validate the "Manage idea" form. A genuine transition into Completed
+     * is staged and confirmed via a modal before saving, since it emails the
+     * idea's author and can't be undone; every other change — including
+     * edits made while already Completed — is applied immediately.
      */
-    public function updateManagement(): void
+    public function attemptUpdateManagement(): void
     {
         abort_unless($this->canManage, 403);
 
@@ -262,6 +274,64 @@ new #[Title('Idea')] class extends Component {
             'statusNote' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        if ($this->managementChangeNotifiesAuthor($validated['status'])) {
+            $this->pendingManagementUpdate = $validated;
+            $this->dispatch('modal-show', name: 'confirm-manage-idea');
+
+            return;
+        }
+
+        $this->applyManagementUpdate($validated);
+    }
+
+    /**
+     * Persist the "Manage idea" update staged by attemptUpdateManagement()
+     * once the user confirms sending the author notification email.
+     */
+    public function confirmUpdateManagement(): void
+    {
+        abort_unless($this->canManage, 403);
+        abort_if($this->pendingManagementUpdate === null, 404);
+
+        $this->applyManagementUpdate($this->pendingManagementUpdate);
+        $this->reset('pendingManagementUpdate');
+        $this->dispatch('modal-close', name: 'confirm-manage-idea');
+    }
+
+    /**
+     * Discard a staged "Manage idea" update without saving it.
+     */
+    public function cancelManagementConfirmation(): void
+    {
+        $this->reset('pendingManagementUpdate');
+        $this->dispatch('modal-close', name: 'confirm-manage-idea');
+    }
+
+    /**
+     * Whether moving this idea to $newStatus is a genuine transition into
+     * Completed with a distinct, notifiable author — i.e. whether it would
+     * actually send an author notification email.
+     */
+    private function managementChangeNotifiesAuthor(string $newStatus): bool
+    {
+        if ($this->ideaModel->status === $newStatus || $newStatus !== IdeaStatus::Released->value) {
+            return false;
+        }
+
+        $author = $this->ideaModel->submittedBy;
+
+        return $author !== null && $author->id !== Auth::id();
+    }
+
+    /**
+     * Apply validated status/priority/impact/effort changes, recording a
+     * status-history entry and notifying the author only when the status
+     * actually changes.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function applyManagementUpdate(array $validated): void
+    {
         $previousStatus = $this->ideaModel->status;
 
         $attributes = [
@@ -288,12 +358,34 @@ new #[Title('Idea')] class extends Component {
             ]);
 
             unset($this->statusHistory);
+
+            $this->notifyAuthorOfStatusChange($validated['status']);
         }
 
         $this->reset('statusNote');
         $this->dispatch('modal-close', name: 'manage-idea');
 
         Flux::toast(variant: 'success', text: __('Idea updated.'));
+    }
+
+    /**
+     * Email the idea's author when it has just moved into Completed,
+     * skipping self-notification when the acting manager is also the
+     * author.
+     */
+    private function notifyAuthorOfStatusChange(string $newStatus): void
+    {
+        if ($newStatus !== IdeaStatus::Released->value) {
+            return;
+        }
+
+        $author = $this->ideaModel->submittedBy;
+
+        if ($author === null || $author->id === Auth::id()) {
+            return;
+        }
+
+        Notification::send($author, new IdeaCompleted($this->ideaModel));
     }
 
     /**
@@ -2353,7 +2445,7 @@ new #[Title('Idea')] class extends Component {
                     <div class="space-y-5">
                         <flux:heading size="lg">{{ __('Manage idea') }}</flux:heading>
 
-                        <form wire:submit="updateManagement" id="manage-idea-form" class="space-y-4">
+                        <form wire:submit="attemptUpdateManagement" id="manage-idea-form" class="space-y-4">
                             <div class="grid grid-cols-2 gap-6 sm:grid-cols-4">
                                 <flux:select wire:model="status" :label="__('Status')" size="sm" data-test="manage-status">
                                     @foreach (IdeaStatus::meta() as $value => $statusMeta)
@@ -2393,6 +2485,26 @@ new #[Title('Idea')] class extends Component {
                         <div class="flex justify-end border-t border-zinc-200 pt-4 dark:border-zinc-700">
                             <flux:button variant="primary" type="submit" form="manage-idea-form" size="sm" wire:loading.attr="disabled" data-test="manage-save">
                                 {{ __('Save changes') }}
+                            </flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
+
+                {{-- Confirm sending the author notification email before saving a Manage idea change into Completed --}}
+                <flux:modal name="confirm-manage-idea" class="max-w-lg" :dismissible="false" data-test="confirm-manage-idea-modal">
+                    <div class="space-y-5">
+                        <div>
+                            <flux:heading size="lg">
+                                {{ __('Mark idea as :status?', ['status' => $this->pendingManagementUpdate ? IdeaStatus::from($this->pendingManagementUpdate['status'])->label() : '']) }}
+                            </flux:heading>
+                            <flux:text class="mt-2 text-sm text-slate-600 dark:text-slate-500">
+                                {{ __('You are about to mark this idea as :status. An email notification will be sent to the author of this idea. This cannot be undone.', ['status' => $this->pendingManagementUpdate ? IdeaStatus::from($this->pendingManagementUpdate['status'])->label() : '']) }}
+                            </flux:text>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <flux:button variant="ghost" wire:click="cancelManagementConfirmation" data-test="confirm-manage-idea-cancel">{{ __('Cancel') }}</flux:button>
+                            <flux:button variant="primary" wire:click="confirmUpdateManagement" wire:loading.attr="disabled" data-test="confirm-manage-idea-confirm">
+                                {{ __('Yes, continue') }}
                             </flux:button>
                         </div>
                     </div>

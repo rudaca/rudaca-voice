@@ -78,5 +78,12 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+
+        // Flags outgoing mail with its environment in the visible "From"
+        // name, so a stray test send is never mistaken for a real
+        // notification. Omitted in production.
+        if (! app()->isProduction()) {
+            config(['mail.from.name' => config('mail.from.name').' ('.ucfirst(app()->environment()).')']);
+        }
     }
 }

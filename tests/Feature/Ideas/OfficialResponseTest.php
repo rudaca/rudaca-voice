@@ -282,7 +282,7 @@ test('changing the idea status does not auto-generate an official response', fun
     Livewire::actingAs($manager)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->set('status', 'planned')
-        ->call('updateManagement');
+        ->call('attemptUpdateManagement');
 
     expect($idea->refresh()->status)->toBe('planned')
         ->and($idea->officialResponse)->toBeNull();
