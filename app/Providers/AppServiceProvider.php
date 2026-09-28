@@ -81,9 +81,16 @@ class AppServiceProvider extends ServiceProvider
 
         // Flags outgoing mail with its environment in the visible "From"
         // name, so a stray test send is never mistaken for a real
-        // notification. Omitted in production.
+        // notification. Omitted in production, and skipped if the
+        // configured name already carries the tag (e.g. set directly in
+        // the environment's MAIL_FROM_NAME).
         if (! app()->isProduction()) {
-            config(['mail.from.name' => config('mail.from.name').' ('.ucfirst(app()->environment()).')']);
+            $fromName = config('mail.from.name');
+            $tag = ' ('.ucfirst(app()->environment()).')';
+
+            if (! str_ends_with($fromName, $tag)) {
+                config(['mail.from.name' => $fromName.$tag]);
+            }
         }
     }
 }
