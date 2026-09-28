@@ -78,7 +78,8 @@ enum IdeaStatus: string
 
     /**
      * Statuses considered "active" — an idea in one of these statuses still
-     * counts toward a user's one-vote-per-board limit.
+     * counts toward a user's one-vote-per-board limit, and this is the set
+     * the Board's default "Active" status filter preset shows.
      *
      * @return array<int, self>
      */
@@ -100,12 +101,22 @@ enum IdeaStatus: string
 
     /**
      * The string values of activeCases(), for use in whereIn() queries.
+     * Declared as a literal constant (rather than derived from activeCases())
+     * so it can also be used as a constant expression, e.g. a Livewire
+     * property default.
+     *
+     * @var array<int, string>
+     */
+    public const array ACTIVE_STATUS_VALUES = ['new', 'approved', 'planned', 'in_progress', 'on_hold'];
+
+    /**
+     * The string values of activeCases().
      *
      * @return array<int, string>
      */
     public static function activeValues(): array
     {
-        return array_map(fn (self $status) => $status->value, self::activeCases());
+        return self::ACTIVE_STATUS_VALUES;
     }
 
     /**
@@ -135,5 +146,40 @@ enum IdeaStatus: string
                 'dotColor' => $status->dotColor(),
             ], fn ($value) => $value !== null),
         ])->all();
+    }
+
+    /**
+     * The Board's default "Active" status filter preset values — the current
+     * working backlog, excluding every terminal status.
+     *
+     * @return array<int, string>
+     */
+    public static function boardDefaultValues(): array
+    {
+        return self::activeValues();
+    }
+
+    /**
+     * Every status value, for the Board's "All Statuses" filter preset.
+     *
+     * @return array<int, string>
+     */
+    public static function values(): array
+    {
+        return array_column(self::cases(), 'value');
+    }
+
+    /**
+     * Display order for the Board's status filter dropdown: non-terminal
+     * statuses first, then terminal ones below a separator.
+     *
+     * @return array<int, self>
+     */
+    public static function boardFilterOrder(): array
+    {
+        return [
+            self::New, self::Approved, self::InProgress, self::OnHold, self::Planned, self::Released,
+            self::NotDoing, self::Duplicate, self::Archived,
+        ];
     }
 }

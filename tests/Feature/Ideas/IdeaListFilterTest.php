@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AccessLevel;
+use App\Enums\IdeaStatus;
 use App\Enums\TeamRole;
 use App\Models\IdeaBoardUserAccess;
 use App\Models\IdeaCategory;
@@ -36,7 +37,64 @@ test('an idea with a status not in STATUS_META renders without error', function 
 
     Livewire::actingAs($user)
         ->test('pages::ideas.index')
+        ->set('status', ['legacy_status'])
         ->assertOk();
+});
+
+test('the Board shows only Active statuses by default', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $new = makeIdea($team, ['status' => 'new']);
+    $onHold = makeIdea($team, ['status' => 'on_hold']);
+    $released = makeIdea($team, ['status' => 'released']);
+    $archived = makeIdea($team, ['status' => 'archived']);
+
+    $component = Livewire::actingAs($user)->test('pages::ideas.index');
+
+    expect($component->instance()->status)->toEqualCanonicalizing(IdeaStatus::boardDefaultValues())
+        ->and($component->instance()->isActiveStatusPreset)->toBeTrue()
+        ->and($component->instance()->hasActiveFilters)->toBeFalse();
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($new->id)
+        ->and($ids)->toContain($onHold->id)
+        ->and($ids)->not->toContain($released->id)
+        ->and($ids)->not->toContain($archived->id);
+});
+
+test('selecting All Statuses shows ideas in every status', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $new = makeIdea($team, ['status' => 'new']);
+    $archived = makeIdea($team, ['status' => 'archived']);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->call('setAllStatusFilter');
+
+    expect($component->instance()->isAllStatusPreset)->toBeTrue();
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($new->id)
+        ->and($ids)->toContain($archived->id);
+});
+
+test('a user can filter to a single terminal status', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $released = makeIdea($team, ['status' => 'released']);
+    $new = makeIdea($team, ['status' => 'new']);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->set('status', ['released']);
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($released->id)
+        ->and($ids)->not->toContain($new->id);
 });
 
 test('board filter accepts multiple boards', function () {
@@ -271,7 +329,7 @@ test('clearFilters resets every filter control back to its default', function ()
 
     $component = Livewire::actingAs($user)
         ->test('pages::ideas.index')
-        ->set('status', ['new'])
+        ->call('setAllStatusFilter')
         ->set('board', ['1'])
         ->set('category', ['Bug'])
         ->set('author', ['1'])
@@ -282,8 +340,9 @@ test('clearFilters resets every filter control back to its default', function ()
         ->set('onlyPrivateNotes', true)
         ->call('clearFilters');
 
+    expect($component->instance()->status)->toEqualCanonicalizing(IdeaStatus::boardDefaultValues());
+
     $component
-        ->assertSet('status', [])
         ->assertSet('board', [])
         ->assertSet('category', [])
         ->assertSet('author', [])

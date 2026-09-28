@@ -107,8 +107,11 @@ test('a duplicate idea renders a red dot to match its overridden badge', functio
 
     // The badge declares color "rose" but a class override paints it red, so
     // the dot has to follow "dotColor" rather than the nominal color.
+    // Duplicate is a terminal status hidden by the default Active filter,
+    // so it must be explicitly selected to appear in the list.
     Livewire::actingAs($user)
         ->test('pages::ideas.index')
+        ->call('setAllStatusFilter')
         ->assertOk()
         ->assertSee('bg-red-700 dark:bg-red-200', escape: false)
         ->assertDontSee('bg-rose-700 dark:bg-rose-200', escape: false);

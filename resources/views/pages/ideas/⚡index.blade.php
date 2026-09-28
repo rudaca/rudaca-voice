@@ -27,7 +27,7 @@ new class extends Component {
      * @var array<int, string>
      */
     #[Url(as: 'status')]
-    public array $status = [];
+    public array $status = IdeaStatus::ACTIVE_STATUS_VALUES;
 
     #[Url(as: 'group')]
     public string $group = '';
@@ -113,12 +113,71 @@ new class extends Component {
     }
 
     /**
-     * Clear the status filter.
+     * Set the status filter to the Board's default "Active" preset: the
+     * current working backlog, excluding terminal statuses and On Hold.
      */
-    public function clearStatusFilter(): void
+    public function setActiveStatusFilter(): void
     {
-        $this->status = [];
+        $this->status = IdeaStatus::boardDefaultValues();
         $this->resetPage();
+    }
+
+    /**
+     * Set the status filter to every status, including terminal ones.
+     */
+    public function setAllStatusFilter(): void
+    {
+        $this->status = IdeaStatus::values();
+        $this->resetPage();
+    }
+
+    /**
+     * Whether the status filter's current selection matches the given set of
+     * values, regardless of order.
+     *
+     * @param  array<int, string>  $values
+     */
+    private function statusSetEquals(array $values): bool
+    {
+        return count($this->status) === count($values)
+            && array_diff($this->status, $values) === []
+            && array_diff($values, $this->status) === [];
+    }
+
+    /**
+     * Whether the status filter currently matches the "Active" preset.
+     */
+    #[Computed]
+    public function isActiveStatusPreset(): bool
+    {
+        return $this->statusSetEquals(IdeaStatus::boardDefaultValues());
+    }
+
+    /**
+     * Whether the status filter currently matches the "All Statuses" preset.
+     */
+    #[Computed]
+    public function isAllStatusPreset(): bool
+    {
+        return $this->statusSetEquals(IdeaStatus::values());
+    }
+
+    /**
+     * The Status filter button's label: the matching preset's name, or a
+     * count of the individually selected statuses.
+     */
+    #[Computed]
+    public function statusFilterLabel(): string
+    {
+        if ($this->isActiveStatusPreset) {
+            return __('Active');
+        }
+
+        if ($this->isAllStatusPreset) {
+            return __('All Statuses');
+        }
+
+        return __(':count selected', ['count' => count($this->status)]);
     }
 
     /**
@@ -394,7 +453,7 @@ new class extends Component {
     #[Computed]
     public function hasActiveFilters(): bool
     {
-        return $this->status !== []
+        return ! $this->isActiveStatusPreset
             || $this->group !== ''
             || $this->board !== []
             || $this->search !== ''
@@ -665,50 +724,55 @@ new class extends Component {
                             <flux:dropdown position="bottom" align="start" class="min-w-0 flex-1 sm:w-auto sm:flex-none">
                                 <flux:button size="sm" icon:trailing="chevron-down" data-test="filter-status-trigger" @class([
                                     'w-full sm:w-auto',
-                                    'border-gray-800! font-semibold! dark:border-gray-400!' => $status !== [],
+                                    'border-gray-800! font-semibold! dark:border-gray-400!' => ! $this->isActiveStatusPreset,
                                 ])>
-                                    {{ __('Status') }}
-                                    @if ($status !== [])
-                                        <flux:badge size="sm" color="zinc">{{ count($status) }}</flux:badge>
-                                    @endif
+                                    {{ $this->statusFilterLabel }}
                                 </flux:button>
 
                                 <flux:menu class="w-56">
                                     <flux:menu.item
                                         keep-open
-                                        wire:click="clearStatusFilter"
-                                        icon:trailing="{{ $status === [] ? 'check' : '' }}"
-                                        class="{{ $status === [] ? 'font-semibold' : '' }}"
+                                        wire:click="setActiveStatusFilter"
+                                        icon:trailing="{{ $this->isActiveStatusPreset ? 'check' : '' }}"
+                                        class="{{ $this->isActiveStatusPreset ? 'font-semibold' : '' }}"
+                                        data-test="filter-status-active"
+                                    >
+                                        {{ __('Active') }}
+                                    </flux:menu.item>
+                                    <flux:menu.item
+                                        keep-open
+                                        wire:click="setAllStatusFilter"
+                                        icon:trailing="{{ $this->isAllStatusPreset ? 'check' : '' }}"
+                                        class="{{ $this->isAllStatusPreset ? 'font-semibold' : '' }}"
                                         data-test="filter-status-all"
                                     >
-                                        {{ __('All Status') }}
+                                        {{ __('All Statuses') }}
                                     </flux:menu.item>
                                     <flux:menu.separator />
 
                                     <flux:menu.checkbox.group wire:model.live="status">
-                                        @php($statusGroups = [
-                                            ['new', 'approved', 'planned', 'in_progress', 'on_hold', 'released'],
-                                            ['not_doing', 'duplicate', 'archived'],
-                                        ])
+                                        @php($terminalValues = IdeaStatus::terminalValues())
+                                        @php($separatorRendered = false)
 
-                                        @foreach ($statusGroups as $groupIndex => $statusGroup)
-                                            @if ($groupIndex > 0)
+                                        @foreach (IdeaStatus::boardFilterOrder() as $statusCase)
+                                            @php($value = $statusCase->value)
+                                            @php($isDanger = in_array($value, $terminalValues, true))
+
+                                            @if (! $separatorRendered && $isDanger)
                                                 <flux:menu.separator />
+                                                @php($separatorRendered = true)
                                             @endif
 
-                                            @foreach ($statusGroup as $value)
-                                                @php($meta = IdeaStatus::meta()[$value])
-                                                @php($isDanger = in_array($value, ['not_doing', 'duplicate', 'archived'], true))
+                                            @php($meta = IdeaStatus::meta()[$value])
 
-                                                <flux:menu.checkbox
-                                                    value="{{ $value }}"
-                                                    keep-open
-                                                    class="{{ $selectedItemClasses }} {{ $isDanger ? 'text-red-600! dark:text-red-400!' : '' }}"
-                                                    data-test="filter-status-{{ $value }}"
-                                                >
-                                                    <x-status-dot :color="$meta['dotColor'] ?? $meta['color']" class="me-2" />{{ $meta['label'] }}
-                                                </flux:menu.checkbox>
-                                            @endforeach
+                                            <flux:menu.checkbox
+                                                value="{{ $value }}"
+                                                keep-open
+                                                class="{{ $selectedItemClasses }} {{ $isDanger ? 'text-red-600! dark:text-red-400!' : '' }}"
+                                                data-test="filter-status-{{ $value }}"
+                                            >
+                                                <x-status-dot :color="$meta['dotColor'] ?? $meta['color']" class="me-2" />{{ $meta['label'] }}
+                                            </flux:menu.checkbox>
                                         @endforeach
                                     </flux:menu.checkbox.group>
                                 </flux:menu>

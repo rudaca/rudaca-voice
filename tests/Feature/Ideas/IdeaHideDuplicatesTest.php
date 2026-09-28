@@ -3,13 +3,29 @@
 use App\Enums\TeamRole;
 use Livewire\Livewire;
 
-test('duplicates are shown by default', function () {
+test('duplicates are hidden by the default Active status filter', function () {
     ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
 
     $duplicate = makeIdea($team, ['status' => 'duplicate']);
     $active = makeIdea($team, ['status' => 'new']);
 
     $component = Livewire::actingAs($user)->test('pages::ideas.index');
+
+    $ids = $component->instance()->ideas->pluck('id')->all();
+
+    expect($ids)->toContain($active->id)
+        ->and($ids)->not->toContain($duplicate->id);
+});
+
+test('the All Statuses filter includes duplicate ideas', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+
+    $duplicate = makeIdea($team, ['status' => 'duplicate']);
+    $active = makeIdea($team, ['status' => 'new']);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.index')
+        ->call('setAllStatusFilter');
 
     $ids = $component->instance()->ideas->pluck('id')->all();
 
@@ -25,6 +41,7 @@ test('checking hide duplicates excludes duplicate ideas from the results', funct
 
     $component = Livewire::actingAs($user)
         ->test('pages::ideas.index')
+        ->call('setAllStatusFilter')
         ->set('hideDuplicates', true);
 
     $ids = $component->instance()->ideas->pluck('id')->all();

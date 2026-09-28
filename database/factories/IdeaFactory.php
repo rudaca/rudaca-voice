@@ -33,9 +33,7 @@ class IdeaFactory extends Factory
             'title' => $title,
             'slug' => Str::slug($title).'-'.fake()->unique()->numberBetween(1, 999999),
             'description' => fake()->paragraphs(2, true),
-            'status' => fake()->randomElement([
-                'new', 'approved', 'planned', 'in_progress', 'released', 'not_doing', 'duplicate',
-            ]),
+            'status' => 'new',
             'priority' => fake()->randomElement(['low', 'medium', 'high']),
             'impact' => fake()->randomElement(['low', 'medium', 'high']),
             'effort' => fake()->randomElement(['small', 'medium', 'large']),
