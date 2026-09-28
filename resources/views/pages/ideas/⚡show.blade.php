@@ -309,8 +309,8 @@ new #[Title('Idea')] class extends Component {
 
     /**
      * Whether moving this idea to $newStatus is a genuine transition into
-     * Completed with a distinct, notifiable author — i.e. whether it would
-     * actually send an author notification email.
+     * Completed with a notifiable author — i.e. whether it would actually
+     * send an author notification email.
      */
     private function managementChangeNotifiesAuthor(string $newStatus): bool
     {
@@ -318,9 +318,7 @@ new #[Title('Idea')] class extends Component {
             return false;
         }
 
-        $author = $this->ideaModel->submittedBy;
-
-        return $author !== null && $author->id !== Auth::id();
+        return $this->ideaModel->submittedBy !== null;
     }
 
     /**
@@ -370,8 +368,7 @@ new #[Title('Idea')] class extends Component {
 
     /**
      * Email the idea's author when it has just moved into Completed,
-     * skipping self-notification when the acting manager is also the
-     * author.
+     * including when the acting manager is also the author.
      */
     private function notifyAuthorOfStatusChange(string $newStatus): void
     {
@@ -381,7 +378,7 @@ new #[Title('Idea')] class extends Component {
 
         $author = $this->ideaModel->submittedBy;
 
-        if ($author === null || $author->id === Auth::id()) {
+        if ($author === null) {
             return;
         }
 

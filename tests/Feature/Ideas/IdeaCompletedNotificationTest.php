@@ -98,7 +98,7 @@ test('editing an already Completed idea does not resend the notification', funct
     Notification::assertSentToTimes($author, IdeaCompleted::class, 1);
 });
 
-test('a manager completing their own idea does not email themselves', function () {
+test('a manager completing their own idea still emails them', function () {
     Notification::fake();
 
     ['team' => $team, 'user' => $manager] = teamWithMember(TeamRole::Manager);
@@ -107,11 +107,12 @@ test('a manager completing their own idea does not email themselves', function (
     Livewire::actingAs($manager)
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->set('status', 'released')
-        ->call('attemptUpdateManagement');
+        ->call('attemptUpdateManagement')
+        ->call('confirmUpdateManagement');
 
     expect($idea->refresh()->status)->toBe('released');
 
-    Notification::assertNothingSent();
+    Notification::assertSentTo($manager, IdeaCompleted::class);
 });
 
 test('the Completed email includes the idea title, a link, and the official response when present', function () {
