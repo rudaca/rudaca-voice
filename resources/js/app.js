@@ -22,7 +22,21 @@ const RICH_TEXT_TOOLBAR = [
 // false)` (deferred — included in the next request rather than an immediate
 // round-trip) instead of relying on a hidden-input `wire:model` + synthetic
 // event, which several browsers/timing orders don't reliably deliver.
+//
+// Safe to call twice on the same element: wire:navigate's page cache (and
+// back/forward) restores HTML that already contains Quill's toolbar and editor,
+// then Alpine re-runs x-init. Mounting a second Quill on top of that leaves a
+// dead, unfocusable editor, so any previous mount is torn down first.
 window.initRichTextEditor = function (el, $wire, property, initialContent, placeholder) {
+    let previousToolbar = el.previousElementSibling;
+
+    if (previousToolbar && previousToolbar.classList.contains('ql-toolbar')) {
+        previousToolbar.remove();
+    }
+
+    el.innerHTML = '';
+    el.classList.remove('ql-container', 'ql-snow', 'ql-disabled');
+
     let quill = new Quill(el, {
         theme: 'snow',
         placeholder: placeholder || '',
