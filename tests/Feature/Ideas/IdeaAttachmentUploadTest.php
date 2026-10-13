@@ -4,6 +4,7 @@ use App\Enums\TeamRole;
 use App\Models\Idea;
 use App\Models\IdeaAttachment;
 use App\Models\IdeaAttachmentHistory;
+use App\Rules\IdeaAttachmentFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -119,4 +120,27 @@ test('exceeding the configured attachment count is rejected', function () {
         ->assertHasErrors(['newAttachments']);
 
     expect(IdeaAttachment::count())->toBe(0);
+});
+
+test('an office file sniffed as a generic zip container is accepted by extension', function () {
+    $file = UploadedFile::fake()->create('report.docx', 20, 'application/zip');
+
+    $rule = new IdeaAttachmentFile;
+    $failed = false;
+    $rule->validate('newAttachments.0', $file, function () use (&$failed) {
+        $failed = true;
+    });
+
+    expect($failed)->toBeFalse();
+});
+
+test('a non-office file is not accepted just because of its mime type', function () {
+    $file = UploadedFile::fake()->create('page.html', 20, 'application/zip');
+
+    $failed = false;
+    (new IdeaAttachmentFile)->validate('newAttachments.0', $file, function () use (&$failed) {
+        $failed = true;
+    });
+
+    expect($failed)->toBeTrue();
 });

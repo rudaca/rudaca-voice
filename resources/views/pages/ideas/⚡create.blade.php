@@ -331,7 +331,7 @@ new #[Title('Submit idea')] class extends Component {
             'newAttachments.*' => [
                 'file',
                 'max:'.config('idea_attachments.max_file_size_kb'),
-                'mimes:'.implode(',', config('idea_attachments.allowed_extensions')),
+                new \App\Rules\IdeaAttachmentFile,
             ],
             'board_group_id' => [
                 'required',
