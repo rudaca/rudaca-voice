@@ -2086,12 +2086,14 @@ new #[Title('Idea')] class extends Component {
                         @error('newAttachments')
                             <flux:text class="text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
                         @enderror
-                        @error('newAttachments.*')
-                            <flux:text class="text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
-                        @enderror
                         <div class="flex justify-end gap-2">
                             <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
-                            <flux:button variant="primary" type="submit" data-test="save-attachments">{{ __('Upload') }}</flux:button>
+                            <flux:button
+                                variant="primary"
+                                type="submit"
+                                :disabled="$errors->has('newAttachments') || $errors->has('newAttachments.*') || count($newAttachments) === 0"
+                                data-test="save-attachments"
+                            >{{ __('Upload') }}</flux:button>
                         </div>
                     </form>
                 </flux:modal>

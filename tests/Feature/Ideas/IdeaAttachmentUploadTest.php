@@ -162,3 +162,23 @@ test('an invalid file staged first is dropped and does not block a valid file', 
 
     expect(IdeaAttachment::where('idea_id', $idea->id)->count())->toBe(1);
 });
+
+test('the upload button is disabled until a valid file is staged', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team, ['submitted_by_user_id' => $user->id]);
+
+    $buttonIsDisabled = fn ($component): bool => (bool) preg_match(
+        '/<button[^>]*\sdisabled[\s=>][^>]*data-test="save-attachments"|<button[^>]*data-test="save-attachments"[^>]*\sdisabled[\s=>]/s',
+        $component->html(),
+    );
+
+    $component = Livewire::actingAs($user)->test('pages::ideas.show', ['idea' => $idea->slug]);
+
+    expect($buttonIsDisabled($component))->toBeTrue();
+
+    $component->set('newAttachments', [UploadedFile::fake()->create('page.html', 10, 'text/html')]);
+    expect($buttonIsDisabled($component))->toBeTrue();
+
+    $component->set('newAttachments', [UploadedFile::fake()->create('proof.pdf', 10, 'application/pdf')]);
+    expect($buttonIsDisabled($component))->toBeFalse();
+});
