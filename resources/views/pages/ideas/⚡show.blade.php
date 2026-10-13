@@ -2381,7 +2381,7 @@ new #[Title('Idea')] class extends Component {
         <aside class="space-y-4">
             {{-- Edit idea modal --}}
             @if ($this->canEditIdea)
-                <flux:modal name="edit-idea" class="flex max-h-[85vh] max-w-2xl flex-col lg:min-w-4xl" data-test="edit-idea-modal">
+                <flux:modal name="edit-idea" class="max-h-[85vh] max-w-2xl flex-col open:flex lg:min-w-4xl" data-test="edit-idea-modal">
                     <form wire:submit="updateIdea" class="flex min-h-0 flex-1 flex-col">
                         <flux:heading size="lg" class="shrink-0 border-b border-zinc-200 pb-4 dark:border-zinc-700">{{ __('Edit idea') }}</flux:heading>
 
