@@ -66,8 +66,8 @@ test('a disallowed file type is rejected and nothing is stored', function () {
         ->set('title', 'Bad attachment')
         ->set('description', 'A description.')
         ->set('newAttachments', [$file])
-        ->call('save')
-        ->assertHasErrors(['newAttachments.0']);
+        ->assertHasErrors(['newAttachments'])
+        ->call('save');
 
     expect(IdeaAttachment::count())->toBe(0);
 });
@@ -89,8 +89,8 @@ test('a file over the configured size limit is rejected', function () {
         ->set('title', 'Oversized attachment')
         ->set('description', 'A description.')
         ->set('newAttachments', [$file])
-        ->call('save')
-        ->assertHasErrors(['newAttachments.0']);
+        ->assertHasErrors(['newAttachments'])
+        ->call('save');
 
     expect(IdeaAttachment::count())->toBe(0);
 });
@@ -143,4 +143,22 @@ test('a non-office file is not accepted just because of its mime type', function
     });
 
     expect($failed)->toBeTrue();
+});
+
+test('an invalid file staged first is dropped and does not block a valid file', function () {
+    Storage::fake(config('idea_attachments.disk'));
+
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Manager);
+    $idea = makeIdea($team, ['submitted_by_user_id' => $user->id]);
+
+    $component = Livewire::actingAs($user)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->set('newAttachments', [UploadedFile::fake()->create('page.html', 10, 'text/html')])
+        ->assertHasErrors(['newAttachments'])
+        ->set('newAttachments', [UploadedFile::fake()->create('proof.pdf', 10, 'application/pdf')])
+        ->assertHasNoErrors()
+        ->call('addAttachments')
+        ->assertHasNoErrors();
+
+    expect(IdeaAttachment::where('idea_id', $idea->id)->count())->toBe(1);
 });

@@ -8,9 +8,11 @@ use App\Models\IdeaBoard;
 use App\Models\IdeaStatusHistory;
 use App\Models\Team;
 use App\Models\User;
+use App\Rules\IdeaAttachmentFile;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -331,7 +333,7 @@ new #[Title('Submit idea')] class extends Component {
             'newAttachments.*' => [
                 'file',
                 'max:'.config('idea_attachments.max_file_size_kb'),
-                new \App\Rules\IdeaAttachmentFile,
+                new IdeaAttachmentFile,
             ],
             'board_group_id' => [
                 'required',
@@ -390,6 +392,38 @@ new #[Title('Submit idea')] class extends Component {
             'board_id' => __('board'),
             'category_id' => __('category'),
         ];
+    }
+
+    /**
+     * Drop files that fail validation as soon as they are staged, so one bad
+     * file can't linger in the list and block valid ones added afterwards.
+     */
+    public function updatedNewAttachments(): void
+    {
+        $this->resetErrorBag('newAttachments');
+
+        $valid = [];
+
+        foreach ($this->newAttachments as $file) {
+            $validator = Validator::make(
+                ['file' => $file],
+                ['file' => [
+                    'file',
+                    'max:'.config('idea_attachments.max_file_size_kb'),
+                    new IdeaAttachmentFile,
+                ]],
+            );
+
+            if ($validator->fails()) {
+                $this->addError('newAttachments', $file->getClientOriginalName().': '.$validator->errors()->first());
+
+                continue;
+            }
+
+            $valid[] = $file;
+        }
+
+        $this->newAttachments = $valid;
     }
 
     /**
