@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int $idea_id
  * @property int $user_id
  * @property string $body
+ * @property string $body_format
  * @property bool $is_internal
  * @property Carbon|null $hidden_at
  * @property int|null $hidden_by_user_id
@@ -26,7 +27,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $user
  * @property-read User|null $hiddenBy
  */
-#[Fillable(['idea_id', 'user_id', 'body', 'is_internal'])]
+#[Fillable(['idea_id', 'user_id', 'body', 'body_format', 'is_internal'])]
 class IdeaComment extends Model
 {
     /** @use HasFactory<IdeaCommentFactory> */

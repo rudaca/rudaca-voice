@@ -262,3 +262,61 @@ test('the moderation menu is hidden from a manager but visible to an admin', fun
         ->test('pages::ideas.show', ['idea' => $idea->slug])
         ->assertSeeHtml('data-test="comment-actions-trigger"');
 });
+
+test('a comment is stored as sanitized rich text', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->set('commentBody', '<p>This is <strong>great</strong><script>alert(1)</script></p>')
+        ->call('addComment')
+        ->assertHasNoErrors()
+        ->assertSet('commentBody', '');
+
+    $comment = IdeaComment::where('idea_id', $idea->id)->firstOrFail();
+
+    expect($comment->body_format)->toBe('html')
+        ->and($comment->body)->toContain('<strong>great</strong>')
+        ->and($comment->body)->not->toContain('<script');
+});
+
+test('a rich text comment with no visible text is rejected', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->set('commentBody', '<p><br></p>')
+        ->call('addComment')
+        ->assertHasErrors('commentBody');
+
+    expect(IdeaComment::where('idea_id', $idea->id)->count())->toBe(0);
+});
+
+test('a rich text comment is limited to 2000 characters of visible text', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->set('commentBody', '<p><strong>'.str_repeat('a', 2001).'</strong></p>')
+        ->call('addComment')
+        ->assertHasErrors('commentBody');
+
+    expect(IdeaComment::where('idea_id', $idea->id)->count())->toBe(0);
+});
+
+test('html comments render formatted while legacy plain comments stay escaped', function () {
+    ['team' => $team, 'user' => $user] = teamWithMember(TeamRole::Employee);
+    $idea = makeIdea($team);
+
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $user->id, 'body' => '<p>Formatted <em>text</em></p>', 'body_format' => 'html']);
+    IdeaComment::factory()->create(['idea_id' => $idea->id, 'user_id' => $user->id, 'body' => '<b>legacy</b>', 'body_format' => 'plain']);
+
+    Livewire::actingAs($user)
+        ->test('pages::ideas.show', ['idea' => $idea->slug])
+        ->assertSeeHtml('<p>Formatted <em>text</em></p>')
+        ->assertDontSeeHtml('<b>legacy</b>')
+        ->assertSee('&lt;b&gt;legacy&lt;/b&gt;', false);
+});

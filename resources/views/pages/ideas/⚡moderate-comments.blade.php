@@ -805,7 +805,7 @@ new #[Title('Moderate comments')] class extends Component {
                         <flux:table.cell class="max-w-sm">
                             <flux:modal.trigger name="view-comment-{{ $comment->id }}">
                                 <button type="button" class="cursor-pointer text-left text-sm text-slate-800 hover:underline dark:text-slate-400" data-test="view-comment">
-                                    {{ str($comment->body)->limit(30) }}
+                                    {{ str($comment->body_format === 'html' ? html_entity_decode(strip_tags($comment->body)) : $comment->body)->limit(30) }}
                                 </button>
                             </flux:modal.trigger>
                             <div class="mt-1 flex items-center gap-1 text-xs text-slate-700">
@@ -993,7 +993,11 @@ new #[Title('Moderate comments')] class extends Component {
                                 </flux:text>
                             </div>
 
-                            <flux:text class="flex-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</flux:text>
+                            @if ($comment->body_format === 'html')
+                                <div class="idea-rich-text flex-1 text-sm text-slate-800 dark:text-slate-400">{!! $comment->body !!}</div>
+                            @else
+                                <flux:text class="flex-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</flux:text>
+                            @endif
 
                             <div class="flex flex-wrap justify-end gap-2">
                                 <flux:modal.close>

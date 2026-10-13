@@ -22,9 +22,10 @@ const RICH_TEXT_TOOLBAR = [
 // false)` (deferred — included in the next request rather than an immediate
 // round-trip) instead of relying on a hidden-input `wire:model` + synthetic
 // event, which several browsers/timing orders don't reliably deliver.
-window.initRichTextEditor = function (el, $wire, property, initialContent) {
+window.initRichTextEditor = function (el, $wire, property, initialContent, placeholder) {
     let quill = new Quill(el, {
         theme: 'snow',
+        placeholder: placeholder || '',
         modules: {toolbar: RICH_TEXT_TOOLBAR},
     });
 

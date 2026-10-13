@@ -15,6 +15,7 @@ use App\Models\IdeaStatusHistory;
 use App\Models\IdeaVote;
 use App\Models\Team;
 use App\Models\User;
+use App\Rules\IdeaAttachmentFile;
 use App\Notifications\Ideas\IdeaCompleted;
 use App\Notifications\Ideas\OfficialResponsePublished;
 use App\Notifications\Ideas\OfficialResponseUpdated;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -48,8 +50,19 @@ new #[Title('Idea')] class extends Component {
 
     public Idea $ideaModel;
 
-    #[Validate('required|string|max:2000')]
+    /**
+     * Raw Quill HTML — the max is generous (a DoS guard only); the real
+     * 2000-character business rule is checked in addComment(), post-sanitization.
+     */
+    #[Validate('required|string|max:20000')]
     public string $commentBody = '';
+
+    /**
+     * Bumped after each posted comment, forcing a fresh (empty) Quill mount —
+     * the editor lives under wire:ignore, so resetting commentBody alone
+     * wouldn't clear it.
+     */
+    public int $commentEditorKey = 0;
 
     public bool $isPrivateNote = false;
 
@@ -857,6 +870,38 @@ new #[Title('Idea')] class extends Component {
     }
 
     /**
+     * Drop files that fail validation as soon as they are staged, so one bad
+     * file can't linger in the list and block valid ones added afterwards.
+     */
+    public function updatedNewAttachments(): void
+    {
+        $this->resetErrorBag('newAttachments');
+
+        $valid = [];
+
+        foreach ($this->newAttachments as $file) {
+            $validator = Validator::make(
+                ['file' => $file],
+                ['file' => [
+                    'file',
+                    'max:'.config('idea_attachments.max_file_size_kb'),
+                    new IdeaAttachmentFile,
+                ]],
+            );
+
+            if ($validator->fails()) {
+                $this->addError('newAttachments', $file->getClientOriginalName().': '.$validator->errors()->first());
+
+                continue;
+            }
+
+            $valid[] = $file;
+        }
+
+        $this->newAttachments = $valid;
+    }
+
+    /**
      * Upload the staged files as attachments on this idea.
      */
     public function addAttachments(): void
@@ -868,7 +913,7 @@ new #[Title('Idea')] class extends Component {
             'newAttachments.*' => [
                 'file',
                 'max:'.config('idea_attachments.max_file_size_kb'),
-                new \App\Rules\IdeaAttachmentFile,
+                new IdeaAttachmentFile,
             ],
         ]);
 
@@ -1115,14 +1160,31 @@ new #[Title('Idea')] class extends Component {
 
         $validated = $this->validate();
 
+        $cleanBody = Purify::config('idea_rich_text')->clean($validated['commentBody']);
+        $plainTextLength = mb_strlen(trim(strip_tags($cleanBody)));
+
+        if ($plainTextLength === 0) {
+            $this->addError('commentBody', __('The comment body field is required.'));
+
+            return;
+        }
+
+        if ($plainTextLength > 2000) {
+            $this->addError('commentBody', __('Comment is too long.'));
+
+            return;
+        }
+
         IdeaComment::create([
             'idea_id' => $this->ideaModel->id,
             'user_id' => Auth::id(),
-            'body' => $validated['commentBody'],
+            'body' => $cleanBody,
+            'body_format' => 'html',
             'is_internal' => $this->canPostPrivateNote && $this->isPrivateNote,
         ]);
 
         $this->reset('commentBody', 'isPrivateNote');
+        $this->commentEditorKey++;
 
         unset($this->comments);
 
@@ -2151,12 +2213,17 @@ new #[Title('Idea')] class extends Component {
                 <form wire:submit="addComment" class="mt-4 flex gap-3">
                     <flux:avatar size="sm" :name="auth()->user()->name" />
                     <div class="min-w-0 flex-1 space-y-2">
-                        <flux:textarea
-                            wire:model="commentBody"
-                            rows="3"
-                            :placeholder="__('Share your thoughts or add context…')"
-                            data-test="comment-body"
-                        />
+                        <div
+                            wire:ignore
+                            wire:key="comment-editor-{{ $commentEditorKey }}"
+                            x-data
+                            x-init="initRichTextEditor($refs.editor, $wire, 'commentBody', '', @js(__('Share your thoughts or add context…')))"
+                        >
+                            <div x-ref="editor" data-test="comment-body"></div>
+                        </div>
+                        @error('commentBody')
+                            <flux:text class="text-sm text-red-600 dark:text-red-400">{{ $message }}</flux:text>
+                        @enderror
                         <div class="flex items-center justify-between gap-3">
                             @if ($this->canPostPrivateNote)
                                 <flux:checkbox
@@ -2241,7 +2308,11 @@ new #[Title('Idea')] class extends Component {
                                     </div>
                                 </div>
                             @else
-                                <div class="mt-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</div>
+                                @if ($comment->body_format === 'html')
+                                    <div class="idea-rich-text mt-1 text-sm text-slate-800 dark:text-slate-400" data-test="comment-rich-body">{!! $comment->body !!}</div>
+                                @else
+                                    <div class="mt-1 whitespace-pre-line text-sm text-slate-800 dark:text-slate-400">{{ $comment->body }}</div>
+                                @endif
                             @endif
                         </div>
                         @if ($this->canModerate || $this->canDelete)
